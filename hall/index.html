@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en" data-input="pointer">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>NeoArcade · The Arcade Hall</title>
+    <meta
+      name="description"
+      content="Classic games from the BASIC, Pascal, C and Assembler era, rebuilt as modern web games. Pick a cabinet and play."
+    />
+    <meta name="theme-color" content="#07060e" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <canvas id="ambience" class="ambience" aria-hidden="true"></canvas>
+    <div class="grain" aria-hidden="true"></div>
+    <a class="skip-link" href="#main">Skip to the games</a>
+
+    <header class="masthead">
+      <div class="masthead__sign">
+        <h1 class="logo">
+          <span class="logo__neo">Neo</span
+          ><span class="logo__arcade">Arc<span class="logo__flicker">a</span>de</span>
+        </h1>
+        <p class="masthead__subtitle">
+          The Arcade Hall <span aria-hidden="true">·</span> classic games, rebuilt for tonight
+        </p>
+      </div>
+      <p class="free-play"><span class="free-play__lamp" aria-hidden="true"></span>Free play</p>
+    </header>
+
+    <main id="main" tabindex="-1"></main>
+
+    <footer class="footer">
+      <p class="hints hints--keys" aria-hidden="true">
+        <span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> Browse</span>
+        <span><kbd>Enter</kbd> Open</span>
+        <span><kbd>/</kbd> Search</span>
+        <span><kbd>Esc</kbd> Back</span>
+      </p>
+      <p class="hints hints--pad" aria-hidden="true">
+        <span><kbd>✚</kbd> Browse</span>
+        <span><kbd>A</kbd> Open</span>
+        <span><kbd>B</kbd> Back</span>
+        <span><kbd>LB</kbd><kbd>RB</kbd> Genre</span>
+        <span><kbd>Start</kbd> Play</span>
+      </p>
+      <p class="footer__credit">
+        Every game here is a tribute to its original — credits live on each game's About page.
+      </p>
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

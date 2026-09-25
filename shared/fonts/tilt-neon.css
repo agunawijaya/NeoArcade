@@ -1,0 +1,11 @@
+/*
+ * Tilt Neon by The Tilt Project Authors, SIL Open Font License 1.1
+ * (see tilt-neon-OFL.txt). Pinned to its upright instance and subset to Latin.
+ */
+@font-face {
+  font-family: 'Tilt Neon';
+  src: url('./tilt-neon-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,0 +1,252 @@
+.lobby,
+.empty {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 var(--page-pad);
+}
+
+/* Toolbar ------------------------------------------------------------------ */
+
+.toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px 18px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 20px 50px -30px #000;
+}
+
+.search {
+  position: relative;
+  display: flex;
+  flex: 0 1 300px;
+  min-width: 180px;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px 0 14px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.35);
+  color: var(--ink-faint);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.search:focus-within {
+  border-color: rgb(63 243 255 / 0.7);
+  box-shadow: 0 0 24px -8px var(--cyan);
+  color: var(--cyan);
+}
+
+.search__field {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+}
+
+.search__field::placeholder {
+  color: var(--ink-faint);
+}
+
+.search__field::-webkit-search-cancel-button {
+  filter: invert(1) opacity(0.5);
+}
+
+.search__key {
+  opacity: 0.7;
+}
+
+.search:focus-within .search__key {
+  display: none;
+}
+
+.chips,
+.segments {
+  display: flex;
+  gap: 8px;
+}
+
+/* Genres scroll sideways rather than wrapping, fading out at the edge. */
+.chips {
+  flex: 1 1 0;
+  min-width: 0;
+  /* Room for the selected chip's glow, which the scroller would otherwise clip. */
+  margin: -8px 0;
+  padding: 8px 0 8px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+}
+
+.chip,
+.segment {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 500 0.88rem/1 var(--font-body);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.25s ease;
+}
+
+.chip:hover,
+.segment:hover {
+  border-color: rgb(255 255 255 / 0.3);
+  color: var(--ink);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: rgb(255 63 164 / 0.8);
+  background: rgb(255 63 164 / 0.14);
+  color: #ffe3f1;
+  box-shadow: 0 0 18px -6px var(--magenta);
+}
+
+.segments {
+  padding: 3px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.3);
+}
+
+.segment {
+  min-height: 34px;
+  border-color: transparent;
+}
+
+.segment[aria-pressed='true'] {
+  background: rgb(63 243 255 / 0.14);
+  color: #dffdff;
+  box-shadow: inset 0 0 0 1px rgb(63 243 255 / 0.55);
+}
+
+.lobby__count {
+  margin: 22px 4px 0;
+  color: var(--ink-faint);
+  font: 600 0.74rem/1 var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.lobby__none {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 56px 0 24px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.lobby__none p {
+  margin: 0;
+}
+
+/* The floor ---------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  /* auto-fit collapses empty tracks, so a lone cabinet stands centre stage. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 256px));
+  justify-content: center;
+  gap: 72px clamp(24px, 3vw, 44px);
+  margin: 0;
+  padding: 44px 0 16px;
+  list-style: none;
+}
+
+.cabinet-slot {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* Empty Hall --------------------------------------------------------------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  padding-top: clamp(8px, 3vw, 28px);
+}
+
+.grid--dormant {
+  width: 100%;
+  padding-top: 12px;
+}
+
+.empty__message {
+  max-width: 40rem;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.empty__heading {
+  margin: 0;
+  text-wrap: balance;
+  font: 400 clamp(1.7rem, 4.6vw, 2.5rem) / 1.15 var(--font-display);
+  color: #fff3fb;
+  text-shadow:
+    0 0 8px rgb(255 63 164 / 0.8),
+    0 0 26px rgb(255 63 164 / 0.45);
+}
+
+.empty__text {
+  margin: 14px auto 0;
+  text-wrap: balance;
+  color: var(--ink-soft);
+  font-size: 1.02rem;
+}
+
+/* Three dormant machines crowd a phone; one is enough to set the scene. */
+@media (max-width: 560px) {
+  .grid--dormant .cabinet-slot:not(:first-child) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .search,
+  .chips {
+    flex: 1 1 100%;
+  }
+
+  .segments {
+    margin-left: auto;
+  }
+
+  .search__key {
+    display: none;
+  }
+}

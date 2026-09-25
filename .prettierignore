@@ -1,0 +1,8 @@
+sources/
+dist/
+node_modules/
+playwright-report/
+test-results/
+package-lock.json
+# Markdown is written by hand (and by the architect); keep its line breaks.
+*.md

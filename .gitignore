@@ -1,0 +1,15 @@
+# Original sources stay local by default — many come from books, magazines
+# and old disks, and the copyright belongs to their authors.
+# Remove these two lines only if you decide to publish the sources too.
+sources/*
+!sources/README.md
+
+node_modules/
+dist/
+.DS_Store
+Thumbs.db
+*.log
+test-results/
+playwright-report/
+.vite/
+coverage/

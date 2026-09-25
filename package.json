@@ -1,0 +1,45 @@
+{
+  "name": "neoarcade",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Classic games reborn as modern web games, gathered in the Arcade Hall.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && tsx scripts/build.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test --project=desktop --project=phone",
+    "screenshots": "playwright test --project=screenshots",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "docs:check": "tsx scripts/check-mermaid.ts"
+  },
+  "dependencies": {
+    "marked": "^18.0.14",
+    "mermaid": "^12.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@mermaid-js/mermaid-cli": "^12.0.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "lodash-es": "^4.18.1"
+  }
+}
