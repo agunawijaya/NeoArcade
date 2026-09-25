@@ -2,7 +2,7 @@
 
 | Game | Original language | Source folder | Genre | Status | Port folder | Notes |
 |---|---|---|---|---|---|---|
-| Skyline Showdown (QBasic Gorillas, 1990) | QBasic | `sources/Gorillas/` | Artillery / duel | queued | `ports/skyline-showdown/` | Prompt 001 |
+| Skyline Showdown (QBasic Gorillas, 1990) | QBasic | `sources/Gorillas/` | Artillery / duel | done | `ports/skyline-showdown/` | Prompt 001. Four worlds, CPU (4 levels), power-ups, replays. Notes: `docs/games/skyline-showdown.md`; ADRs 0003–0004. |
 
 Status values: `queued` → `designing` → `building` → `polishing` → `done`.
 

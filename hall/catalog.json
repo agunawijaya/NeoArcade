@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "slug": "skyline-showdown",
+    "title": "Skyline Showdown",
+    "tagline": "Two gorillas, a city at dusk and a lot of exploding bananas.",
+    "original": {
+      "title": "QBasic Gorillas",
+      "author": "Microsoft Corporation",
+      "year": 1990,
+      "platform": "MS-DOS 5.0 (QBasic)"
+    },
+    "genres": ["Artillery", "Duel"],
+    "players": { "min": 1, "max": 2 },
+    "accent": "#ff8a3d",
+    "path": "skyline-showdown/",
+    "cover": "skyline-showdown",
+    "docs": {
+      "howToPlay": "docs/HOW-TO-PLAY.md",
+      "about": "docs/ABOUT.md",
+      "architecture": "docs/ARCHITECTURE.md"
+    },
+    "added": "2026-09-25"
+  }
+]
