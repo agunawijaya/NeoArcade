@@ -7,7 +7,7 @@ Every port keeps the soul of the original (rules, feel, surprises) and gets a
 brand-new look. Graphics are drawn by code (Canvas / SVG / WebGL), not by
 copying old sprites.
 
-![The Arcade Hall, waiting for its first game](hall/media/lobby-desktop.jpg)
+![The Arcade Hall with Skyline Showdown in the spotlight](hall/media/lobby-desktop.jpg)
 
 ## Run it
 
@@ -48,7 +48,7 @@ next to it.
 | `scripts/` | Build and docs tooling. |
 | `e2e/` | Playwright smoke tests and screenshot runs. |
 | `prompts/` | Build prompts written by the architect, run by Claude Code. |
-| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md)). |
+| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md)). |
 | `docs/games/` | Per-game notes: what the original does, what changed in the port. |
 | `PORTS.md` | Progress tracker for every game. |
 
@@ -69,15 +69,17 @@ next to it.
      create({ seed, accent }) {
        return {
          draw(ctx, { width, height, time, energy }) {
-           // paint a full frame; energy goes 0 → 1 when the cabinet is hovered
+           // paint a full frame; energy goes 0 → 1 while the cover has attention
          },
        };
      },
    });
    ```
 
-4. Register it in `hall/catalog.json` (every field is described in
-   [ADR 0002](docs/adr/0002-hall-catalog-and-covers.md)).
+4. Register it in `hall/catalog.json` with a short `pitch`, a few
+   `highlights` and captioned `screens` (every field is described in
+   [ADR 0002](docs/adr/0002-hall-catalog-and-covers.md)). The Hall shows the
+   screenshots; the cover is the fallback.
 5. Run `npm test`: a test checks that every catalog entry has its port,
    cover and docs. Then `npm run build`, `npm run test:e2e` and
    `npm run docs:check`.

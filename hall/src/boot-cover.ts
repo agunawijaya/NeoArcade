@@ -3,7 +3,7 @@ import { defineCover } from './cover-api';
 import { withAlpha } from './colour';
 
 /**
- * What the empty cabinets show while the Hall has no games: a cabinet
+ * What the waiting screens show while the Hall has no games: a screen
  * powering on and running its self-test, forever.
  */
 const CYCLE_SECONDS = 11;

@@ -7,12 +7,12 @@
   width: 100%;
   max-width: 1320px;
   margin: 0 auto;
-  padding: clamp(28px, 6vw, 64px) var(--page-pad) clamp(20px, 4vw, 40px);
+  padding: clamp(22px, 4vw, 44px) var(--page-pad) clamp(16px, 3vw, 30px);
 }
 
 .logo {
   margin: 0;
-  font: 400 clamp(2.9rem, 8.5vw, 5.6rem) / 0.95 var(--font-display);
+  font: 400 clamp(2.4rem, 6.5vw, 3.8rem) / 0.95 var(--font-display);
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -45,37 +45,11 @@
 }
 
 .masthead__subtitle {
-  margin: 14px 0 0 0.2em;
+  margin: 10px 0 0 0.2em;
   color: var(--ink-soft);
-  font-size: clamp(0.8rem, 2.4vw, 0.95rem);
+  font-size: clamp(0.74rem, 2.2vw, 0.86rem);
   letter-spacing: 0.22em;
   text-transform: uppercase;
-}
-
-.free-play {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 6px;
-  padding: 8px 14px;
-  border: 1px solid rgb(255 179 71 / 0.35);
-  border-radius: 6px;
-  background: rgb(255 179 71 / 0.06);
-  color: #ffd699;
-  font: 600 0.78rem/1 var(--font-mono);
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  text-shadow: 0 0 10px rgb(255 179 71 / 0.6);
-  white-space: nowrap;
-}
-
-.free-play__lamp {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--amber);
-  box-shadow: 0 0 10px var(--amber);
-  animation: lamp 2.4s ease-in-out infinite;
 }
 
 @keyframes tube-strike {
@@ -117,13 +91,6 @@
   }
 }
 
-@keyframes lamp {
-  50% {
-    opacity: 0.35;
-    box-shadow: 0 0 4px var(--amber);
-  }
-}
-
 /* While reading a guide the sign steps back so the text has the stage. */
 .is-reading .masthead {
   padding-block: 18px 6px;
@@ -133,8 +100,7 @@
   font-size: clamp(1.8rem, 5vw, 2.4rem);
 }
 
-.is-reading .masthead__subtitle,
-.is-reading .free-play {
+.is-reading .masthead__subtitle {
   display: none;
 }
 
@@ -149,12 +115,5 @@
   .masthead__subtitle {
     margin-left: 0;
     letter-spacing: 0.16em;
-  }
-
-  .free-play {
-    order: -1;
-    margin: 0 0 4px;
-    padding: 5px 10px;
-    font-size: 0.64rem;
   }
 }

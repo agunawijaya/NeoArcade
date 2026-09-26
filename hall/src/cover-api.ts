@@ -7,7 +7,7 @@
  *   export default defineCover({
  *     posterTime: 2,
  *     create({ seed, accent }) {
- *       const stars = makeStars(seed);           // per-cabinet state lives here
+ *       const stars = makeStars(seed);           // per-screen state lives here
  *       return {
  *         draw(ctx, { width, height, time, energy }) {
  *           // paint a complete frame; energy rises from 0 to 1 on hover/focus
@@ -23,7 +23,7 @@ export interface CoverFrame {
   /** Size of the screen in CSS pixels. The context is already scaled for the device. */
   readonly width: number;
   readonly height: number;
-  /** Seconds of animation. Starts at `posterTime` and only runs while the cabinet is alive. */
+  /** Seconds of animation. Starts at `posterTime` and only runs while the cover is alive. */
   readonly time: number;
   /** Seconds since the previous frame (0 for a still). */
   readonly delta: number;
@@ -34,7 +34,7 @@ export interface CoverFrame {
 }
 
 export interface CoverSetup {
-  /** Stable per cabinet, for seeding procedural details. */
+  /** Stable per game, for seeding procedural details. */
   readonly seed: number;
   /** The game's accent colour from the catalog, as #rrggbb. */
   readonly accent: string;

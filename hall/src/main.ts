@@ -2,13 +2,12 @@ import '@shared/fonts/tilt-neon.css';
 import '../styles/base.css';
 import '../styles/masthead.css';
 import '../styles/lobby.css';
-import '../styles/cabinet.css';
+import '../styles/screens.css';
 import '../styles/detail.css';
 import '../styles/docs.css';
 
 import { createStore } from '@shared/storage';
 import rawCatalog from '../catalog.json';
-import { startAmbience } from './ambience';
 import { parseCatalog } from './catalog';
 import { createDetailPanel } from './detail';
 import { createDocsView } from './docs-view';
@@ -22,10 +21,8 @@ const { games, problems } = parseCatalog(rawCatalog);
 for (const problem of problems) console.warn(`hall/catalog.json: ${problem}`);
 
 const main = document.querySelector<HTMLElement>('#main');
-const ambience = document.querySelector<HTMLCanvasElement>('#ambience');
-if (!main || !ambience) throw new Error('The Hall page is missing its #main or #ambience element.');
-
-startAmbience(ambience);
+const backdrop = document.querySelector<HTMLElement>('#backdrop');
+if (!main || !backdrop) throw new Error('The Hall page is missing its #main or #backdrop element.');
 
 // Canvas text can't wait for a web font the way CSS text does, so covers start
 // once the neon font is in (or after a short wait, falling back to system fonts).
@@ -35,6 +32,10 @@ await Promise.race([
 ]);
 
 const lobby = createLobby(games, createStore('hall'));
+// The featured game's first screen, blurred into light behind the whole page.
+if (lobby.backdropImage) backdrop.style.backgroundImage = `url("${lobby.backdropImage}")`;
+document.body.classList.toggle('has-library', games.length > 1);
+document.body.classList.toggle('is-searchable', lobby.searchable);
 const docs = createDocsView(games);
 const detail = createDetailPanel(() => navigate({ view: 'lobby' }));
 main.append(lobby.element, docs.element);
@@ -72,7 +73,7 @@ function applyRoute() {
     else detail.hide();
   }
 
-  // Coming back to the lobby puts focus on the cabinet the player came from.
+  // Coming back to the lobby puts focus on the game the player came from.
   if (currentRoute.view === 'lobby' && previous.view !== 'lobby') {
     requestAnimationFrame(() => lobby.focusGame(previous.slug));
   }
@@ -90,5 +91,6 @@ startGamepadNavigation({
   stepGenre: (delta) => lobby.stepGenre(delta),
   start() {
     if (detail.openSlug) detail.play();
+    else if (currentRoute.view === 'lobby') lobby.playFeatured();
   },
 });

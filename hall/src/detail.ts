@@ -1,13 +1,12 @@
 import { formatPlayers, type GameEntry } from './catalog';
 import { inkOn } from './colour';
-import { playCover, type CoverPlayer } from './cover-player';
-import { loadCover } from './covers';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
 import { gameUrl, launchOnClick } from './launch';
 import { routeToHash } from './routes';
+import { buildScreenShow, type ScreenShow } from './screen-show';
 
-/** The panel that opens over the lobby when a cabinet is chosen. */
+/** The panel that opens over the lobby when a game is chosen. */
 export interface DetailPanel {
   show(game: GameEntry): void;
   hide(): void;
@@ -23,7 +22,7 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
   document.body.append(dialog);
 
   let openSlug: string | null = null;
-  let cover: CoverPlayer | null = null;
+  let screens: ScreenShow | null = null;
   let playLink: HTMLAnchorElement | null = null;
 
   // Esc and clicks outside the panel ask the router to go back to the lobby,
@@ -37,7 +36,7 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
   });
 
   const render = (game: GameEntry) => {
-    const canvas = h('canvas', { class: 'detail__canvas' });
+    screens = buildScreenShow(game, { cycle: true, eager: true });
     const closeButton = h(
       'button',
       { class: 'detail__close', type: 'button', 'aria-label': 'Close' },
@@ -63,17 +62,18 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
         'div',
         { class: 'detail__panel' },
         closeButton,
-        h('div', { class: 'detail__screen' }, canvas, h('span', { class: 'detail__glass' })),
+        h('div', { class: 'detail__screen' }, screens.element),
         h(
           'div',
           { class: 'detail__info' },
           h('p', { class: 'detail__eyebrow' }, game.genres.join(' · ')),
           h('h2', { class: 'detail__title', id: 'detail-title' }, game.title),
           h('p', { class: 'detail__tagline' }, game.tagline),
+          game.pitch ? h('p', { class: 'detail__pitch' }, game.pitch) : null,
           h(
             'dl',
             { class: 'detail__facts' },
-            fact('Based on', h('span', {}, h('strong', {}, original.title), h('br'), origin)),
+            fact('Inspired by', h('span', {}, h('strong', {}, original.title), h('br'), origin)),
             fact('Players', formatPlayers(game.players)),
             fact('Added', addedDate.format(new Date(game.added))),
           ),
@@ -104,19 +104,14 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
         ),
       ),
     );
-
-    void loadCover(game.cover).then((definition) => {
-      if (openSlug !== game.slug) return;
-      cover = playCover(canvas, definition, { seed: 1, accent: game.accent, title: game.title });
-      cover.setAlive(true);
-    });
+    screens.setPlaying(true);
   };
 
   return {
     show(game) {
       if (openSlug === game.slug && dialog.open) return;
-      cover?.dispose();
-      cover = null;
+      screens?.dispose();
+      screens = null;
       openSlug = game.slug;
       render(game);
       if (!dialog.open) dialog.showModal();
@@ -124,8 +119,8 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
     },
     hide() {
       openSlug = null;
-      cover?.dispose();
-      cover = null;
+      screens?.dispose();
+      screens = null;
       if (dialog.open) dialog.close();
     },
     get openSlug() {

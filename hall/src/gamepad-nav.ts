@@ -54,7 +54,8 @@ export function startGamepadNavigation(actions: GamepadActions): void {
           ),
           direction,
         )?.element
-      : (scope.querySelector<HTMLElement>('.cabinet[tabindex="0"]') ?? candidates[0]);
+      : (scope.querySelector<HTMLElement>('.spotlight .button--play, .card[tabindex="0"]') ??
+        candidates[0]);
     if (!next) return;
     next.focus();
     next.scrollIntoView({ block: 'nearest', inline: 'nearest' });

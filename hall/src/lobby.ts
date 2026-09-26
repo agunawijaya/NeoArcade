@@ -1,21 +1,29 @@
 import type { Store } from '@shared/storage';
-import { buildCabinet, type Cabinet } from './cabinet';
+import { buildCard, type Card } from './card';
 import type { GameEntry } from './catalog';
-import { playCover, type CoverPlayer } from './cover-player';
-import { loadCover } from './covers';
 import { h, icon, isVisible } from './dom';
 import { buildEmptyState } from './empty-state';
 import { ICONS } from './icons';
 import { collectGenres, selectGames, type LibraryQuery, type SortOrder } from './library';
 import { nearestInDirection, type Direction } from './spatial-nav';
+import { buildSpotlight } from './spotlight';
 
 export interface Lobby {
   element: HTMLElement;
-  /** Puts keyboard focus back on a cabinet, e.g. after its detail panel closes. */
+  /** Screenshot for the page's blurred backdrop, if the featured game has one. */
+  backdropImage: string | null;
+  /** Whether there is a search box, so the key hints can mention it. */
+  searchable: boolean;
+  /** Puts keyboard focus back on a game, e.g. after its detail panel closes. */
   focusGame(slug: string): void;
   /** Steps through the genre filters; used by gamepad shoulder buttons. */
   stepGenre(delta: number): void;
+  /** Launches the featured game; used by the gamepad's Start button. */
+  playFeatured(): void;
 }
+
+/** Below this many games, search and filters are more clutter than help. */
+const SEARCH_FROM = 6;
 
 const ARROW_DIRECTIONS: Record<string, Direction> = {
   ArrowUp: 'up',
@@ -27,18 +35,65 @@ const ARROW_DIRECTIONS: Record<string, Direction> = {
 const SORT_LABELS: Record<SortOrder, string> = { title: 'A–Z', added: 'Newest' };
 
 export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
-  if (games.length === 0) {
-    return { element: buildEmptyState(), focusGame() {}, stepGenre() {} };
+  const newest = selectGames(games, { search: '', genre: null, sort: 'added' })[0];
+  if (!newest) {
+    return {
+      element: buildEmptyState(),
+      backdropImage: null,
+      searchable: false,
+      focusGame() {},
+      stepGenre() {},
+      playFeatured() {},
+    };
   }
 
+  const spotlight = buildSpotlight(newest);
+  const library = games.length > 1 ? buildLibrary(games, store) : null;
+  const element = h(
+    'div',
+    { class: 'lobby' },
+    spotlight.element,
+    library?.element,
+    games.length < SEARCH_FROM
+      ? h(
+          'p',
+          { class: 'lobby__soon' },
+          'More classics are being rebuilt right now. Each one lands here the day it is ready.',
+        )
+      : null,
+  );
+
+  return {
+    element,
+    backdropImage: spotlight.backdropImage,
+    searchable: library?.searchable ?? false,
+    focusGame(slug) {
+      if (library?.focusGame(slug)) return;
+      if (slug === spotlight.game.slug) spotlight.focusPlay();
+    },
+    stepGenre: (delta) => library?.stepGenre(delta),
+    playFeatured: () => spotlight.play(),
+  };
+}
+
+interface Library {
+  element: HTMLElement;
+  searchable: boolean;
+  /** Returns false when the game has no visible card to focus. */
+  focusGame(slug: string): boolean;
+  stepGenre(delta: number): void;
+}
+
+/** Every game as a card, with search, genre filters and sorting once there are enough. */
+function buildLibrary(games: readonly GameEntry[], store: Store): Library {
+  const searchable = games.length >= SEARCH_FROM;
   const query: LibraryQuery = {
     search: '',
     genre: null,
     sort: store.get<SortOrder>('sort', 'added') === 'title' ? 'title' : 'added',
   };
   const genres = collectGenres(games);
-  const cabinets = games.map(buildCabinet);
-  const covers = new Map<string, CoverPlayer>();
+  const cards = games.map(buildCard);
 
   const searchField = h('input', {
     class: 'search__field',
@@ -58,7 +113,7 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
   const sortButtons = (Object.keys(SORT_LABELS) as SortOrder[]).map((sort) =>
     h('button', { class: 'segment', type: 'button', 'data-sort': sort }, SORT_LABELS[sort]),
   );
-  const count = h('p', { class: 'lobby__count', role: 'status' });
+  const count = h('p', { class: 'library__count', role: 'status' });
   const grid = h('ul', { class: 'grid', id: 'games', 'aria-label': 'Games' });
   const clearButton = h(
     'button',
@@ -67,45 +122,59 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
   );
   const noResults = h(
     'div',
-    { class: 'lobby__none', hidden: true },
-    h('p', {}, 'No machine matches that. Maybe it is still being wired up.'),
+    { class: 'library__none', hidden: true },
+    h('p', {}, 'Nothing matches that yet. Maybe it is still being rebuilt.'),
     clearButton,
   );
 
   const element = h(
     'section',
-    { class: 'lobby', 'aria-label': 'Games' },
+    { class: 'library', 'aria-labelledby': 'library-title' },
     h(
       'div',
-      { class: 'toolbar' },
-      h(
-        'label',
-        { class: 'search' },
-        icon(ICONS.search),
-        searchField,
-        h('kbd', { class: 'search__key', 'aria-hidden': 'true' }, '/'),
-      ),
-      h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter by genre' }, ...genreButtons),
-      h('div', { class: 'segments', role: 'group', 'aria-label': 'Sort order' }, ...sortButtons),
+      { class: 'library__head' },
+      h('h2', { class: 'library__title', id: 'library-title' }, 'All games'),
+      count,
     ),
-    count,
+    searchable
+      ? h(
+          'div',
+          { class: 'toolbar' },
+          h(
+            'label',
+            { class: 'search' },
+            icon(ICONS.search),
+            searchField,
+            h('kbd', { class: 'search__key', 'aria-hidden': 'true' }, '/'),
+          ),
+          h(
+            'div',
+            { class: 'chips', role: 'group', 'aria-label': 'Filter by genre' },
+            ...genreButtons,
+          ),
+          h(
+            'div',
+            { class: 'segments', role: 'group', 'aria-label': 'Sort order' },
+            ...sortButtons,
+          ),
+        )
+      : null,
     grid,
     noResults,
   );
 
-  const visibleCabinets = () => cabinets.filter((cabinet) => isVisible(cabinet.link));
+  const visibleCards = () => cards.filter((card) => isVisible(card.link));
 
   const refresh = () => {
     const ordered = selectGames(games, query)
-      .map((game) => cabinets.find((cabinet) => cabinet.game.slug === game.slug))
-      .filter((cabinet): cabinet is Cabinet => cabinet !== undefined);
-    grid.replaceChildren(...ordered.map((cabinet) => cabinet.slot));
+      .map((game) => cards.find((card) => card.game.slug === game.slug))
+      .filter((card): card is Card => card !== undefined);
+    grid.replaceChildren(...ordered.map((card) => card.slot));
 
-    const machines = (total: number) => `${total === 1 ? 'machine' : 'machines'}`;
     count.textContent =
       ordered.length === games.length
-        ? `${games.length} ${machines(games.length)} on the floor`
-        : `${ordered.length} of ${games.length} ${machines(games.length)}`;
+        ? `${games.length} games`
+        : `${ordered.length} of ${games.length} games`;
     noResults.hidden = ordered.length > 0;
 
     for (const button of genreButtons) {
@@ -115,31 +184,31 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
     for (const button of sortButtons) {
       button.setAttribute('aria-pressed', String(button.dataset.sort === query.sort));
     }
-    keepOneCabinetTabbable(ordered);
+    keepOneCardTabbable(ordered);
   };
 
-  // Only one cabinet is in the tab order; arrow keys move between them.
-  const keepOneCabinetTabbable = (ordered: Cabinet[]) => {
-    const current = ordered.find((cabinet) => cabinet.link.tabIndex === 0) ?? ordered[0];
-    for (const cabinet of cabinets) cabinet.link.tabIndex = cabinet === current ? 0 : -1;
+  // Only one card is in the tab order; arrow keys move between them.
+  const keepOneCardTabbable = (ordered: Card[]) => {
+    const current = ordered.find((card) => card.link.tabIndex === 0) ?? ordered[0];
+    for (const card of cards) card.link.tabIndex = card === current ? 0 : -1;
   };
 
-  const moveFocusTo = (cabinet: Cabinet) => {
-    for (const other of cabinets) other.link.tabIndex = other === cabinet ? 0 : -1;
-    cabinet.link.focus();
-    cabinet.link.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const moveFocusTo = (card: Card) => {
+    for (const other of cards) other.link.tabIndex = other === card ? 0 : -1;
+    card.link.focus();
+    card.link.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
 
   grid.addEventListener('keydown', (event) => {
-    const from = cabinets.find((cabinet) => cabinet.link === event.target);
+    const from = cards.find((card) => card.link === event.target);
     if (!from) return;
-    const visible = visibleCabinets();
-    let next: Cabinet | null | undefined;
+    const visible = visibleCards();
+    let next: Card | null | undefined;
 
     const direction = ARROW_DIRECTIONS[event.key];
     if (direction) {
-      const boxes = visible.map((cabinet) => ({ cabinet, ...boxOf(cabinet.link) }));
-      next = nearestInDirection(boxOf(from.link), boxes, direction)?.cabinet;
+      const boxes = visible.map((card) => ({ card, ...boxOf(card.link) }));
+      next = nearestInDirection(boxOf(from.link), boxes, direction)?.card;
     } else if (event.key === 'Home') {
       next = visible[0];
     } else if (event.key === 'End') {
@@ -166,7 +235,7 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
       query.search = '';
       refresh();
     } else if (event.key === 'ArrowDown' || event.key === 'Enter') {
-      const first = visibleCabinets()[0];
+      const first = visibleCards()[0];
       if (first) {
         event.preventDefault();
         moveFocusTo(first);
@@ -199,59 +268,28 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
     searchField.value = '';
     Object.assign(query, { search: '', genre: null });
     refresh();
-    visibleCabinets()[0]?.link.focus();
+    visibleCards()[0]?.link.focus();
   });
 
-  for (const cabinet of cabinets) wakeOnAttention(cabinet, covers);
   refresh();
 
   return {
     element,
+    searchable,
     focusGame(slug) {
-      const cabinet = cabinets.find((candidate) => candidate.game.slug === slug);
-      if (cabinet && isVisible(cabinet.link)) moveFocusTo(cabinet);
+      const card = cards.find((candidate) => candidate.game.slug === slug);
+      if (!card || !isVisible(card.link)) return false;
+      moveFocusTo(card);
+      return true;
     },
     stepGenre(delta) {
+      if (!searchable) return;
       const options = [null, ...genres];
       const index = options.indexOf(query.genre);
       query.genre = options[(index + delta + options.length) % options.length] ?? null;
       refresh();
     },
   };
-}
-
-/** The cover comes alive while the cabinet is hovered or focused. */
-function wakeOnAttention(cabinet: Cabinet, covers: Map<string, CoverPlayer>) {
-  const { game, link, canvas } = cabinet;
-  let hovered = false;
-  let focused = false;
-  const update = () => covers.get(game.slug)?.setAlive(hovered || focused);
-
-  void loadCover(game.cover).then((definition) => {
-    const seed = [...game.slug].reduce((sum, char) => sum * 31 + char.charCodeAt(0), 7) >>> 0;
-    covers.set(
-      game.slug,
-      playCover(canvas, definition, { seed, accent: game.accent, title: game.title }),
-    );
-    update();
-  });
-
-  link.addEventListener('pointerenter', () => {
-    hovered = true;
-    update();
-  });
-  link.addEventListener('pointerleave', () => {
-    hovered = false;
-    update();
-  });
-  link.addEventListener('focus', () => {
-    focused = true;
-    update();
-  });
-  link.addEventListener('blur', () => {
-    focused = false;
-    update();
-  });
 }
 
 function boxOf(element: Element) {

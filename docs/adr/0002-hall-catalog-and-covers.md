@@ -1,12 +1,14 @@
 # ADR 0002 — Hall catalog, covers, and how a port registers itself
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-09-26 by [ADR 0005](0005-hall-shows-game-screens.md)
+  (screens, pitch and highlights; covers become the fallback)
 - **Date:** 2026-09-25
 
 ## Context
 
-The Arcade Hall lists every finished port as an arcade cabinet with a small,
-code-drawn, animated cover, a detail panel, and the port's player-facing docs.
+The Arcade Hall lists every finished port with its screens (or, failing
+those, a small code-drawn animated cover), a detail panel, and the port's
+player-facing docs.
 Ports are built in separate sessions, so the contract between a port and the
 Hall has to be small, explicit and checked by tests.
 
@@ -21,17 +23,20 @@ warning) and by `hall/src/catalog.test.ts` in CI (bad entries fail the build).
 | Field | Type | Meaning |
 |---|---|---|
 | `slug` | string, kebab-case | Folder name under `ports/` and the URL segment in `dist/`. |
-| `title` | string | The port's name, shown on the marquee. |
+| `title` | string | The port's name. |
 | `tagline` | string | One line that sells it. |
+| `pitch` | string, optional | Two or three sentences on why it is worth playing, written as an invitation. Shown in the spotlight and the detail panel. |
+| `highlights` | string[], optional, at most 4 | Short reasons to play, shown as a list in the spotlight. |
+| `screens` | `{ image, caption? }[]`, optional | Screenshots, relative to the port folder (normally `media/…`), each with a short caption. The Hall shows the first on cards and cycles through all of them in the spotlight and the detail panel. Without screens, the cover is shown. |
 | `original.title` | string | The classic this is based on. |
 | `original.author` | string | Author or company. |
 | `original.year` | integer | Year of the original. |
 | `original.platform` | string, optional | e.g. `"MS-DOS (QBasic)"`. |
-| `genres` | string[], at least one | Drives the genre filter; the first two show on the cabinet. |
+| `genres` | string[], at least one | Drives the genre filter; the first two show on the card. |
 | `players` | `{ min, max }` integers, `1 <= min <= max` | Shown as "1–2 players". |
-| `accent` | `#rrggbb` | The cabinet's neon colour and T-molding. |
+| `accent` | `#rrggbb` | The game's colour in the Hall: Play button, glow under the screen, card highlights. |
 | `path` | relative URL | Where the game lives relative to the Hall in `dist/`. Always `"<slug>/"`. |
-| `cover` | string | Name of the cover module in `hall/covers/`, without `.ts`. Usually the slug. |
+| `cover` | string | Name of the cover module in `hall/covers/`, without `.ts`. Usually the slug. Shown when there are no screens or they fail to load. |
 | `docs.howToPlay` | path | Relative to the port folder, normally `docs/HOW-TO-PLAY.md`. |
 | `docs.about` | path | Normally `docs/ABOUT.md`. |
 | `docs.architecture` | path, optional | Normally `docs/ARCHITECTURE.md`. Not shown to players. |
@@ -44,6 +49,9 @@ Example:
   "slug": "skyline-showdown",
   "title": "Skyline Showdown",
   "tagline": "Bananas, wind and a city at dusk.",
+  "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city.",
+  "highlights": ["Learn it in one throw, master it in the wind", "Four worlds, each with its own gravity"],
+  "screens": [{ "image": "media/aiming.jpg", "caption": "Pull back, read the wind, let it fly." }],
   "original": { "title": "QBasic Gorillas", "author": "Microsoft Corporation", "year": 1990, "platform": "MS-DOS (QBasic)" },
   "genres": ["Artillery", "Duel"],
   "players": { "min": 1, "max": 2 },
@@ -56,8 +64,8 @@ Example:
 ```
 
 The catalog test also checks, for every entry, that `ports/<slug>/index.html`,
-`hall/covers/<cover>.ts` and both player docs exist, and that `path` is
-`"<slug>/"`.
+`hall/covers/<cover>.ts`, both player docs and every screen image exist, and
+that `path` is `"<slug>/"`.
 
 ### 2. The cover API: `hall/covers/<cover>.ts`
 
@@ -132,13 +140,15 @@ after asking "leave the match?").
 3. Write `ports/<slug>/docs/HOW-TO-PLAY.md`, `ABOUT.md` and `ARCHITECTURE.md`;
    put screenshots in `ports/<slug>/media/`.
 4. Add `hall/covers/<slug>.ts` using `defineCover`.
-5. Add the catalog entry to `hall/catalog.json`.
+5. Add the catalog entry to `hall/catalog.json`, with a `pitch`, a few
+   `highlights` and four to six `screens` of real play (landscape,
+   16:10 or close, no title screens), each with a short caption.
 6. Run `npm test` (the catalog guard), `npm run build`, `npm run test:e2e`.
 
 ## Consequences
 
-- Adding a game never touches Hall code, only data (`catalog.json`) and one
-  cover file.
+- Adding a game never touches Hall code, only data (`catalog.json`), its
+  screenshots and one cover file.
 - The Hall bundle grows with every port's docs and screenshots; keep
   screenshots as JPEG or reasonably sized PNG.
 - The catalog schema is a public contract: changing a field means updating

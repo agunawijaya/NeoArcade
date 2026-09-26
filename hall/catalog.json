@@ -3,6 +3,39 @@
     "slug": "skyline-showdown",
     "title": "Skyline Showdown",
     "tagline": "Two gorillas, a city at dusk and a lot of exploding bananas.",
+    "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city. Every miss blows a hole in the skyline and teaches you something; the first clean hit brings the house down.",
+    "highlights": [
+      "Learn it in one throw, master it in the wind",
+      "Play a friend on one keyboard, or a CPU at four levels",
+      "Earth, the Moon, Mars and Jupiter, each with its own gravity",
+      "Power-ups on balloons, slow-motion replays, a city you can blow apart"
+    ],
+    "screens": [
+      {
+        "image": "media/aiming.jpg",
+        "caption": "Pull back, read the wind, let it fly."
+      },
+      {
+        "image": "media/building-hit.jpg",
+        "caption": "Every miss leaves its mark on the skyline."
+      },
+      {
+        "image": "media/moon.jpg",
+        "caption": "On the Moon, a banana floats for ages."
+      },
+      {
+        "image": "media/jupiter.jpg",
+        "caption": "On Jupiter it drops like a stone."
+      },
+      {
+        "image": "media/night.jpg",
+        "caption": "Play on from dusk into the night."
+      },
+      {
+        "image": "media/light.jpg",
+        "caption": "Or settle it in broad daylight."
+      }
+    ],
     "original": {
       "title": "QBasic Gorillas",
       "author": "Microsoft Corporation",
@@ -10,7 +43,10 @@
       "platform": "MS-DOS 5.0 (QBasic)"
     },
     "genres": ["Artillery", "Duel"],
-    "players": { "min": 1, "max": 2 },
+    "players": {
+      "min": 1,
+      "max": 2
+    },
     "accent": "#ff8a3d",
     "path": "skyline-showdown/",
     "cover": "skyline-showdown",

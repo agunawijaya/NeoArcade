@@ -2,11 +2,24 @@
  * One entry of hall/catalog.json. The schema is documented in
  * docs/adr/0002-hall-catalog-and-covers.md; this module is its enforcement.
  */
+/** One screenshot from the port, with a line saying what is happening in it. */
+export interface GameScreen {
+  /** Image path relative to the port folder, normally under media/. */
+  image: string;
+  caption?: string;
+}
+
 export interface GameEntry {
   /** Folder name under ports/, and the game's URL segment in the built site. */
   slug: string;
   title: string;
   tagline: string;
+  /** Two or three sentences on why the game is worth playing, in the voice of an invitation. */
+  pitch?: string;
+  /** A few short reasons to play, shown as a list. */
+  highlights?: string[];
+  /** Screenshots shown in the Hall; without them the Hall shows the animated cover. */
+  screens?: GameScreen[];
   original: {
     title: string;
     author: string;
@@ -15,11 +28,11 @@ export interface GameEntry {
   };
   genres: string[];
   players: { min: number; max: number };
-  /** Neon colour of the cabinet, as #rrggbb. */
+  /** The game's colour in the Hall, as #rrggbb. */
   accent: string;
   /** Where the game lives relative to the Hall in the built site, normally "<slug>/". */
   path: string;
-  /** Name of the cover module in hall/covers/ (without .ts). */
+  /** Name of the animated cover in hall/covers/ (without .ts), shown when there are no screens. */
   cover: string;
   /** Markdown files relative to the port folder. */
   docs: {
@@ -40,6 +53,7 @@ export interface ParsedCatalog {
 const SLUG = /^_?[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_HIGHLIGHTS = 4;
 
 export function parseCatalog(raw: unknown): ParsedCatalog {
   if (!Array.isArray(raw)) {
@@ -94,6 +108,27 @@ function entryProblems(item: unknown): string[] {
   need(
     Array.isArray(item.genres) && item.genres.length > 0 && item.genres.every(isText),
     'genres must list at least one genre',
+  );
+
+  need(item.pitch === undefined || isText(item.pitch), 'pitch must be a non-empty string');
+  need(
+    item.highlights === undefined ||
+      (Array.isArray(item.highlights) &&
+        item.highlights.length <= MAX_HIGHLIGHTS &&
+        item.highlights.every(isText)),
+    `highlights must be a list of at most ${MAX_HIGHLIGHTS} lines`,
+  );
+  need(
+    item.screens === undefined ||
+      (Array.isArray(item.screens) &&
+        item.screens.every(
+          (screen) =>
+            isRecord(screen) &&
+            isText(screen.image) &&
+            !/^([a-z]+:|\/)/i.test(screen.image) &&
+            (screen.caption === undefined || isText(screen.caption)),
+        )),
+    'screens must list images relative to the port, each with an optional caption',
   );
 
   const { original, players, docs } = item;

@@ -1,7 +1,7 @@
 import type { CoverDefinition } from './cover-api';
 import { fallbackCover } from './fallback-cover';
 
-// Every file in hall/covers/ is a cover, loaded only when a cabinet shows it.
+// Every file in hall/covers/ is a cover, loaded only when the Hall shows it.
 const coverModules = import.meta.glob<{ default: CoverDefinition }>('../covers/*.ts');
 
 const coversById = new Map(

@@ -147,44 +147,67 @@
   box-shadow: inset 0 0 0 1px rgb(63 243 255 / 0.55);
 }
 
-.lobby__count {
-  margin: 22px 4px 0;
+/* The collection ------------------------------------------------------------ */
+
+.library {
+  display: grid;
+  gap: 18px;
+  margin-top: clamp(40px, 7vw, 72px);
+}
+
+.library__head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.library__title {
+  margin: 0;
+  font: 400 clamp(1.5rem, 3.4vw, 2rem) / 1.1 var(--font-display);
+  color: var(--ink);
+}
+
+.library__count {
+  margin: 0;
   color: var(--ink-faint);
   font: 600 0.74rem/1 var(--font-mono);
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
-.lobby__none {
+.library__none {
   display: grid;
   justify-items: center;
   gap: 18px;
-  padding: 56px 0 24px;
+  padding: 40px 0 24px;
   color: var(--ink-soft);
   text-align: center;
 }
 
-.lobby__none p {
+.library__none p {
   margin: 0;
 }
-
-/* The floor ---------------------------------------------------------------- */
 
 .grid {
   display: grid;
-  /* auto-fit collapses empty tracks, so a lone cabinet stands centre stage. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 256px));
-  justify-content: center;
-  gap: 72px clamp(24px, 3vw, 44px);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: clamp(18px, 2.4vw, 28px);
   margin: 0;
-  padding: 44px 0 16px;
+  padding: 0;
   list-style: none;
 }
 
-.cabinet-slot {
-  position: relative;
+.card-slot {
   display: flex;
-  justify-content: center;
+}
+
+.lobby__soon {
+  max-width: 40rem;
+  margin: clamp(36px, 6vw, 60px) auto 0;
+  color: var(--ink-faint);
+  font-size: 0.95rem;
+  text-align: center;
+  text-wrap: balance;
 }
 
 /* Empty Hall --------------------------------------------------------------- */
@@ -192,17 +215,27 @@
 .empty {
   display: grid;
   justify-items: center;
+  gap: 28px;
   padding-top: clamp(8px, 3vw, 28px);
 }
 
-.grid--dormant {
+.empty__screens {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 2.4vw, 28px);
   width: 100%;
-  padding-top: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty__screen {
+  opacity: 0.8;
+  animation: rise 0.8s var(--ease-out) var(--delay) both;
 }
 
 .empty__message {
   max-width: 40rem;
-  margin-top: 8px;
   text-align: center;
 }
 
@@ -210,10 +243,7 @@
   margin: 0;
   text-wrap: balance;
   font: 400 clamp(1.7rem, 4.6vw, 2.5rem) / 1.15 var(--font-display);
-  color: #fff3fb;
-  text-shadow:
-    0 0 8px rgb(255 63 164 / 0.8),
-    0 0 26px rgb(255 63 164 / 0.45);
+  color: var(--ink);
 }
 
 .empty__text {
@@ -223,9 +253,20 @@
   font-size: 1.02rem;
 }
 
-/* Three dormant machines crowd a phone; one is enough to set the scene. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Three waiting screens crowd a phone; one is enough to set the scene. */
 @media (max-width: 560px) {
-  .grid--dormant .cabinet-slot:not(:first-child) {
+  .empty__screens {
+    grid-template-columns: 1fr;
+  }
+
+  .empty__screen:not(:first-child) {
     display: none;
   }
 }

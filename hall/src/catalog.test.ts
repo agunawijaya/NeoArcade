@@ -62,6 +62,26 @@ describe('parseCatalog', () => {
     }
   });
 
+  it('accepts a pitch, highlights and screens, and checks their shape', () => {
+    const invited: GameEntry = {
+      ...validGame,
+      pitch: 'Throw a banana across the city.',
+      highlights: ['Four worlds', 'A CPU at four levels'],
+      screens: [
+        { image: 'media/aiming.jpg', caption: 'Read the wind.' },
+        { image: 'media/moon.jpg' },
+      ],
+    };
+    expect(parseCatalog([invited]).problems).toEqual([]);
+    expect(parseCatalog([{ ...validGame, pitch: '' }]).problems[0]).toMatch(/pitch/);
+    expect(
+      parseCatalog([{ ...validGame, highlights: ['a', 'b', 'c', 'd', 'e'] }]).problems[0],
+    ).toMatch(/highlights/);
+    for (const image of ['/media/x.jpg', 'https://example.com/x.jpg', '']) {
+      expect(parseCatalog([{ ...validGame, screens: [{ image }] }]).problems[0]).toMatch(/screens/);
+    }
+  });
+
   it('rejects impossible dates and missing docs', () => {
     expect(parseCatalog([{ ...validGame, added: '25/09/2026' }]).problems).toHaveLength(1);
     const withoutDocs: Partial<GameEntry> = { ...validGame };
@@ -78,7 +98,7 @@ describe('formatting', () => {
   });
 });
 
-// Guards the real catalog: every registered game must be complete, or the Hall shows a broken cabinet.
+// Guards the real catalog: every registered game must be complete, or the Hall shows a broken card.
 describe('hall/catalog.json', () => {
   const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
   const raw: unknown = JSON.parse(readFileSync(`${repoRoot}hall/catalog.json`, 'utf8'));
@@ -96,6 +116,9 @@ describe('hall/catalog.json', () => {
       expect(existsSync(`${repoRoot}ports/${slug}/${game.docs.howToPlay}`)).toBe(true);
       expect(existsSync(`${repoRoot}ports/${slug}/${game.docs.about}`)).toBe(true);
       expect(game.path).toBe(`${slug}/`);
+      for (const screen of game.screens ?? []) {
+        expect(existsSync(`${repoRoot}ports/${slug}/${screen.image}`), screen.image).toBe(true);
+      }
     },
   );
 });

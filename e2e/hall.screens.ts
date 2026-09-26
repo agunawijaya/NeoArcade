@@ -44,11 +44,11 @@ for (const viewport of VIEWPORTS) {
       if (viewport.name === 'phone') await shoot(page, `lobby-${viewport.name}-full`, true);
     });
 
-    test('cabinet in focus', async ({ page }) => {
-      test.skip(!firstSlug, 'The catalog is empty.');
+    test('card in focus', async ({ page }) => {
+      test.skip(catalog.length < 2, 'A single game is shown in the spotlight, without cards.');
       await page.goto('./');
       await settle(page);
-      await page.locator('.cabinet').first().focus();
+      await page.locator('.card').first().focus();
       await page.waitForTimeout(1200);
       await shoot(page, `lobby-focus-${viewport.name}`);
     });
@@ -67,7 +67,8 @@ for (const viewport of VIEWPORTS) {
         await page.goto(`./#/games/${firstSlug}/${doc}`);
         await settle(page, 800);
         await page.locator('.prose h1').waitFor();
-        if (doc === 'about') await page.locator('.doc-diagram--ready').first().waitFor();
+        const diagrams = await page.locator('.doc-diagram').count();
+        if (diagrams > 0) await page.locator('.doc-diagram--ready').first().waitFor();
         await shoot(page, `docs-${doc}-${viewport.name}`, viewport.name === 'phone');
       }
     });

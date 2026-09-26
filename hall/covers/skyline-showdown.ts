@@ -3,9 +3,9 @@ import { withAlpha } from '../src/colour';
 import { defineCover } from '../src/cover-api';
 
 /**
- * Skyline Showdown's cabinet screen: a city at dusk, two gorillas on their
+ * Skyline Showdown's animated cover: a city at dusk, two gorillas on their
  * rooftops and a banana forever arcing between them while the sun watches.
- * Drawn in its own 160 × 120 space and scaled to the cabinet.
+ * Drawn in its own 160 × 120 space and scaled to fit.
  */
 const WIDTH = 160;
 const HEIGHT = 120;
@@ -125,7 +125,7 @@ function drawSun(ctx: CanvasRenderingContext2D, time: number, energy: number) {
   ctx.strokeStyle = '#3a1a10';
   ctx.lineWidth = 0.6;
   ctx.beginPath();
-  // The sun gasps while the cabinet is lit and a banana sails past.
+  // The sun gasps while the cover is lit and a banana sails past.
   if (energy > 0.5) ctx.arc(x, y + 2.2, 1.2, 0, Math.PI * 2);
   else ctx.arc(x, y + 0.5, 2.6, Math.PI * 0.2, Math.PI * 0.8);
   ctx.stroke();
