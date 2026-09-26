@@ -99,7 +99,8 @@ ports/skyline-showdown/
 └── src/
     ├── main.ts             wiring: stage, audio, controls, screens, loop
     ├── settings.ts         settings, presets, validation, match options
-    ├── styles.css          HUD and menus
+    ├── theme.ts            light, dark or auto: stored, resolved, followed live
+    ├── styles.css          HUD and menus, as colour tokens for both themes
     ├── engine/
     │   ├── constants.ts    world size, step time, radii, the sun
     │   ├── worlds.ts       gravity and wind scale per world
@@ -129,7 +130,7 @@ ports/skyline-showdown/
     │   ├── sky-body.ts     the mascot: Sun, Earth, Phobos, Io
     │   ├── gorilla.ts      vector gorillas, moods, the banana shape
     │   ├── effects.ts      fire, sparks, debris, smoke, embers, falling roofs
-    │   └── palette.ts      colours per world and time of day
+    │   └── palette.ts      colours per world, time of day and theme
     ├── ui/
     │   ├── hud.ts          name plates, wind, aim readout, typed panel, toasts
     │   ├── title-screen.ts
@@ -232,6 +233,16 @@ sequenceDiagram
 4. Static layers (city, both skylines, cloud sprites) are painted once per
    round and resolution into offscreen canvases. Per frame they cost one
    `drawImage` each.
+5. **Themes.** The dark theme uses the dusk, night and dawn palettes. The
+   light theme swaps dusk and dawn for a `day` palette per world (the Moon
+   keeps its black, airless sky) and keeps night as it is. Each palette
+   carries `daylight` (0 or 1, blended across the cycle): it turns the
+   street lamps off and makes `Stage` raise the bloom threshold and soften
+   the vignette, so a bright sky does not glow all over. `main.ts` sets
+   `data-theme` on the page from the choice and the scene: light only while
+   the city is lit, so a night round keeps the HUD dark. `styles.css` keeps
+   every colour in tokens and redefines them under `[data-theme='light']`.
+   A small script in `index.html` sets the theme before the first paint.
 
 ## Where every visual "asset" lives
 
@@ -248,7 +259,7 @@ sequenceDiagram
 | The banana | `render/gorilla.ts` (`drawBananaShape`), trails in `render/scene.ts` |
 | Balloons and crates | `render/scene.ts` (`drawBalloon`, `POWER_UP_COLOURS`) |
 | Fire, sparks, debris, smoke, fur, flashes, rings, embers | `render/effects.ts` |
-| Palettes for 4 worlds × dusk, night and dawn | `render/palette.ts` |
+| Palettes for 4 worlds × dusk, night, dawn and day | `render/palette.ts` |
 | Post-processing (bloom, vignette, grading, CRT) | `@shared/fx`, set up in `render/stage.ts` |
 | HUD, menus, icons | `ui/*.ts`, `styles.css`, `ui/icons.ts` |
 | Sound effects, the theme, city hum, victory jingle | `audio/sounds.ts` (synth patches for `@shared/audio`) |
@@ -265,12 +276,17 @@ flowchart LR
   start --> options[matchOptionsFrom] --> engine[createMatch]
   start --> session[Session: players, CPU level, aiming, aim assist]
   start --> stage[Stage: CRT]
+  theme[("localStorage<br/>neoarcade:skyline-showdown:theme")] <--> prefs[ThemePreference]
+  prefs --> page[data-theme on the page]
+  prefs --> session
   session --> scene[Scene: weather and day cycle]
   mix[("arcade-wide audio mix")] <--> screen
 ```
 
 Sound levels live in the arcade-wide `@shared/audio` mix, so mute and
-volume carry across every NeoArcade game.
+volume carry across every NeoArcade game. The theme is this game's own
+preference: like the sound it applies at once, and switching presets
+never changes it.
 
 ## Tests
 

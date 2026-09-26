@@ -20,7 +20,7 @@ import {
 } from '../engine/match';
 import { POWER_UPS, type Balloon } from '../engine/powerups';
 import { CITY_HUM, SOUNDS, VICTORY, playFanfare, type SoundName } from '../audio/sounds';
-import { timeOfDayForRound } from '../render/palette';
+import { timeOfDayForRound, type Theme } from '../render/palette';
 import { Scene, type ThrowPreview } from '../render/scene';
 import type { Stage } from '../render/stage';
 import { cleanName, isCpu, matchOptionsFrom, type Settings } from '../settings';
@@ -47,6 +47,8 @@ export interface SessionOptions {
   controls: Controls;
   reducedMotion: () => boolean;
   touch: () => boolean;
+  /** Read at the start of each round, so a change shows from the next city on. */
+  theme: () => Theme;
   onMatchOver: (summary: MatchSummary) => void;
   onPause: () => void;
 }
@@ -177,12 +179,12 @@ export class Session {
   private beginRound() {
     const { settings, stage, hud, audio } = this.options;
     const { round } = this.state;
-    this.scene = new Scene(
-      round,
-      timeOfDayForRound(round.number, settings.weather),
-      settings.weather,
-      () => this.sound('thunder'),
-    );
+    this.scene = new Scene(round, {
+      timeOfDay: timeOfDayForRound(round.number, settings.weather),
+      theme: this.options.theme(),
+      weather: settings.weather,
+      onThunder: () => this.sound('thunder'),
+    });
     stage.setScene(this.scene);
     stage.camera.rest(true);
     this.scene.actors.forEach((actor, player) => (actor.shielded = round.shields[player] === true));

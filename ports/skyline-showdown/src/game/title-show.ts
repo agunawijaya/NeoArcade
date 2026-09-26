@@ -1,5 +1,6 @@
 import { createMatch } from '../engine/match';
 import { gorillaCentre } from '../engine/gorillas';
+import type { Theme } from '../render/palette';
 import { Scene } from '../render/scene';
 import type { Stage } from '../render/stage';
 
@@ -8,9 +9,10 @@ const SHOWCASE_SEED = 1990;
 const PAN_SECONDS = 26;
 
 /**
- * The establishing shot behind the title: dusk over the city, the camera
- * drifting slowly along the skyline and easing back, gorillas idling on
- * their rooftops and the sun keeping an eye on things.
+ * The establishing shot behind the title: dusk over the city (a bright day
+ * in the light theme), the camera drifting slowly along the skyline and
+ * easing back, gorillas idling on their rooftops and the sun keeping an eye
+ * on things.
  */
 export class TitleShow {
   readonly scene: Scene;
@@ -19,6 +21,7 @@ export class TitleShow {
   constructor(
     private readonly stage: Stage,
     weather: boolean,
+    theme: Theme,
   ) {
     const match = createMatch({
       seed: SHOWCASE_SEED,
@@ -27,7 +30,12 @@ export class TitleShow {
       format: 'firstTo',
       powerUps: [],
     });
-    this.scene = new Scene(match.round, 0.15, weather, () => {});
+    this.scene = new Scene(match.round, {
+      timeOfDay: 0.15,
+      theme,
+      weather,
+      onThunder: () => {},
+    });
     this.scene.wind = 3;
     // One gorilla on the right, gazing across the city; the left side belongs to the logo.
     this.scene.actors[0].setMood('gone');

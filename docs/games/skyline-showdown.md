@@ -172,6 +172,10 @@ flights take the same wall-clock time. The physics is unchanged.
 
 ### Presentation
 
+- **Light and dark themes.** The original had one look. A Theme setting
+  (Auto, Light, Dark; Auto follows the device) adds a light theme with a
+  daytime palette for every world. Night rounds stay dark. It is a personal
+  preference, stored apart from the match rules.
 - Everything is redrawn in code: layered parallax skyline, procedural
   facades, flickering windows, rooftop props (non-solid scenery, as the
   original had nothing on its roofs), vector gorillas with moods, a sun

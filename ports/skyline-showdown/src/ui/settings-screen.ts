@@ -9,6 +9,7 @@ import {
   type PresetId,
   type Settings,
 } from '../settings';
+import type { ThemeChoice, ThemePreference } from '../theme';
 import { h, icon } from './dom';
 import { ICONS, POWER_UP_ICONS } from './icons';
 
@@ -38,10 +39,14 @@ const PRESET_TEXT: Record<PresetId, { title: string; lines: string[] }> = {
   },
 };
 
-/** The match setup screen. Every change is kept in a working copy until Start. */
+/**
+ * The match setup screen. Rule changes are kept in a working copy until
+ * Start; the theme and sound levels are personal and apply at once.
+ */
 export function buildSettingsScreen(
   initial: Settings,
   audio: AudioEngine,
+  theme: ThemePreference,
   handlers: SettingsHandlers,
 ): { element: HTMLElement; refresh(settings: Settings): void } {
   let settings = structuredClone(initial);
@@ -158,6 +163,19 @@ export function buildSettingsScreen(
         h(
           'div',
           { class: 'settings__row' },
+          segmented<ThemeChoice>(
+            'theme',
+            theme.choice,
+            [
+              { value: 'auto', label: 'Auto', note: 'like your device' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ],
+            (choice) => {
+              theme.choose(choice);
+              update(settings);
+            },
+          ),
           toggle('Weather and day cycle', settings.weather, (weather) =>
             update({ ...settings, weather }),
           ),

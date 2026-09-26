@@ -1,8 +1,10 @@
 import type { WorldId } from '../engine/worlds';
 
 /**
- * Colours for one world at one moment of the day. Each world has three
- * looks, dusk, night and dawn, and the day cycle blends between them.
+ * Colours for one world at one moment of the day. Each world has four
+ * looks: dusk, night and dawn for the dark theme, and a bright day that
+ * stands in for dusk and dawn in the light theme. The day cycle blends
+ * between them.
  */
 export interface Palette {
   skyTop: string;
@@ -24,13 +26,17 @@ export interface Palette {
   /** How bright the face in the sky is. */
   bodyGlow: number;
   cloud: string;
+  /** 0 in the dark looks, 1 in full daylight: dims street lamps and softens the bloom. */
+  daylight: number;
   /** Colour grading handed to the post-processing pass. */
   grade: { exposure: number; saturation: number; contrast: number; tint: [number, number, number] };
 }
 
 export type TimeOfDay = number;
 
-type Key = 'dusk' | 'night' | 'dawn';
+type Key = 'dusk' | 'night' | 'dawn' | 'day';
+
+export type Theme = 'light' | 'dark';
 
 const EARTH: Record<Key, Palette> = {
   dusk: {
@@ -49,6 +55,7 @@ const EARTH: Record<Key, Palette> = {
     stars: 0.25,
     bodyGlow: 1,
     cloud: '#d9829a',
+    daylight: 0,
     grade: { exposure: 1.02, saturation: 1.08, contrast: 1.04, tint: [1.03, 0.98, 0.98] },
   },
   night: {
@@ -67,6 +74,7 @@ const EARTH: Record<Key, Palette> = {
     stars: 1,
     bodyGlow: 0.75,
     cloud: '#3c3f73',
+    daylight: 0,
     grade: { exposure: 1, saturation: 1.02, contrast: 1.06, tint: [0.96, 0.98, 1.05] },
   },
   dawn: {
@@ -85,7 +93,27 @@ const EARTH: Record<Key, Palette> = {
     stars: 0.05,
     bodyGlow: 1,
     cloud: '#ffd0c4',
+    daylight: 0,
     grade: { exposure: 1.04, saturation: 1.02, contrast: 1, tint: [1.02, 1, 0.99] },
+  },
+  day: {
+    skyTop: '#3a86d6',
+    skyMiddle: '#79b6ea',
+    skyHorizon: '#d4eaf7',
+    horizonGlow: '#fff4d6',
+    farCity: '#9db3cb',
+    midCity: '#8198b3',
+    haze: '#dcebf5',
+    facades: ['#8c7f9c', '#9c8a86', '#7c8ba2', '#a69484', '#8797aa', '#96889c'],
+    windowLit: ['#d2e8ff', '#b8d6f2', '#e8f3ff', '#a8c6e6'],
+    windowDark: '#4c566b',
+    street: '#3c414d',
+    rimLight: '#fff3d8',
+    stars: 0,
+    bodyGlow: 1,
+    cloud: '#ffffff',
+    daylight: 1,
+    grade: { exposure: 1, saturation: 1.04, contrast: 1.03, tint: [1, 1, 1] },
   },
 };
 
@@ -106,6 +134,7 @@ const MOON: Record<Key, Palette> = {
     stars: 1,
     bodyGlow: 0.95,
     cloud: '#00000000',
+    daylight: 0,
     grade: { exposure: 1, saturation: 0.9, contrast: 1.1, tint: [0.95, 1, 1.06] },
   },
   night: {
@@ -124,6 +153,7 @@ const MOON: Record<Key, Palette> = {
     stars: 1,
     bodyGlow: 1,
     cloud: '#00000000',
+    daylight: 0,
     grade: { exposure: 0.98, saturation: 0.88, contrast: 1.12, tint: [0.94, 1, 1.08] },
   },
   dawn: {
@@ -142,7 +172,28 @@ const MOON: Record<Key, Palette> = {
     stars: 0.8,
     bodyGlow: 1,
     cloud: '#00000000',
+    daylight: 0,
     grade: { exposure: 1.02, saturation: 0.9, contrast: 1.08, tint: [0.98, 1, 1.04] },
+  },
+  day: {
+    // No air, so the sky stays black even with the Sun up; only the ground is lit.
+    skyTop: '#000000',
+    skyMiddle: '#04050b',
+    skyHorizon: '#10131e',
+    horizonGlow: '#36415c',
+    farCity: '#5c606e',
+    midCity: '#4a4e5b',
+    haze: '#2c3242',
+    facades: ['#9a9da8', '#a9a9b1', '#8f94a0', '#b1aeb4', '#98a0ac', '#a6a1aa'],
+    windowLit: ['#dae7f3', '#c6d5e5', '#eef4fa', '#bacbdc'],
+    windowDark: '#3b3e49',
+    street: '#5e6068',
+    rimLight: '#ffffff',
+    stars: 0.35,
+    bodyGlow: 1,
+    cloud: '#00000000',
+    daylight: 1,
+    grade: { exposure: 1.02, saturation: 0.88, contrast: 1.1, tint: [1, 1, 1.02] },
   },
 };
 
@@ -163,6 +214,7 @@ const MARS: Record<Key, Palette> = {
     stars: 0.35,
     bodyGlow: 0.9,
     cloud: '#c9967a',
+    daylight: 0,
     grade: { exposure: 1.02, saturation: 1.05, contrast: 1.05, tint: [1.04, 0.98, 0.95] },
   },
   night: {
@@ -181,6 +233,7 @@ const MARS: Record<Key, Palette> = {
     stars: 1,
     bodyGlow: 0.8,
     cloud: '#5a3a36',
+    daylight: 0,
     grade: { exposure: 1, saturation: 1.02, contrast: 1.08, tint: [1.04, 0.97, 0.96] },
   },
   dawn: {
@@ -199,7 +252,28 @@ const MARS: Record<Key, Palette> = {
     stars: 0,
     bodyGlow: 1,
     cloud: '#f0c6a0',
+    daylight: 0,
     grade: { exposure: 1.04, saturation: 1.04, contrast: 1.02, tint: [1.05, 0.99, 0.94] },
+  },
+  day: {
+    // A Martian noon: dust turns the sky butterscotch.
+    skyTop: '#b98b60',
+    skyMiddle: '#d7ab7c',
+    skyHorizon: '#eed2aa',
+    horizonGlow: '#f8e8ca',
+    farCity: '#b27c5c',
+    midCity: '#9c684c',
+    haze: '#eac69e',
+    facades: ['#b2684c', '#c27858', '#a26c5a', '#ca8662', '#ac785e', '#ba7252'],
+    windowLit: ['#f6e4ca', '#ead2b2', '#fff2de', '#dae6ee'],
+    windowDark: '#5c362a',
+    street: '#6c4232',
+    rimLight: '#fff0d8',
+    stars: 0,
+    bodyGlow: 1,
+    cloud: '#f6dec2',
+    daylight: 1,
+    grade: { exposure: 1, saturation: 1.02, contrast: 1.02, tint: [1.02, 1, 0.97] },
   },
 };
 
@@ -220,6 +294,7 @@ const JUPITER: Record<Key, Palette> = {
     stars: 0.15,
     bodyGlow: 1,
     cloud: '#e8a878',
+    daylight: 0,
     grade: { exposure: 1.02, saturation: 1.12, contrast: 1.05, tint: [1.05, 0.98, 0.94] },
   },
   night: {
@@ -238,6 +313,7 @@ const JUPITER: Record<Key, Palette> = {
     stars: 0.8,
     bodyGlow: 0.85,
     cloud: '#5a3432',
+    daylight: 0,
     grade: { exposure: 1, saturation: 1.08, contrast: 1.08, tint: [1.06, 0.97, 0.95] },
   },
   dawn: {
@@ -256,7 +332,27 @@ const JUPITER: Record<Key, Palette> = {
     stars: 0,
     bodyGlow: 1,
     cloud: '#f8c8a8',
+    daylight: 0,
     grade: { exposure: 1.04, saturation: 1.08, contrast: 1.02, tint: [1.05, 0.99, 0.95] },
+  },
+  day: {
+    skyTop: '#c99b6b',
+    skyMiddle: '#e7c59b',
+    skyHorizon: '#f7e5c5',
+    horizonGlow: '#fff5de',
+    farCity: '#b28a72',
+    midCity: '#9a7460',
+    haze: '#f2d6b2',
+    facades: ['#906c7c', '#a2786c', '#88768c', '#b28068', '#927c90', '#a27a74'],
+    windowLit: ['#fcedd2', '#f4deba', '#fff7e6', '#eadac2'],
+    windowDark: '#4c3642',
+    street: '#5c424a',
+    rimLight: '#fff0d0',
+    stars: 0,
+    bodyGlow: 1,
+    cloud: '#fff2de',
+    daylight: 1,
+    grade: { exposure: 1, saturation: 1.05, contrast: 1.02, tint: [1.02, 1, 0.98] },
   },
 };
 
@@ -281,9 +377,17 @@ export function isNight(time: TimeOfDay): boolean {
   return time > 0.6 && time < 1.6;
 }
 
-export function paletteFor(world: WorldId, time: TimeOfDay): Palette {
+/**
+ * The look for a world at a time of day. The light theme swaps dusk and dawn
+ * for broad daylight, but night stays night: when the Moon is up, the city
+ * is dark whatever the theme.
+ */
+export function paletteFor(world: WorldId, time: TimeOfDay, theme: Theme = 'dark'): Palette {
   const keys = WORLD_PALETTES[world];
-  const stops: Palette[] = [keys.dusk, keys.night, keys.dawn, keys.dusk];
+  const stops: Palette[] =
+    theme === 'light'
+      ? [keys.day, keys.night, keys.day, keys.day]
+      : [keys.dusk, keys.night, keys.dawn, keys.dusk];
   const index = Math.min(2, Math.floor(time));
   const from = stops[index] as Palette;
   const to = stops[index + 1] as Palette;
@@ -311,6 +415,7 @@ export function blendPalettes(from: Palette, to: Palette, amount: number): Palet
     stars: number(from.stars, to.stars),
     bodyGlow: number(from.bodyGlow, to.bodyGlow),
     cloud: colour(from.cloud, to.cloud),
+    daylight: number(from.daylight, to.daylight),
     grade: {
       exposure: number(from.grade.exposure, to.grade.exposure),
       saturation: number(from.grade.saturation, to.grade.saturation),

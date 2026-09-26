@@ -15,6 +15,8 @@ export class Stage {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly fx: PostFx;
   private scene: Scene | null = null;
+  /** Told about every new scene, so the page around it can match its light. */
+  onSceneChange: ((scene: Scene) => void) | null = null;
   private crt = false;
   private cssWidth = 1;
   private cssHeight = 1;
@@ -43,6 +45,7 @@ export class Stage {
     this.scene = scene;
     scene.resize(this.paintScale());
     this.applyGrade();
+    this.onSceneChange?.(scene);
   }
 
   setCrt(on: boolean) {
@@ -76,8 +79,14 @@ export class Stage {
 
   private applyGrade() {
     if (!this.scene) return;
-    const { grade } = this.scene.palette;
-    this.fx.update({ grade: { ...grade }, crt: this.crt ? {} : false });
+    const { grade, daylight } = this.scene.palette;
+    // A bright sky would bloom all over; in daylight only the hottest things glow.
+    this.fx.update({
+      grade: { ...grade },
+      bloom: { strength: 0.6 - 0.3 * daylight, threshold: 0.62 + 0.26 * daylight },
+      vignette: 0.38 - 0.18 * daylight,
+      crt: this.crt ? {} : false,
+    });
     this.setCrt(this.crt);
   }
 }

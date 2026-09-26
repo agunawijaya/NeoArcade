@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { WORLD_IDS } from '../engine/worlds';
-import { mixColours, paletteFor, shade, timeOfDayForRound, withAlpha } from './palette';
+import {
+  mixColours,
+  paletteFor,
+  parseColour,
+  shade,
+  timeOfDayForRound,
+  withAlpha,
+} from './palette';
 
 describe('timeOfDayForRound', () => {
   it('stays at dusk without the day cycle', () => {
@@ -43,5 +50,32 @@ describe('paletteFor', () => {
 
   it('comes back to dusk after dawn', () => {
     expect(paletteFor('mars', 3)).toEqual(paletteFor('mars', 0));
+  });
+});
+
+describe('the light theme', () => {
+  it('turns dusk and dawn into daylight', () => {
+    for (const time of [0, 2, 2.5]) {
+      expect(paletteFor('earth', time, 'light').daylight).toBe(1);
+      expect(paletteFor('earth', time, 'dark').daylight).toBe(0);
+    }
+  });
+
+  it('keeps the night dark', () => {
+    expect(paletteFor('earth', 1, 'light')).toEqual(paletteFor('earth', 1, 'dark'));
+  });
+
+  it('brightens the sky everywhere but the airless Moon', () => {
+    const brightness = (colour: string) =>
+      parseColour(colour)
+        .slice(0, 3)
+        .reduce((sum, channel) => sum + channel, 0);
+    for (const world of WORLD_IDS) {
+      const light = paletteFor(world, 0, 'light');
+      const dark = paletteFor(world, 0, 'dark');
+      if (world === 'moon') expect(brightness(light.skyTop)).toBeLessThan(30);
+      else expect(brightness(light.skyTop)).toBeGreaterThan(brightness(dark.skyTop) * 2);
+      expect(brightness(light.facades[0] ?? '')).toBeGreaterThan(brightness(dark.facades[0] ?? ''));
+    }
   });
 });

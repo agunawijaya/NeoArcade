@@ -151,8 +151,12 @@ export class Backdrop {
     ctx.fillStyle = withAlpha(palette.rimLight, 0.2);
     ctx.fillRect(area.left, STREET_Y, area.right - area.left, 0.6);
 
+    // Street lamps are off in daylight.
+    const lampLight = 1 - palette.daylight;
+    if (lampLight <= 0) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = lampLight;
     for (let x = Math.floor(area.left / 64) * 64 + 20; x < area.right; x += 64) {
       ctx.drawImage(LAMP_GLOW, x - 16, STREET_Y - 14, 32, 32);
       if (wet) {

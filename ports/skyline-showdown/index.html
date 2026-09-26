@@ -8,9 +8,23 @@
       name="description"
       content="Two gorillas, one city at dusk, exploding bananas. A modern remake inspired by QBasic Gorillas."
     />
-    <meta name="theme-color" content="#120c1c" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#120c1c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#d4eaf7" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Set the theme before the first paint, so a light-theme player never sees a dark flash.
+      let choice = 'auto';
+      try {
+        choice = JSON.parse(localStorage.getItem('neoarcade:skyline-showdown:theme')) ?? 'auto';
+      } catch {
+        // Storage blocked or unreadable: follow the device.
+      }
+      const light =
+        choice === 'light' ||
+        (choice !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    </script>
   </head>
   <body>
     <main id="game" class="game" tabindex="-1">

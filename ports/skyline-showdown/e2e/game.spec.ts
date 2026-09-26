@@ -147,3 +147,23 @@ test('aim assist, switched on in the settings, shows the opening of the throw', 
   await run(page, 50);
   expect(await page.evaluate(() => document.body.dataset.guide)).toBe('assist');
 });
+
+test('follows the device theme until a theme is chosen, then remembers it', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await openGame(page, testSettings(), 1);
+  const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
+  expect(await theme()).toBe('light');
+
+  await page.getByRole('button', { name: 'Switch to the dark theme' }).click({ force: true });
+  expect(await theme()).toBe('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  expect(await theme()).toBe('dark');
+  const stored = await page.evaluate(() =>
+    localStorage.getItem('neoarcade:skyline-showdown:theme'),
+  );
+  expect(JSON.parse(stored ?? 'null')).toBe('dark');
+
+  await page.getByRole('button', { name: 'Match settings' }).click({ force: true });
+  await page.getByRole('radio', { name: /Auto/ }).click({ force: true });
+  expect(await theme()).toBe('light');
+});

@@ -10,7 +10,14 @@ import type { Camera } from './camera';
 import { City } from './city';
 import { Effects } from './effects';
 import { drawBananaShape, GORILLA_LOOKS, GorillaActor } from './gorilla';
-import { isNight, paletteFor, withAlpha, type Palette, type TimeOfDay } from './palette';
+import {
+  isNight,
+  paletteFor,
+  withAlpha,
+  type Palette,
+  type Theme,
+  type TimeOfDay,
+} from './palette';
 import { SkyBody } from './sky-body';
 
 export const POWER_UP_COLOURS: Record<PowerUpKind, string> = {
@@ -39,6 +46,14 @@ const GUIDE_HIT_COLOUR = '#7dff8a';
 /** Aim assist shows this share of the flight: enough to judge the launch, not the landing. */
 const ASSIST_SHARE = 1 / 3;
 
+/** How a round should look, chosen before its first frame. */
+export interface SceneLook {
+  timeOfDay: TimeOfDay;
+  theme: Theme;
+  weather: boolean;
+  onThunder: () => void;
+}
+
 /** A predicted throw to draw while aiming: all of it, or only its opening third. */
 export interface ThrowPreview {
   shot: ShotRecord;
@@ -51,6 +66,8 @@ export interface ThrowPreview {
  */
 export class Scene {
   readonly palette: Palette;
+  /** Earth's Moon is up: the city is dark, even in the light theme. */
+  readonly night: boolean;
   readonly city: City;
   readonly backdrop: Backdrop;
   readonly atmosphere: Atmosphere;
@@ -75,18 +92,17 @@ export class Scene {
 
   constructor(
     readonly round: Round,
-    timeOfDay: TimeOfDay,
-    weatherEnabled: boolean,
-    onThunder: () => void,
+    look: SceneLook,
   ) {
     const world = round.world.id;
-    this.palette = paletteFor(world, timeOfDay);
+    this.palette = paletteFor(world, look.timeOfDay, look.theme);
+    this.night = isNight(look.timeOfDay);
     const occupied = round.gorillas.map((gorilla) => gorilla.building);
     this.city = new City(round.terrain.buildings, occupied, round.seed, this.palette);
     this.backdrop = new Backdrop(round.seed, this.palette, world);
-    const weather = rollWeather(createRng(round.seed + 5), world, weatherEnabled);
-    this.atmosphere = new Atmosphere(round.seed, this.palette, weather, world, onThunder);
-    this.skyBody = new SkyBody(world, isNight(timeOfDay));
+    const weather = rollWeather(createRng(round.seed + 5), world, look.weather);
+    this.atmosphere = new Atmosphere(round.seed, this.palette, weather, world, look.onThunder);
+    this.skyBody = new SkyBody(world, this.night);
     this.wind = round.wind;
     this.balloon = round.balloon;
   }

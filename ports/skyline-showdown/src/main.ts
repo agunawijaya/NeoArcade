@@ -16,6 +16,7 @@ import { Hud } from './ui/hud';
 import { MenuNavigator } from './ui/menu-nav';
 import { buildPauseMenu, buildRotateHint, buildVictoryScreen } from './ui/overlays';
 import { buildSettingsScreen } from './ui/settings-screen';
+import { ThemePreference } from './theme';
 import { buildTitleScreen } from './ui/title-screen';
 
 type Screen = 'title' | 'settings' | 'match';
@@ -25,6 +26,8 @@ if (!root) throw new Error('The page is missing its #game element.');
 
 const store = createStore('skyline-showdown');
 let settings = sanitiseSettings(store.get<unknown>('settings', null));
+const themePreference = new ThemePreference(store);
+let sceneIsNight = false;
 // A seed in the address (?seed=1990) replays the same cities, handy for sharing a duel.
 const seedParam = Number.parseInt(new URLSearchParams(location.search).get('seed') ?? '', 10);
 const nextSeed = () => (Number.isFinite(seedParam) ? seedParam : randomSeed());
@@ -34,6 +37,10 @@ const coarsePointer = matchMedia('(pointer: coarse)');
 const reducedMotion = () => reducedMotionQuery.matches;
 
 const stage = new Stage(root);
+stage.onSceneChange = (scene) => {
+  sceneIsNight = scene.night;
+  applyPageTheme();
+};
 stage.camera.reducedMotion = reducedMotion();
 reducedMotionQuery.addEventListener('change', () => (stage.camera.reducedMotion = reducedMotion()));
 stage.setCrt(settings.crt);
@@ -41,7 +48,7 @@ stage.setCrt(settings.crt);
 const audio = createAudio();
 const controls = new Controls(stage.surface);
 let session: Session | null = null;
-let title: TitleShow | null = new TitleShow(stage, settings.weather);
+let title: TitleShow | null = new TitleShow(stage, settings.weather, themePreference.theme);
 let screen: Screen = 'title';
 
 const hallHref = hallUrl();
@@ -56,10 +63,15 @@ const hud = new Hud({
 });
 
 const titleScreen = buildTitleScreen(
-  { play: () => startMatch(settings), settings: () => showScreen('settings') },
+  {
+    play: () => startMatch(settings),
+    settings: () => showScreen('settings'),
+    toggleTheme: () => themePreference.choose(themePreference.theme === 'light' ? 'dark' : 'light'),
+  },
   howToPlayHref,
 );
-const settingsScreen = buildSettingsScreen(settings, audio, {
+titleScreen.showTheme(themePreference.theme);
+const settingsScreen = buildSettingsScreen(settings, audio, themePreference, {
   start(chosen) {
     settings = sanitiseSettings(chosen);
     store.set('settings', settings);
@@ -83,7 +95,7 @@ const victory = buildVictoryScreen(
 
 root.append(
   hud.element,
-  titleScreen,
+  titleScreen.element,
   settingsScreen.element,
   pauseMenu.element,
   victory.element,
@@ -102,7 +114,7 @@ mountHallButton({
 
 const menus = new MenuNavigator(
   () =>
-    [pauseMenu.element, victory.element, settingsScreen.element, titleScreen].find(
+    [pauseMenu.element, victory.element, settingsScreen.element, titleScreen.element].find(
       (element) => !element.hidden,
     ) ?? null,
   () => {
@@ -115,18 +127,18 @@ function showScreen(next: Screen) {
   screen = next;
   document.body.dataset.screen = next;
   if (next !== 'match') endMatch();
-  titleScreen.hidden = next !== 'title';
+  titleScreen.element.hidden = next !== 'title';
   settingsScreen.element.hidden = next !== 'settings';
   pauseMenu.close();
   victory.hide();
   if (next === 'settings') settingsScreen.refresh(settings);
   if (next !== 'match') {
-    title ??= new TitleShow(stage, settings.weather);
+    title ??= new TitleShow(stage, settings.weather, themePreference.theme);
     stage.setCrt(settings.crt);
     audio.playMusic(THEME);
     controls.disable();
     const first = (
-      next === 'title' ? titleScreen : settingsScreen.element
+      next === 'title' ? titleScreen.element : settingsScreen.element
     ).querySelector<HTMLElement>('button');
     first?.focus();
   }
@@ -137,7 +149,7 @@ function startMatch(chosen: Settings) {
   title = null;
   screen = 'match';
   document.body.dataset.screen = 'match';
-  titleScreen.hidden = true;
+  titleScreen.element.hidden = true;
   settingsScreen.element.hidden = true;
   pauseMenu.close();
   victory.hide();
@@ -152,6 +164,7 @@ function startMatch(chosen: Settings) {
     controls,
     reducedMotion,
     touch: () => coarsePointer.matches,
+    theme: () => themePreference.theme,
     onPause: () => openPause(),
     onMatchOver: (summary) => {
       controls.disable();
@@ -159,6 +172,23 @@ function startMatch(chosen: Settings) {
     },
   });
 }
+
+/**
+ * The page follows the chosen theme, except that a match at night stays
+ * dark around its dark city.
+ */
+function applyPageTheme() {
+  const theme = themePreference.theme === 'light' && !sceneIsNight ? 'light' : 'dark';
+  document.documentElement.dataset.theme = theme;
+}
+
+themePreference.onChange(() => {
+  // Menus show the title city, which is repainted in the new light; a match
+  // picks the theme up from its next round.
+  if (!session) title = new TitleShow(stage, settings.weather, themePreference.theme);
+  applyPageTheme();
+  titleScreen.showTheme(themePreference.theme);
+});
 
 function endMatch() {
   session?.dispose();

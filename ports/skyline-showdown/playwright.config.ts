@@ -21,6 +21,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}/skyline-showdown/`,
     trace: 'retain-on-failure',
+    // The theme follows the device; pin it so screenshots keep the dusk look.
+    colorScheme: 'dark',
   },
   webServer: {
     command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,

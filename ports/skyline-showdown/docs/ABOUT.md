@@ -67,6 +67,8 @@ around it.
   optional **Aim assist** that sketches the first third of your throw while
   you learn the feel of it.
 - **Instant replays** of every knockout, in slow motion.
+- **Light or dark**: a sunny daytime city or the classic dusk, as you
+  like. When the Moon comes up, the night is dark either way.
 - A few old bugs fixed. Hitting yourself now scores for your opponent, as
   it was always meant to.
 

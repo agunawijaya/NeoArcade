@@ -67,7 +67,12 @@ choices are remembered.
 | Power-ups | Off | On (all five) | Balloons carrying crates drift over the city. Each kind can be switched off. |
 | Weather and day cycle | Off | On | Dusk turns to night and dawn over the rounds, with rain, fog and lightning. It only changes the look. |
 | CRT filter | On | Off | Scanlines and a curved-glass look. |
+| Theme | Auto | Auto | *Auto* follows your device's light or dark setting. *Light* gives menus and a bright daytime city; *Dark* keeps the city at dusk. Night rounds stay dark in either theme, because the Moon is up. The sun or moon button on the title screen switches it too. This is a personal choice: it applies straight away and is kept, whatever the preset. |
 | Sound | – | – | Separate volumes for effects and music. Mute is shared with the whole arcade. |
+
+![The light theme: a bright day over the city](../media/light.jpg "Light theme")
+
+![The same light theme at night: the Moon is up and everything goes dark](../media/light-night.jpg "Night stays dark")
 
 ## Worlds
 
@@ -162,6 +167,11 @@ It knows the distances exactly, but it has to find the range the same way
 you do: throw, see where it lands, correct. It never sees where a banana
 will land before throwing. If it still feels unfair, turn on **Aim
 assist** or pick an easier level.
+
+**I chose the light theme, so why did the city go dark?**
+With the weather and day cycle on, the rounds move through the night. When
+the Moon is up the city is dark, and the name plates and menus turn dark
+with it. Daylight comes back a couple of rounds later.
 
 **Can I skip the replay?**
 Yes. Press Space, or tap.
