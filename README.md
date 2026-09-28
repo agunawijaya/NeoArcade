@@ -9,6 +9,15 @@ copying old sprites.
 
 ![The Arcade Hall with Skyline Showdown in the spotlight](hall/media/lobby-desktop.jpg)
 
+Every game also feeds the **Arcade Pass**: one profile across the whole
+collection, kept in your browser and nowhere else. Games award XP for what
+you do and badges for what you pull off; you climb from Coin Slot to Arcade
+Legend, dress up a code-drawn avatar with what each level unlocks, and fill
+a badge cabinet shelf by shelf. The Hall comes in a night and a daylight
+theme.
+
+![The Arcade Pass: profile, rank road and badge cabinet](hall/media/pass/pass-full-desktop-dark.jpg)
+
 ## Run it
 
 Needs Node.js 20 or newer.
@@ -26,6 +35,7 @@ npm run dev        # the Hall at http://localhost:5173/hall/ (/ redirects there)
 | `npm test` | Unit tests (Vitest). |
 | `npm run test:e2e` | Builds, then runs Playwright smoke tests on desktop and phone profiles. |
 | `npm run screenshots` | Playwright screenshots of the Hall into `hall/media/`. |
+| `npx playwright test -c hall/dev` | Screenshots of every Arcade Pass state into `hall/media/pass/`, through the Pass Lab on the dev server. |
 | `npm run docs:check` | Renders every Mermaid diagram in the docs to prove it works. |
 | `npm run lint` | ESLint and Prettier checks (`npm run format` fixes formatting). |
 
@@ -36,19 +46,26 @@ e2e tests and the Mermaid check use.
 its own if copied elsewhere; only its "back to the Hall" button needs the Hall
 next to it.
 
+While `npm run dev` is running, the **Pass Lab** at
+http://localhost:5173/hall/dev/pass-lab/ is a pretend game for trying the
+Arcade Pass: award XP, unlock badges, show toasts, load ready-made profiles.
+It exists only on the dev server.
+
 ## Layout
 
 | Folder | What lives there |
 |---|---|
 | `sources/` | Original source code, one folder per game. Read-only reference. |
 | `ports/` | The web ports, one folder per game (`ports/<slug>/`). |
-| `hall/` | The Arcade Hall — the lobby where players pick a game ([architecture](docs/HALL-ARCHITECTURE.md)). |
+| `hall/` | The Arcade Hall — the lobby where players pick a game and see their Pass ([architecture](docs/HALL-ARCHITECTURE.md)). |
+| `hall/dev/` | Development tools that are never built: the Pass Lab and its screenshot run. |
 | `hall/covers/` | One animated, code-drawn cover per game. |
-| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button ([index](shared/README.md)). |
+| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button, the Arcade Pass ([index](shared/README.md)). |
 | `scripts/` | Build and docs tooling. |
 | `e2e/` | Playwright smoke tests and screenshot runs. |
 | `prompts/` | Build prompts written by the architect, run by Claude Code. |
-| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md)). |
+| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md), [the Arcade Pass](docs/adr/0006-arcade-pass.md)). |
+| `docs/ARCADE-PASS.md` | How a game joins the Arcade Pass: manifest, XP, badges, toasts, checklist. |
 | `docs/games/` | Per-game notes: what the original does, what changed in the port. |
 | `PORTS.md` | Progress tracker for every game. |
 
@@ -80,9 +97,13 @@ next to it.
    `highlights` and captioned `screens` (every field is described in
    [ADR 0002](docs/adr/0002-hall-catalog-and-covers.md)). The Hall shows the
    screenshots; the cover is the fallback.
-5. Run `npm test`: a test checks that every catalog entry has its port,
-   cover and docs. Then `npm run build`, `npm run test:e2e` and
-   `npm run docs:check`.
+5. Join the Arcade Pass: declare badges, cosmetics and stats in
+   `ports/<slug>/pass.manifest.ts`, call `connectPass(manifest)` and mount
+   the unlock toasts ([guide](docs/ARCADE-PASS.md)).
+6. Run `npm test`: a test checks that every catalog entry has its port,
+   cover and docs, and that every Pass manifest is valid. Then
+   `npm run build` (which checks the manifests again), `npm run test:e2e`
+   and `npm run docs:check`.
 
 ## How work happens
 

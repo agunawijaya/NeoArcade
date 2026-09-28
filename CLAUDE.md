@@ -41,6 +41,8 @@ The code should read as if a thoughtful developer wrote it by hand:
 - `docs/games/<game>.md` — original behaviour notes and a diff log of changes.
 - Tests for the engine, and a few screenshots in `ports/<game>/media/`.
 - An entry in the Arcade Hall catalog and in `PORTS.md`.
+- Arcade Pass integration: a `pass.manifest.ts` with badges and cosmetics, XP
+  awards and the shared unlock toast — see `docs/ARCADE-PASS.md`.
 
 ## The three required documents (every port, no exceptions)
 
@@ -69,3 +71,6 @@ GitHub — validate each block with `npx @mermaid-js/mermaid-cli` before finishi
      draws each thing, palettes, shaders, audio synth patches), how settings
      flow through the app, how tests are organised, and a "how to extend"
      section (add a power-up, add a world, tweak the AI, etc.).
+   - An "Arcade Pass" section on how the port reports progress: which moments
+     award XP, where each badge is unlocked or counted, its stats and
+     cosmetics, and when it flushes the unlock toasts.

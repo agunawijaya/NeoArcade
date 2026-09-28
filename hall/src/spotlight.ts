@@ -1,3 +1,5 @@
+import type { BadgeTally } from '@shared/pass';
+import { badgeCount } from './badge-count';
 import { formatPlayers, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { mediaUrl } from './docs-source';
@@ -18,6 +20,7 @@ export interface Spotlight {
   backdropImage: string | null;
   focusPlay(): void;
   play(): void;
+  setBadges(tally: BadgeTally | null): void;
 }
 
 export function buildSpotlight(game: GameEntry): Spotlight {
@@ -34,6 +37,12 @@ export function buildSpotlight(game: GameEntry): Spotlight {
 
   const { original } = game;
   const firstScreen = game.screens?.[0];
+  const badges = badgeCount();
+  const badgesLink = h(
+    'a',
+    { class: 'spotlight__badges', href: routeToHash({ view: 'pass' }), hidden: true },
+    badges.element,
+  );
   const element = h(
     'section',
     {
@@ -85,6 +94,7 @@ export function buildSpotlight(game: GameEntry): Spotlight {
         { class: 'spotlight__origin' },
         `Inspired by ${original.title} · ${original.author} · ${original.year}`,
       ),
+      badgesLink,
     ),
   );
 
@@ -94,5 +104,9 @@ export function buildSpotlight(game: GameEntry): Spotlight {
     backdropImage: firstScreen ? mediaUrl(`ports/${game.slug}/${firstScreen.image}`) : null,
     focusPlay: () => playLink.focus(),
     play: () => playLink.click(),
+    setBadges(tally) {
+      badges.set(tally);
+      badgesLink.hidden = tally === null;
+    },
   };
 }

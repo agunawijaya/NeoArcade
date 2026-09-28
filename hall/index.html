@@ -9,8 +9,21 @@
       content="Classic games from the BASIC, Pascal, C and Assembler era, rebuilt as modern web games. Pick one and play."
     />
     <meta name="theme-color" content="#07060e" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Set the theme before the first paint, so a light-theme player never sees a dark flash.
+      let choice = 'auto';
+      try {
+        choice = JSON.parse(localStorage.getItem('neoarcade:hall:theme')) ?? 'auto';
+      } catch {
+        // Storage blocked or unreadable: follow the device.
+      }
+      const light =
+        choice === 'light' ||
+        (choice !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    </script>
   </head>
   <body>
     <div class="backdrop" aria-hidden="true"><div id="backdrop" class="backdrop__image"></div></div>
@@ -27,6 +40,7 @@
           The Arcade Hall <span aria-hidden="true">·</span> classic games, rebuilt to play today
         </p>
       </div>
+      <div class="masthead__tools" id="masthead-tools"></div>
     </header>
 
     <main id="main" tabindex="-1"></main>

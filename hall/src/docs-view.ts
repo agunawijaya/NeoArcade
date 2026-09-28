@@ -13,11 +13,16 @@ export interface DocsView {
   element: HTMLElement;
   show(game: GameEntry, doc: DocKind): Promise<void>;
   hide(): void;
+  /** Draws the open page again, e.g. so its diagrams follow a theme change. */
+  redraw(): void;
 }
 
 const DOC_LABELS: Record<DocKind, string> = { 'how-to-play': 'How to play', about: 'About' };
 
-export function createDocsView(games: readonly GameEntry[]): DocsView {
+export function createDocsView(
+  games: readonly GameEntry[],
+  theme: () => 'light' | 'dark',
+): DocsView {
   const findDocRoute = docRouteFinder(games);
   const bar = h('div', { class: 'docs__bar-inner' });
   const article = h('article', { class: 'prose' });
@@ -28,6 +33,7 @@ export function createDocsView(games: readonly GameEntry[]): DocsView {
     article,
   );
   let showing = '';
+  let current: { game: GameEntry; doc: DocKind } | null = null;
 
   // In-page anchors can't use the URL hash, which the router owns; scroll instead.
   article.addEventListener('click', (event) => {
@@ -73,6 +79,7 @@ export function createDocsView(games: readonly GameEntry[]): DocsView {
     element,
     async show(game, doc) {
       const key = `${game.slug}/${doc}`;
+      current = { game, doc };
       element.style.setProperty('--accent', game.accent);
       element.style.setProperty('--on-accent', inkOn(game.accent));
       element.hidden = false;
@@ -104,11 +111,18 @@ export function createDocsView(games: readonly GameEntry[]): DocsView {
         imageUrl: mediaUrl,
         docHref: findDocRoute,
       });
-      await renderDiagrams(article, game.accent);
+      await renderDiagrams(article, game.accent, theme());
     },
     hide() {
       element.hidden = true;
       showing = '';
+      current = null;
+    },
+    redraw() {
+      if (!current || element.hidden) return;
+      const scrolled = window.scrollY;
+      showing = '';
+      void this.show(current.game, current.doc).then(() => window.scrollTo({ top: scrolled }));
     },
   };
 }

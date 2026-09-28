@@ -1,0 +1,504 @@
+.neo-cabinet {
+  display: grid;
+  gap: 22px;
+  color: var(--neo-pass-ink);
+  font-family: var(--neo-pass-body);
+}
+
+.neo-cabinet__empty {
+  margin: 0;
+  padding: 36px 24px;
+  border: 1px dashed var(--neo-pass-line);
+  border-radius: 20px;
+  color: var(--neo-pass-ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* A shelf: a lit display case per game. */
+.neo-shelf {
+  --neo-shelf-accent: #9b6bff;
+  position: relative;
+  padding: clamp(16px, 2.4vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--neo-shelf-accent) 30%, var(--neo-pass-line));
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      70% 90px at 50% 0%,
+      color-mix(in srgb, var(--neo-shelf-accent) 16%, transparent),
+      transparent
+    ),
+    var(--neo-pass-panel);
+  box-shadow: var(--neo-pass-shadow);
+}
+
+.neo-shelf__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 16px;
+  margin-bottom: 18px;
+}
+
+.neo-shelf__title {
+  margin: 0;
+  font: 400 clamp(1.3rem, 2.4vw, 1.6rem) / 1.1 var(--neo-pass-display);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--neo-shelf-accent) 45%, transparent);
+}
+
+/* Every badge on the shelf: a gold rim and a small ribbon to say so. */
+.neo-shelf.is-complete {
+  border-color: color-mix(in srgb, #ffc93d 60%, transparent);
+  box-shadow:
+    var(--neo-pass-shadow),
+    0 0 40px -18px #ffc93d;
+}
+
+.neo-shelf__complete {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff1a6, #f0b72f);
+  color: #4e2a00;
+  font: 800 0.66rem/1 var(--neo-pass-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 0 0 16px -4px #ffc93d;
+}
+
+.neo-shelf__count {
+  margin: 0;
+  color: var(--neo-pass-ink-soft);
+  font: 600 0.8rem/1 var(--neo-pass-mono);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.neo-shelf__count strong {
+  color: var(--neo-pass-ink);
+  font-size: 1.05rem;
+}
+
+.neo-shelf__meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--neo-pass-line);
+}
+
+.neo-shelf__meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--neo-shelf-accent) 70%, white),
+    var(--neo-shelf-accent)
+  );
+  box-shadow: 0 0 12px var(--neo-shelf-accent);
+}
+
+.neo-shelf__tiers {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--neo-pass-ink-faint);
+  font: 600 0.72rem/1.2 var(--neo-pass-mono);
+  letter-spacing: 0.06em;
+}
+
+.neo-shelf__tier::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+.neo-shelf__tier--bronze::before {
+  background: #d98548;
+}
+
+.neo-shelf__tier--silver::before {
+  background: #b9c3d6;
+}
+
+.neo-shelf__tier--gold::before {
+  background: #f5bd34;
+}
+
+.neo-shelf__tier--secret::before {
+  background: linear-gradient(135deg, #ff9ff3, #6ff2ff);
+}
+
+.neo-shelf__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.neo-shelf__grid > li {
+  display: flex;
+}
+
+/* A badge on the shelf ---------------------------------------------------- */
+
+.neo-tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.neo-tile:hover,
+.neo-tile:focus-visible {
+  border-color: color-mix(in srgb, var(--neo-shelf-accent) 45%, transparent);
+  background: var(--neo-pass-raised);
+  transform: translateY(-2px);
+}
+
+.neo-tile:focus-visible {
+  outline: 2px solid var(--neo-pass-focus);
+  outline-offset: 2px;
+}
+
+.neo-tile__art {
+  position: relative;
+  z-index: 0;
+  width: 78px;
+  margin-bottom: 4px;
+  transition: transform 0.35s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+/* A pool of light on the shelf under each medal. */
+.neo-tile__art::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -7px;
+  z-index: -1;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--neo-pass-line), transparent);
+}
+
+.neo-tile.is-unlocked .neo-tile__art::after {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--neo-shelf-accent) 55%, transparent),
+    transparent
+  );
+}
+
+.neo-tile.is-unlocked:hover .neo-tile__art,
+.neo-tile.is-unlocked:focus-visible .neo-tile__art {
+  transform: scale(1.07) rotate(-4deg);
+}
+
+.neo-tile__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.neo-tile.is-locked .neo-tile__name {
+  color: var(--neo-pass-ink-soft);
+}
+
+.neo-tile__note {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--neo-pass-ink-faint);
+  font-size: 0.74rem;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.neo-tile.is-unlocked .neo-tile__note {
+  color: color-mix(
+    in srgb,
+    var(--neo-shelf-accent) var(--neo-pass-accent-text),
+    var(--neo-pass-ink)
+  );
+  font: 600 0.7rem/1.3 var(--neo-pass-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.neo-tile__new {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--neo-shelf-accent);
+  color: #140a1c;
+  font: 800 0.6rem/1 var(--neo-pass-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px var(--neo-shelf-accent);
+}
+
+@media (max-width: 520px) {
+  .neo-shelf__grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 4px;
+  }
+
+  .neo-tile {
+    padding: 10px 4px;
+  }
+
+  .neo-tile__art {
+    width: 64px;
+  }
+}
+
+/* One badge up close ------------------------------------------------------- */
+
+.neo-badge-detail {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--neo-pass-ink);
+  font-family: var(--neo-pass-body);
+  overflow: visible;
+}
+
+.neo-badge-detail::backdrop {
+  background: rgb(4 3 10 / 0.7);
+  backdrop-filter: blur(6px);
+}
+
+:root[data-theme='light'] .neo-badge-detail::backdrop {
+  background: rgb(60 40 110 / 0.35);
+}
+
+.neo-badge-detail__panel {
+  --neo-shelf-accent: #9b6bff;
+  position: relative;
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  max-height: calc(100dvh - 32px);
+  padding: 30px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--neo-shelf-accent) 40%, var(--neo-pass-line));
+  border-radius: 26px;
+  background:
+    radial-gradient(
+      60% 70% at 20% 30%,
+      color-mix(in srgb, var(--neo-shelf-accent) 18%, transparent),
+      transparent
+    ),
+    var(--neo-pass-panel-solid);
+  box-shadow: var(--neo-pass-shadow);
+  animation: neo-detail-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.neo-badge-detail__art {
+  width: 170px;
+  animation: neo-detail-medal 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) 0.05s both;
+}
+
+.neo-badge-detail__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--neo-pass-line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--neo-pass-ink-soft);
+  cursor: pointer;
+}
+
+.neo-badge-detail__close:hover,
+.neo-badge-detail__close:focus-visible {
+  border-color: var(--neo-shelf-accent);
+  color: var(--neo-pass-ink);
+}
+
+.neo-badge-detail__close:focus-visible {
+  outline: 2px solid var(--neo-pass-focus);
+  outline-offset: 2px;
+}
+
+.neo-badge-detail__close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.neo-badge-detail__eyebrow {
+  margin: 0;
+  color: color-mix(
+    in srgb,
+    var(--neo-shelf-accent) var(--neo-pass-accent-text),
+    var(--neo-pass-ink)
+  );
+  font: 700 0.7rem/1.4 var(--neo-pass-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.neo-badge-detail__title {
+  margin: 6px 0 0;
+  font: 400 2rem/1.05 var(--neo-pass-display);
+}
+
+.neo-badge-detail__text {
+  margin: 10px 0 0;
+  color: var(--neo-pass-ink-soft);
+  line-height: 1.5;
+}
+
+.neo-badge-detail__meter {
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--neo-pass-line);
+}
+
+.neo-badge-detail__meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--neo-shelf-accent);
+}
+
+.neo-badge-detail__count {
+  margin: 6px 0 0;
+  color: var(--neo-pass-ink-faint);
+  font: 600 0.75rem/1 var(--neo-pass-mono);
+}
+
+.neo-badge-detail__facts {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--neo-pass-line);
+}
+
+.neo-badge-detail__fact {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  gap: 10px;
+}
+
+.neo-badge-detail__fact dt {
+  color: var(--neo-pass-ink-faint);
+  font: 600 0.7rem/1.6 var(--neo-pass-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.neo-badge-detail__fact dd {
+  margin: 0;
+  color: var(--neo-pass-ink);
+  font-size: 0.93rem;
+}
+
+@media (max-width: 560px) {
+  .neo-badge-detail {
+    width: 100%;
+    max-height: 92dvh;
+    margin: auto 0 0;
+  }
+
+  .neo-badge-detail__panel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 12px;
+    padding: 34px 20px max(24px, env(safe-area-inset-bottom));
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    text-align: center;
+  }
+
+  .neo-badge-detail__art {
+    width: 132px;
+  }
+
+  .neo-badge-detail__body {
+    width: 100%;
+  }
+
+  .neo-badge-detail__fact {
+    text-align: left;
+  }
+}
+
+@keyframes neo-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+@keyframes neo-detail-medal {
+  from {
+    transform: scale(0.6) rotate(-14deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-tile,
+  .neo-tile__art {
+    transition: none;
+  }
+
+  .neo-tile:hover,
+  .neo-tile:focus-visible,
+  .neo-tile.is-unlocked:hover .neo-tile__art,
+  .neo-tile.is-unlocked:focus-visible .neo-tile__art {
+    transform: none;
+  }
+
+  .neo-badge-detail__panel,
+  .neo-badge-detail__art {
+    animation: none;
+  }
+}

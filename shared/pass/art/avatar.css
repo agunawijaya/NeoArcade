@@ -1,0 +1,23 @@
+.neo-avatar {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 50%;
+}
+
+/* A thin rim keeps the round window crisp on light and dark pages alike. */
+.neo-avatar__edge {
+  fill: none;
+  stroke: var(--neo-avatar-edge, rgb(255 255 255 / 0.18));
+  stroke-width: 2;
+}
+
+:root[data-theme='light'] .neo-avatar {
+  --neo-avatar-edge: rgb(29 20 51 / 0.22);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .neo-avatar {
+    --neo-avatar-edge: rgb(29 20 51 / 0.22);
+  }
+}

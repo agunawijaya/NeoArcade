@@ -1,0 +1,166 @@
+/* Badge medals. Every colour is a variable, so a tier, a locked silhouette
+ * and the light theme are each just a different set of values. */
+
+.neo-badge {
+  --nb-accent: var(--nb-accent-game, var(--nb-accent-tier));
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.neo-badge--bronze {
+  --nb-rim-hi: #ffd2a6;
+  --nb-rim-mid: #c9773e;
+  --nb-rim-lo: #6d3013;
+  --nb-face-hi: #f0ac72;
+  --nb-face-lo: #9a4f22;
+  --nb-face: #c57a42;
+  --nb-ink: #4e220a;
+  --nb-shine: #ffe6cc;
+  --nb-emboss: rgb(255 226 196 / 0.55);
+  --nb-accent-tier: #ff6a3d;
+  --nb-glow: #ff9a52;
+}
+
+.neo-badge--silver {
+  --nb-rim-hi: #ffffff;
+  --nb-rim-mid: #b5bfd0;
+  --nb-rim-lo: #5d667a;
+  --nb-face-hi: #f4f7fc;
+  --nb-face-lo: #9ea9bd;
+  --nb-face: #c8d0de;
+  --nb-ink: #333b4e;
+  --nb-shine: #ffffff;
+  --nb-emboss: rgb(255 255 255 / 0.7);
+  --nb-accent-tier: #3fa9ff;
+  --nb-glow: #bcd6ff;
+}
+
+.neo-badge--gold {
+  --nb-rim-hi: #fff4b8;
+  --nb-rim-mid: #f0b72f;
+  --nb-rim-lo: #8f5500;
+  --nb-face-hi: #ffe488;
+  --nb-face-lo: #cc860c;
+  --nb-face: #eab13a;
+  --nb-ink: #5e3400;
+  --nb-shine: #fff8da;
+  --nb-emboss: rgb(255 246 206 / 0.65);
+  --nb-accent-tier: #ff3f6c;
+  --nb-glow: #ffc93d;
+}
+
+.neo-badge--secret {
+  --nb-rim-hi: #ff9ff3;
+  --nb-rim-mid: #6ff2ff;
+  --nb-rim-lo: #5a2fd0;
+  --nb-face-hi: #5a2fa6;
+  --nb-face-lo: #190a38;
+  --nb-face: #2e1766;
+  --nb-ink: #f3e8ff;
+  --nb-shine: #ffffff;
+  --nb-emboss: rgb(255 120 230 / 0.5);
+  --nb-accent-tier: #6ff2ff;
+  --nb-glow: #c77dff;
+}
+
+/* Locked: a quiet silhouette in the page's own colours. */
+.neo-badge.is-locked {
+  --nb-rim-hi: #3e3960;
+  --nb-rim-mid: #2b2745;
+  --nb-rim-lo: #1c1930;
+  --nb-face-hi: #2c2846;
+  --nb-face-lo: #1a172d;
+  --nb-face: #221e38;
+  --nb-ink: #4b4570;
+  --nb-shine: #4b4570;
+  --nb-accent: #4b4570;
+  --nb-emboss: rgb(255 255 255 / 0.05);
+}
+
+:root[data-theme='light'] .neo-badge.is-locked {
+  --nb-rim-hi: #eeebf6;
+  --nb-rim-mid: #d7d1e6;
+  --nb-rim-lo: #b8b0cc;
+  --nb-face-hi: #eceaf4;
+  --nb-face-lo: #d3cde2;
+  --nb-face: #dfdaeb;
+  --nb-ink: #aaa1c2;
+  --nb-shine: #aaa1c2;
+  --nb-accent: #aaa1c2;
+  --nb-emboss: rgb(255 255 255 / 0.8);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .neo-badge.is-locked {
+    --nb-rim-hi: #eeebf6;
+    --nb-rim-mid: #d7d1e6;
+    --nb-rim-lo: #b8b0cc;
+    --nb-face-hi: #eceaf4;
+    --nb-face-lo: #d3cde2;
+    --nb-face: #dfdaeb;
+    --nb-ink: #aaa1c2;
+    --nb-shine: #aaa1c2;
+    --nb-accent: #aaa1c2;
+    --nb-emboss: rgb(255 255 255 / 0.8);
+  }
+}
+
+.neo-badge__rim {
+  stroke: var(--nb-rim-lo);
+  stroke-width: 1;
+}
+
+.neo-badge__face {
+  stroke: var(--nb-rim-lo);
+  stroke-opacity: 0.55;
+  stroke-width: 1.4;
+}
+
+.is-unlocked .neo-badge__medal {
+  filter: drop-shadow(0 3px 5px rgb(0 0 0 / 0.35)) drop-shadow(0 0 7px var(--nb-glow));
+}
+
+.is-locked .neo-badge__glint {
+  display: none;
+}
+
+/* Now and then light runs across an earned medal. */
+.neo-badge__glint {
+  transform: translateX(-60px);
+  animation: neo-badge-glint var(--neo-badge-glint-every, 7s) ease-in-out
+    var(--neo-badge-glint-delay, 1s) infinite;
+}
+
+@keyframes neo-badge-glint {
+  0%,
+  78% {
+    transform: translateX(-60px);
+  }
+  100% {
+    transform: translateX(140px);
+  }
+}
+
+.neo-badge__ring-track,
+.neo-badge__ring-fill {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.neo-badge__ring-track {
+  stroke: var(--neo-pass-line, rgb(155 107 255 / 0.25));
+}
+
+.neo-badge__ring-fill {
+  stroke: var(--nb-accent-game, var(--nb-glow));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-badge__glint {
+    animation: none;
+    display: none;
+  }
+}

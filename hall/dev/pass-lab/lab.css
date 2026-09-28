@@ -1,0 +1,165 @@
+:root {
+  color-scheme: dark;
+  --lab-bg: #0b0918;
+  --lab-panel: #15112a;
+  --lab-ink: #eef0ff;
+  --lab-soft: #9ea0c4;
+  --lab-line: rgb(155 107 255 / 0.25);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --lab-bg: #f5f2fb;
+  --lab-panel: #ffffff;
+  --lab-ink: #1c1631;
+  --lab-soft: #6a6384;
+  --lab-line: rgb(90 60 160 / 0.2);
+}
+
+body {
+  margin: 0;
+  background: var(--lab-bg);
+  color: var(--lab-ink);
+  font:
+    14px/1.45 system-ui,
+    sans-serif;
+}
+
+/* The pretend game ---------------------------------------------------------- */
+
+.lab__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-height: 100dvh;
+}
+
+.lab__stage {
+  position: relative;
+  min-height: 60dvh;
+  overflow: hidden;
+}
+
+.lab__playfield {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lab__hud {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgb(6 4 16 / 0.7);
+  color: #eef0ff;
+  font:
+    600 12px/1.5 ui-monospace,
+    monospace;
+}
+
+.lab__hud p {
+  margin: 0;
+}
+
+.lab__panel {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 20px;
+  overflow: auto;
+  border-left: 1px solid var(--lab-line);
+  background: var(--lab-panel);
+}
+
+.lab__panel h1 {
+  margin: 0;
+  font:
+    400 26px/1 'Tilt Neon',
+    system-ui,
+    sans-serif;
+}
+
+.lab__panel > p {
+  margin: 0;
+  color: var(--lab-soft);
+}
+
+.lab__group h2 {
+  margin: 0 0 8px;
+  color: var(--lab-soft);
+  font:
+    700 11px/1.3 ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lab__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lab__buttons button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--lab-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lab-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lab__buttons button:hover {
+  border-color: #7cf29c;
+}
+
+@media (max-width: 760px) {
+  .lab__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lab__panel {
+    border-left: 0;
+    border-top: 1px solid var(--lab-line);
+  }
+}
+
+/* The art sheet ------------------------------------------------------------- */
+
+.sheet__section {
+  padding: 16px 24px;
+}
+
+.sheet__section h2 {
+  margin: 0 0 10px;
+  color: var(--lab-soft);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.sheet__tile {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: max(var(--size), 72px);
+  margin: 0;
+  color: var(--lab-soft);
+  font-size: 11px;
+  text-align: center;
+}
+
+.sheet__tile > svg {
+  width: var(--size);
+  height: var(--size);
+}

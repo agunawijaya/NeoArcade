@@ -1,3 +1,4 @@
+import type { BadgeTally } from '@shared/pass';
 import type { Store } from '@shared/storage';
 import { buildCard, type Card } from './card';
 import type { GameEntry } from './catalog';
@@ -20,6 +21,8 @@ export interface Lobby {
   stepGenre(delta: number): void;
   /** Launches the featured game; used by the gamepad's Start button. */
   playFeatured(): void;
+  /** Shows the player's badge count on every game they have played. */
+  showBadges(tallyFor: (slug: string) => BadgeTally | null): void;
 }
 
 /** Below this many games, search and filters are more clutter than help. */
@@ -44,6 +47,7 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
       focusGame() {},
       stepGenre() {},
       playFeatured() {},
+      showBadges() {},
     };
   }
 
@@ -73,12 +77,17 @@ export function createLobby(games: readonly GameEntry[], store: Store): Lobby {
     },
     stepGenre: (delta) => library?.stepGenre(delta),
     playFeatured: () => spotlight.play(),
+    showBadges(tallyFor) {
+      spotlight.setBadges(tallyFor(spotlight.game.slug));
+      for (const card of library?.cards ?? []) card.setBadges(tallyFor(card.game.slug));
+    },
   };
 }
 
 interface Library {
   element: HTMLElement;
   searchable: boolean;
+  cards: readonly Card[];
   /** Returns false when the game has no visible card to focus. */
   focusGame(slug: string): boolean;
   stepGenre(delta: number): void;
@@ -276,6 +285,7 @@ function buildLibrary(games: readonly GameEntry[], store: Store): Library {
   return {
     element,
     searchable,
+    cards,
     focusGame(slug) {
       const card = cards.find((candidate) => candidate.game.slug === slug);
       if (!card || !isVisible(card.link)) return false;

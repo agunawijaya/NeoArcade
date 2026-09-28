@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createHighScores, createStore } from './index';
+import { canPersist, createHighScores, createStore } from './index';
 
 class MemoryStorage implements Storage {
   private items = new Map<string, string>();
@@ -52,6 +52,13 @@ describe('createStore', () => {
     expect(store.get('broken', 'fallback')).toBe('fallback');
   });
 
+  it('hands back damaged values as raw text', () => {
+    const store = createStore('skyline', backend);
+    backend.setItem('neoarcade:skyline:broken', '{not json');
+    expect(store.raw('broken')).toBe('{not json');
+    expect(store.raw('missing')).toBeNull();
+  });
+
   it('keeps namespaces apart', () => {
     createStore('a', backend).set('volume', 1);
     createStore('b', backend).set('volume', 0.2);
@@ -67,6 +74,12 @@ describe('createStore', () => {
     expect(store.keys()).toEqual([]);
   });
 
+  it('says whether a write reached storage', () => {
+    expect(createStore('hall', backend).set('sort', 'title')).toBe(true);
+    expect(createStore('hall', new BrokenStorage()).set('sort', 'title')).toBe(false);
+    expect(createStore('hall', null).set('sort', 'title')).toBe(false);
+  });
+
   it('falls back to memory when storage throws', () => {
     const store = createStore('hall', new BrokenStorage());
     store.set('sort', 'title');
@@ -78,6 +91,19 @@ describe('createStore', () => {
     const store = createStore('hall', null);
     store.set('muted', true);
     expect(store.get('muted', false)).toBe(true);
+  });
+});
+
+describe('canPersist', () => {
+  it('is true for working storage and leaves nothing behind', () => {
+    const backend = new MemoryStorage();
+    expect(canPersist(backend)).toBe(true);
+    expect(backend.length).toBe(0);
+  });
+
+  it('is false when storage is missing or refuses writes', () => {
+    expect(canPersist(null)).toBe(false);
+    expect(canPersist(new BrokenStorage())).toBe(false);
   });
 });
 

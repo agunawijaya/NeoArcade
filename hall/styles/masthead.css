@@ -19,23 +19,23 @@
 
 /* Neon tubes: a hot white core, a tight coloured glow and a wide soft halo. */
 .logo__neo {
-  color: #ffe9f5;
+  color: color-mix(in srgb, var(--magenta) 12%, white);
   text-shadow:
     0 0 1px #fff,
     0 0 6px var(--magenta),
     0 0 16px var(--magenta),
-    0 0 42px rgb(255 63 164 / 0.7),
-    0 0 90px rgb(255 63 164 / 0.35);
+    0 0 42px color-mix(in srgb, var(--magenta) 70%, transparent),
+    0 0 90px color-mix(in srgb, var(--magenta) 35%, transparent);
 }
 
 .logo__arcade {
-  color: #e8feff;
+  color: color-mix(in srgb, var(--cyan) 12%, white);
   text-shadow:
     0 0 1px #fff,
     0 0 6px var(--cyan),
     0 0 16px var(--cyan),
-    0 0 42px rgb(63 243 255 / 0.6),
-    0 0 90px rgb(63 243 255 / 0.3);
+    0 0 42px color-mix(in srgb, var(--cyan) 60%, transparent),
+    0 0 90px color-mix(in srgb, var(--cyan) 30%, transparent);
   animation: tube-strike 1.4s steps(1, end) 0.3s both;
 }
 
@@ -116,4 +116,21 @@
     margin-left: 0;
     letter-spacing: 0.16em;
   }
+}
+
+/* In daylight the tubes are coloured glass rather than glowing gas. */
+:root[data-theme='light'] .logo__neo,
+:root[data-theme='light'] .logo__arcade {
+  text-shadow:
+    0 1px 0 #fff,
+    0 0 14px color-mix(in srgb, currentColor 35%, transparent),
+    0 0 36px color-mix(in srgb, currentColor 20%, transparent);
+}
+
+:root[data-theme='light'] .logo__neo {
+  color: var(--magenta);
+}
+
+:root[data-theme='light'] .logo__arcade {
+  color: var(--cyan);
 }

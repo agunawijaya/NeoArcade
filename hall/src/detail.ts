@@ -1,3 +1,4 @@
+import type { BadgeTally } from '@shared/pass';
 import { formatPlayers, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { h, icon } from './dom';
@@ -17,7 +18,10 @@ export interface DetailPanel {
 
 const addedDate = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' });
 
-export function createDetailPanel(onDismiss: () => void): DetailPanel {
+export function createDetailPanel(
+  onDismiss: () => void,
+  badgesFor: (slug: string) => BadgeTally | null = () => null,
+): DetailPanel {
   const dialog = h('dialog', { class: 'detail', 'aria-labelledby': 'detail-title' });
   document.body.append(dialog);
 
@@ -54,6 +58,7 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
 
     const { original } = game;
     const origin = [original.author, original.year, original.platform].filter(Boolean).join(' · ');
+    const badges = badgesFor(game.slug);
 
     dialog.style.setProperty('--accent', game.accent);
     dialog.style.setProperty('--on-accent', inkOn(game.accent));
@@ -76,6 +81,16 @@ export function createDetailPanel(onDismiss: () => void): DetailPanel {
             fact('Inspired by', h('span', {}, h('strong', {}, original.title), h('br'), origin)),
             fact('Players', formatPlayers(game.players)),
             fact('Added', addedDate.format(new Date(game.added))),
+            badges
+              ? fact(
+                  'Your badges',
+                  h(
+                    'a',
+                    { class: 'detail__badges', href: routeToHash({ view: 'pass' }) },
+                    `${badges.unlocked} / ${badges.total}`,
+                  ),
+                )
+              : null,
           ),
           h(
             'div',

@@ -25,6 +25,11 @@ describe('parseRoute', () => {
     });
   });
 
+  it('reads the Arcade Pass', () => {
+    expect(parseRoute('#/pass')).toEqual({ view: 'pass' });
+    expect(parseRoute('#pass/')).toEqual({ view: 'pass' });
+  });
+
   it('falls back to the game for an unknown doc', () => {
     expect(parseRoute('#/games/skyline-showdown/source')).toEqual({
       view: 'game',
@@ -37,6 +42,7 @@ describe('routeToHash', () => {
   it('round-trips every route', () => {
     const routes: Route[] = [
       { view: 'lobby' },
+      { view: 'pass' },
       { view: 'game', slug: '_demo' },
       { view: 'doc', slug: 'skyline-showdown', doc: 'how-to-play' },
     ];

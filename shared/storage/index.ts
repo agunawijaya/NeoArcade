@@ -5,8 +5,11 @@
  */
 export interface Store {
   get<T>(key: string, fallback: T): T;
-  set<T>(key: string, value: T): void;
+  /** Returns false when the value only reached this visit's memory (storage blocked or full). */
+  set<T>(key: string, value: T): boolean;
   remove(key: string): void;
+  /** The stored text as it is, even if it is not valid JSON, e.g. to set a damaged value aside. */
+  raw(key: string): string | null;
   /** Keys in this namespace, without the namespace prefix. */
   keys(): string[];
 }
@@ -26,12 +29,15 @@ export function createStore(namespace: string, backend: Storage | null = browser
     return memory.get(fullKey) ?? null;
   };
 
-  const write = (fullKey: string, text: string): void => {
+  const write = (fullKey: string, text: string): boolean => {
     memory.set(fullKey, text);
+    if (!backend) return false;
     try {
-      backend?.setItem(fullKey, text);
+      backend.setItem(fullKey, text);
+      return true;
     } catch {
       // Quota or permission errors: the in-memory copy still serves this visit.
+      return false;
     }
   };
 
@@ -46,7 +52,10 @@ export function createStore(namespace: string, backend: Storage | null = browser
       }
     },
     set(key, value) {
-      write(prefix + key, JSON.stringify(value));
+      return write(prefix + key, JSON.stringify(value));
+    },
+    raw(key) {
+      return read(prefix + key);
     },
     remove(key) {
       memory.delete(prefix + key);
@@ -125,7 +134,24 @@ export function createHighScores(
   };
 }
 
-function browserStorage(): Storage | null {
+/**
+ * Whether values written now will still be there on the next visit. Private
+ * modes and sandboxed frames often hand out a storage object that throws on
+ * every write, so this tries one.
+ */
+export function canPersist(backend: Storage | null = browserStorage()): boolean {
+  if (!backend) return false;
+  const probeKey = `${PREFIX}:probe`;
+  try {
+    backend.setItem(probeKey, '1');
+    backend.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function browserStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
   } catch {

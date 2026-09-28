@@ -1,0 +1,273 @@
+.neo-toasts {
+  position: fixed;
+  left: 50%;
+  z-index: 2147483100;
+  display: grid;
+  width: min(460px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.neo-toasts--top {
+  top: max(14px, env(safe-area-inset-top));
+}
+
+.neo-toasts--bottom {
+  bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.neo-toast {
+  --neo-toast-glow: var(--neo-pass-focus);
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 44px 14px 14px;
+  border: 1px solid color-mix(in srgb, var(--neo-toast-glow) 45%, transparent);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      90% 140% at 0% 50%,
+      color-mix(in srgb, var(--neo-toast-glow) 18%, transparent),
+      transparent 70%
+    ),
+    var(--neo-pass-panel);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    var(--neo-pass-shadow),
+    0 0 34px -12px var(--neo-toast-glow);
+  color: var(--neo-pass-ink);
+  font-family: var(--neo-pass-body);
+  pointer-events: auto;
+  animation: neo-toast-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+
+.neo-toasts--bottom .neo-toast {
+  animation-name: neo-toast-in-bottom;
+}
+
+.neo-toast.is-leaving {
+  animation: neo-toast-out 0.24s ease-in both;
+}
+
+.neo-toast--bronze {
+  --neo-toast-glow: #ff9a52;
+}
+
+.neo-toast--silver {
+  --neo-toast-glow: #9cc4ff;
+}
+
+.neo-toast--gold {
+  --neo-toast-glow: #ffc93d;
+}
+
+.neo-toast--secret {
+  --neo-toast-glow: #c77dff;
+}
+
+.neo-toast--level {
+  --neo-toast-glow: var(--neo-pass-xp);
+}
+
+.neo-toast--notice {
+  --neo-toast-glow: #ffb347;
+}
+
+.neo-toast__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  animation: neo-toast-pop 0.7s cubic-bezier(0.3, 1.6, 0.4, 1) 0.12s both;
+}
+
+/* Rays behind the medal, turning slowly while the toast is up. */
+.neo-toast__art::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  z-index: -1;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    color-mix(in srgb, var(--neo-toast-glow) 38%, transparent) 0deg 9deg,
+    transparent 9deg 24deg
+  );
+  mask-image: radial-gradient(circle, #000 30%, transparent 70%);
+  animation: neo-toast-rays 9s linear infinite;
+}
+
+.neo-toast__art svg {
+  width: 64px;
+  height: 64px;
+}
+
+.neo-toast__level {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 3px solid var(--neo-toast-glow);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--neo-toast-glow) 16%, var(--neo-pass-panel-solid));
+  box-shadow: 0 0 18px -4px var(--neo-toast-glow);
+  color: var(--neo-pass-ink);
+  font: 400 1.7rem/1 var(--neo-pass-display);
+}
+
+.neo-toast__notice {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--neo-toast-glow) 22%, var(--neo-pass-panel-solid));
+  box-shadow: inset 0 0 0 2px var(--neo-toast-glow);
+  color: var(--neo-pass-ink);
+  font: 400 1.8rem/1 var(--neo-pass-display);
+}
+
+.neo-toast__text {
+  min-width: 0;
+}
+
+.neo-toast__text p {
+  margin: 0;
+}
+
+.neo-toast__eyebrow {
+  color: color-mix(in srgb, var(--neo-toast-glow) 70%, var(--neo-pass-ink));
+  font: 700 0.68rem/1.3 var(--neo-pass-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.neo-toast__title {
+  margin-top: 2px !important;
+  font: 400 1.3rem/1.15 var(--neo-pass-display);
+}
+
+.neo-toast__line {
+  margin-top: 3px !important;
+  color: var(--neo-pass-ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.neo-toast__unlocks {
+  margin-top: 6px !important;
+  color: var(--neo-pass-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.neo-toast__xp {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--neo-pass-xp) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neo-pass-xp) 55%, transparent);
+  color: var(--neo-pass-xp);
+  font: 700 0.85rem/1 var(--neo-pass-mono);
+  white-space: nowrap;
+}
+
+.neo-toast__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--neo-pass-ink-faint);
+  cursor: pointer;
+}
+
+.neo-toast__close:hover,
+.neo-toast__close:focus-visible {
+  background: var(--neo-pass-raised);
+  color: var(--neo-pass-ink);
+}
+
+.neo-toast__close:focus-visible {
+  outline: 2px solid var(--neo-pass-focus);
+  outline-offset: 1px;
+}
+
+.neo-toast__close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+@media (max-width: 420px) {
+  .neo-toast {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 40px 12px 12px;
+  }
+
+  .neo-toast__art,
+  .neo-toast__art svg {
+    width: 52px;
+    height: 52px;
+  }
+
+  .neo-toast__xp {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: -4px;
+  }
+}
+
+@keyframes neo-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.96);
+  }
+}
+
+@keyframes neo-toast-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.96);
+  }
+}
+
+@keyframes neo-toast-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes neo-toast-pop {
+  from {
+    transform: scale(0.4) rotate(-20deg);
+  }
+}
+
+@keyframes neo-toast-rays {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-toast,
+  .neo-toast.is-leaving,
+  .neo-toast__art,
+  .neo-toast__art::before {
+    animation: none;
+  }
+}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Pass Lab · NeoArcade (dev)</title>
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body class="lab">
+    <main class="lab__layout">
+      <section class="lab__stage" aria-label="Pretend playfield">
+        <canvas class="lab__playfield" id="playfield"></canvas>
+        <div class="lab__hud" id="hud" aria-live="polite"></div>
+      </section>
+      <aside class="lab__panel" id="panel" aria-label="Pass Lab controls"></aside>
+    </main>
+    <script type="module" src="./lab.ts"></script>
+  </body>
+</html>

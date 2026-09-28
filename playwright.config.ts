@@ -35,7 +35,8 @@ export default defineConfig({
     {
       name: 'screenshots',
       testMatch: /\.screens\.ts$/,
-      use: { ...devices['Desktop Chrome'] },
+      // The Hall follows the device's theme; the README's pictures show its night look.
+      use: { ...devices['Desktop Chrome'], colorScheme: 'dark' },
     },
   ],
 });

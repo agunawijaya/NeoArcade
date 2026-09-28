@@ -1,0 +1,52 @@
+/* Colours and type for everything the Pass puts on a page: the unlock
+ * toast, the badge cabinet and its detail panel. They follow the page's
+ * `data-theme` ("light" or "dark"), or the device when a page sets none. */
+
+:root {
+  --neo-pass-ink: #eef0ff;
+  --neo-pass-ink-soft: #b8bad8;
+  --neo-pass-ink-faint: #8f91b6;
+  --neo-pass-panel: rgb(22 18 44 / 0.92);
+  --neo-pass-panel-solid: #16122c;
+  --neo-pass-raised: rgb(255 255 255 / 0.04);
+  --neo-pass-line: rgb(155 107 255 / 0.22);
+  --neo-pass-focus: #3ff3ff;
+  --neo-pass-xp: #7cf29c;
+  --neo-pass-shadow: 0 30px 70px -28px rgb(0 0 0 / 0.85);
+  /* How much of a game's colour goes into text; less on light pages, so pale accents stay readable. */
+  --neo-pass-accent-text: 68%;
+  --neo-pass-display: 'Tilt Neon', 'Trebuchet MS', system-ui, sans-serif;
+  --neo-pass-body:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --neo-pass-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+}
+
+:root[data-theme='light'] {
+  --neo-pass-ink: #1c1631;
+  --neo-pass-ink-soft: #4a4263;
+  --neo-pass-ink-faint: #6f6788;
+  --neo-pass-panel: rgb(255 255 255 / 0.94);
+  --neo-pass-panel-solid: #ffffff;
+  --neo-pass-raised: rgb(40 20 90 / 0.04);
+  --neo-pass-line: rgb(90 60 160 / 0.18);
+  --neo-pass-focus: #0a8fa8;
+  --neo-pass-xp: #16873f;
+  --neo-pass-shadow: 0 26px 60px -30px rgb(40 20 80 / 0.45);
+  --neo-pass-accent-text: 38%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --neo-pass-ink: #1c1631;
+    --neo-pass-ink-soft: #4a4263;
+    --neo-pass-ink-faint: #6f6788;
+    --neo-pass-panel: rgb(255 255 255 / 0.94);
+    --neo-pass-panel-solid: #ffffff;
+    --neo-pass-raised: rgb(40 20 90 / 0.04);
+    --neo-pass-line: rgb(90 60 160 / 0.18);
+    --neo-pass-focus: #0a8fa8;
+    --neo-pass-xp: #16873f;
+    --neo-pass-shadow: 0 26px 60px -30px rgb(40 20 80 / 0.45);
+    --neo-pass-accent-text: 38%;
+  }
+}
