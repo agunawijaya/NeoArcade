@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_BLOOM, DEFAULT_CRT, resolveOptions, scanlineCount } from './options';
+import { CGA_PALETTE, DEFAULT_BLOOM, DEFAULT_CRT, resolveOptions, scanlineCount } from './options';
 import { createPostFx } from './index';
 
 describe('resolveOptions', () => {
@@ -32,6 +32,26 @@ describe('resolveOptions', () => {
       strength: 1.4,
       radius: 3,
     });
+  });
+
+  it('switches the palette on as CGA from an empty object, with at most four colours', () => {
+    expect(resolveOptions({}).palette).toBe(false);
+    expect(resolveOptions({ palette: {} }).palette).toEqual(CGA_PALETTE);
+    const five = resolveOptions({
+      palette: {
+        colours: [
+          [0, 0, 0],
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+          [1, 1, 1],
+        ],
+        dither: 3,
+      },
+    }).palette;
+    expect(five && five.colours).toHaveLength(4);
+    expect(five && five.dither).toBe(1);
+    expect(resolveOptions({ palette: false }, resolveOptions({ palette: {} })).palette).toBe(false);
   });
 
   it('clamps the vignette and merges grading', () => {

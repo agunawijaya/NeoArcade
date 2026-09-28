@@ -58,6 +58,11 @@ uniform float exposure;
 uniform float contrast;
 uniform float saturation;
 uniform vec3 tint;
+uniform vec3 palette[4];
+uniform float paletteSize;
+uniform float dither;
+uniform float pixelRows;
+uniform vec2 resolution;
 varying vec2 uv;
 
 vec2 bendLikeATube(vec2 point) {
@@ -67,11 +72,44 @@ vec2 bendLikeATube(vec2 point) {
   return centered * 0.5 + 0.5;
 }
 
+// The 4 x 4 Bayer matrix, built from the 2 x 2 one ([0 2; 3 1] is mod(2x + 3y, 4)), in 0..1.
+float bayer(vec2 cell) {
+  vec2 fine = mod(cell, 2.0);
+  vec2 coarse = mod(floor(cell / 2.0), 2.0);
+  float value = 4.0 * mod(2.0 * fine.x + 3.0 * fine.y, 4.0)
+    + mod(2.0 * coarse.x + 3.0 * coarse.y, 4.0);
+  return (value + 0.5) / 16.0;
+}
+
+vec3 nearestColour(vec3 color, vec2 cell) {
+  vec3 wanted = color + (bayer(mod(cell, 4.0)) - 0.5) * dither * 0.45;
+  vec3 best = palette[0];
+  float bestDistance = 1e9;
+  for (int i = 0; i < 4; i++) {
+    if (float(i) >= paletteSize) break;
+    vec3 away = wanted - palette[i];
+    float distance = dot(away, away);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = palette[i];
+    }
+  }
+  return best;
+}
+
 void main() {
   vec2 point = curvature > 0.0 ? bendLikeATube(uv) : uv;
   if (point.x < 0.0 || point.x > 1.0 || point.y < 0.0 || point.y > 1.0) {
     gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
     return;
+  }
+
+  // Chunky pixels: every block samples its own centre.
+  vec2 cell = point * resolution;
+  if (pixelRows > 0.0) {
+    float block = max(1.0, floor(resolution.y / pixelRows));
+    cell = floor(point * resolution / block);
+    point = (cell + 0.5) * block / resolution;
   }
 
   vec2 fringe = (point - 0.5) * 2.0 * aberration;
@@ -86,6 +124,8 @@ void main() {
   color = (color - 0.5) * contrast + 0.5;
   float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
   color = mix(vec3(luminance), color, saturation) * tint;
+
+  if (paletteSize > 0.0) color = nearestColour(clamp(color, 0.0, 1.0), floor(cell));
 
   if (scanlines > 0.0) {
     float wave = 0.5 + 0.5 * cos(point.y * scanlineCount * 6.2831853);

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Donkey Dash · NeoArcade</title>
+    <meta
+      name="description"
+      content="One button, two lanes, a great many donkeys. A modern remake inspired by DONKEY.BAS, the 1981 IBM PC classic."
+    />
+    <meta name="theme-color" content="#2b1f3a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#bfe3f5" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Set the theme before the first paint, so a daylight player never sees a flash of dusk.
+      let choice = 'auto';
+      try {
+        choice = JSON.parse(localStorage.getItem('neoarcade:donkey-dash:theme')) ?? 'auto';
+      } catch {
+        // Storage blocked or unreadable: follow the device.
+      }
+      const light =
+        choice === 'light' ||
+        (choice !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    </script>
+  </head>
+  <body>
+    <main id="game" class="game" tabindex="-1">
+      <noscript>Donkey Dash needs JavaScript to run.</noscript>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

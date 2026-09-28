@@ -10,7 +10,8 @@ Each module's `index.ts` has a usage example at the top.
 | `input/` | `createInput({ bindings })` — keyboard, pointer/touch and gamepad mapped to named actions. |
 | `audio/` | `createAudio()` — Web Audio synth for effects and step-sequenced music; one master volume and mute for the whole arcade, unlocked on the first gesture. |
 | `storage/` | `createStore(namespace)` and `createHighScores(store)` — namespaced `localStorage` that never throws; `set()` and `canPersist()` say whether values really stick. |
-| `fx/` | `createPostFx(canvas, options)` — WebGL bloom, grading, vignette and CRT; falls back to Canvas 2D without WebGL. |
+| `fx/` | `createPostFx(canvas, options)` — WebGL bloom, grading, vignette, CRT and a four-colour palette (`CGA_PALETTE`); falls back to Canvas 2D without WebGL. |
+| `daily/` | `dailyChallenge({ game, launch })` and `createDailyLog(store)` — one seed per UTC day, numbered from launch; first-run-counts logs, streaks, a month grid, and sharing a result by share sheet or clipboard ([ADR 0009](../docs/adr/0009-daily-challenges.md)). |
 | `hall-link/` | `mountHallButton()` — the consistent "back to the Hall" button. |
 | `pass/` | `connectPass(manifest)` and `mountUnlockToasts()` — the Arcade Pass: XP, levels, badges and the unlock toast, plus the badge cabinet and the code-drawn avatars, medals and rank emblems ([guide](../docs/ARCADE-PASS.md)). |
 | `fonts/` | `tilt-neon.css` — the Hall's neon display font (SIL OFL 1.1). |

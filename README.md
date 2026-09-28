@@ -60,11 +60,11 @@ It exists only on the dev server.
 | `hall/` | The Arcade Hall — the lobby where players pick a game and see their Pass ([architecture](docs/HALL-ARCHITECTURE.md)). |
 | `hall/dev/` | Development tools that are never built: the Pass Lab and its screenshot run. |
 | `hall/covers/` | One animated, code-drawn cover per game. |
-| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button, the Arcade Pass ([index](shared/README.md)). |
+| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button, the Arcade Pass, daily challenges ([index](shared/README.md)). |
 | `scripts/` | Build and docs tooling. |
 | `e2e/` | Playwright smoke tests and screenshot runs. |
 | `prompts/` | Build prompts written by the architect, run by Claude Code. |
-| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md), [the Arcade Pass](docs/adr/0006-arcade-pass.md)). |
+| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md), [the Arcade Pass](docs/adr/0006-arcade-pass.md), [daily challenges](docs/adr/0009-daily-challenges.md)). |
 | `docs/ARCADE-PASS.md` | How a game joins the Arcade Pass: manifest, XP, badges, toasts, checklist. |
 | `docs/games/` | Per-game notes: what the original does, what changed in the port. |
 | `PORTS.md` | Progress tracker for every game. |

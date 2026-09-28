@@ -1,4 +1,10 @@
-import { resolveOptions, scanlineCount, type PostFxOptions, type PostFxSettings } from './options';
+import {
+  MAX_PALETTE_COLOURS,
+  resolveOptions,
+  scanlineCount,
+  type PostFxOptions,
+  type PostFxSettings,
+} from './options';
 import {
   BLUR_FRAGMENT,
   BRIGHT_PASS_FRAGMENT,
@@ -6,19 +12,29 @@ import {
   FULLSCREEN_VERTEX,
 } from './shaders';
 
-export { DEFAULT_BLOOM, DEFAULT_CRT, DEFAULT_GRADE, resolveOptions } from './options';
+export {
+  CGA_PALETTE,
+  DEFAULT_BLOOM,
+  DEFAULT_CRT,
+  DEFAULT_GRADE,
+  MAX_PALETTE_COLOURS,
+  resolveOptions,
+} from './options';
 export type {
   BloomOptions,
   CrtOptions,
   GradeOptions,
+  PaletteOptions,
   PostFxOptions,
   PostFxSettings,
+  Rgb,
 } from './options';
 
 /**
- * Optional post-processing for Canvas games: bloom, colour grading, vignette
- * and a CRT look. The game keeps drawing into its own canvas; this reads it
- * each frame and presents the result on `canvas`.
+ * Optional post-processing for Canvas games: bloom, colour grading, vignette,
+ * a CRT look and a few-colour palette (think CGA). The game keeps drawing
+ * into its own canvas; this reads it each frame and presents the result on
+ * `canvas`.
  *
  *   const fx = createPostFx(scene, { bloom: {}, vignette: 0.4 });
  *   stage.append(fx.canvas);
@@ -262,7 +278,7 @@ function createWebGlFx(
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 
       const glow = renderGlow(res);
-      const { bloom, crt, grade, vignette } = options;
+      const { bloom, crt, grade, vignette, palette } = options;
       bindTexture(0, res.scene);
       bindTexture(1, glow);
       drawPass(res, res.composite, null, (uniform) => {
@@ -279,6 +295,14 @@ function createWebGlFx(
         gl.uniform1f(uniform('contrast'), grade.contrast);
         gl.uniform1f(uniform('saturation'), grade.saturation);
         gl.uniform3f(uniform('tint'), ...grade.tint);
+        const colours = palette ? palette.colours : [];
+        const flat = new Float32Array(MAX_PALETTE_COLOURS * 3);
+        colours.forEach((colour, index) => flat.set(colour, index * 3));
+        gl.uniform3fv(uniform('palette'), flat);
+        gl.uniform1f(uniform('paletteSize'), colours.length);
+        gl.uniform1f(uniform('dither'), palette ? palette.dither : 0);
+        gl.uniform1f(uniform('pixelRows'), palette ? palette.rows : 0);
+        gl.uniform2f(uniform('resolution'), output.width, output.height);
       });
     },
     update(settings) {
