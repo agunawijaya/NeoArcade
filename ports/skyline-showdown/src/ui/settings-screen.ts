@@ -10,18 +10,14 @@ import {
   type Settings,
 } from '../settings';
 import type { ThemeChoice, ThemePreference } from '../theme';
+import { RIVALS, type RivalId } from '../tour/rivals';
 import { h, icon } from './dom';
+import { group, keepingFocus, segmented, slider, toggle } from './form';
 import { ICONS, POWER_UP_ICONS } from './icons';
 
 export interface SettingsHandlers {
   start(settings: Settings): void;
   back(): void;
-}
-
-interface Choice<T extends string> {
-  value: T;
-  label: string;
-  note?: string;
 }
 
 const PRESET_TEXT: Record<PresetId, { title: string; lines: string[] }> = {
@@ -40,16 +36,18 @@ const PRESET_TEXT: Record<PresetId, { title: string; lines: string[] }> = {
 };
 
 /**
- * The match setup screen. Rule changes are kept in a working copy until
- * Start; the theme and sound levels are personal and apply at once.
+ * Quick Match: the match setup screen. Rule changes are kept in a working
+ * copy until Start; the theme and sound levels are personal and apply at
+ * once. Rivals beaten on the World Tour can be picked as the opponent.
  */
 export function buildSettingsScreen(
   initial: Settings,
   audio: AudioEngine,
   theme: ThemePreference,
   handlers: SettingsHandlers,
-): { element: HTMLElement; refresh(settings: Settings): void } {
+): { element: HTMLElement; refresh(settings: Settings, rivalsBeaten: readonly RivalId[]): void } {
   let settings = structuredClone(initial);
+  let rivals: readonly RivalId[] = [];
   const body = h('div', { class: 'settings__body' });
 
   const render = () => {
@@ -89,6 +87,7 @@ export function buildSettingsScreen(
           (players) => update({ ...settings, players }),
         ),
       ),
+      opponent() ?? '',
       group(
         'CPU difficulty',
         segmented(
@@ -101,7 +100,7 @@ export function buildSettingsScreen(
             { value: 'brutal', label: 'Brutal' },
           ],
           (cpuLevel) => update({ ...settings, cpuLevel }),
-          settings.players === 'humanVsHuman',
+          settings.players === 'humanVsHuman' || facingRival(),
         ),
       ),
       group('Names', h('div', { class: 'settings__names' }, nameField(0), nameField(1))),
@@ -195,10 +194,47 @@ export function buildSettingsScreen(
   };
 
   const update = (next: Settings) => {
-    const focused = document.activeElement?.getAttribute('data-focus-key');
     settings = next;
-    render();
-    if (focused) body.querySelector<HTMLElement>(`[data-focus-key="${focused}"]`)?.focus();
+    keepingFocus(body, render);
+  };
+
+  const facingRival = () =>
+    settings.players === 'humanVsCpu' && settings.rival !== null && rivals.includes(settings.rival);
+
+  /** The plain CPU, or any rival already beaten on the World Tour. */
+  const opponent = () => {
+    if (settings.players !== 'humanVsCpu') return null;
+    if (rivals.length === 0) {
+      return group(
+        'Opponent',
+        h('p', { class: 'settings__note' }, 'Beat rivals on the World Tour to face them here.'),
+      );
+    }
+    const current = facingRival() ? settings.rival : null;
+    const chip = (id: RivalId | null) => {
+      const rival = id ? RIVALS[id] : null;
+      const button = h(
+        'button',
+        {
+          class: 'chip chip--rival',
+          type: 'button',
+          'aria-pressed': String(current === id),
+          style: rival ? `--rival: ${rival.colour}` : null,
+          title: rival
+            ? `${rival.title}. ${rival.styleNote}.`
+            : 'The classic CPU, at the difficulty below',
+          'data-focus-key': `rival-${id ?? 'cpu'}`,
+        },
+        h('span', { class: 'chip__dot', 'aria-hidden': 'true' }),
+        rival ? rival.name : 'CPU',
+      );
+      button.addEventListener('click', () => update({ ...settings, rival: id }));
+      return button;
+    };
+    return group(
+      'Opponent',
+      h('div', { class: 'chips' }, chip(null), ...rivals.map((id) => chip(id))),
+    );
   };
 
   const nameField = (player: 0 | 1) => {
@@ -318,7 +354,7 @@ export function buildSettingsScreen(
     h(
       'div',
       { class: 'panel settings' },
-      h('h2', { class: 'panel__title', id: 'settings-title' }, 'Match settings'),
+      h('h2', { class: 'panel__title', id: 'settings-title' }, 'Quick Match'),
       body,
       h('div', { class: 'settings__footer' }, back, start),
     ),
@@ -326,88 +362,10 @@ export function buildSettingsScreen(
 
   return {
     element,
-    refresh(next) {
+    refresh(next, rivalsBeaten) {
       settings = structuredClone(next);
+      rivals = rivalsBeaten;
       render();
     },
   };
-}
-
-function group(label: string, control: HTMLElement): HTMLElement {
-  return h(
-    'fieldset',
-    { class: 'setting' },
-    h('legend', { class: 'setting__label' }, label),
-    control,
-  );
-}
-
-function segmented<T extends string>(
-  name: string,
-  current: T,
-  choices: Choice<T>[],
-  choose: (value: T) => void,
-  disabled = false,
-): HTMLElement {
-  return h(
-    'div',
-    {
-      class: 'segmented',
-      role: 'radiogroup',
-      'aria-label': name,
-      'aria-disabled': String(disabled),
-    },
-    ...choices.map((choice) => {
-      const button = h(
-        'button',
-        {
-          class: 'segmented__option',
-          type: 'button',
-          role: 'radio',
-          'aria-checked': String(choice.value === current),
-          disabled,
-          'data-value': choice.value,
-          'data-focus-key': `${name}-${choice.value}`,
-        },
-        h('span', {}, choice.label),
-        choice.note ? h('small', {}, choice.note) : null,
-      );
-      button.addEventListener('click', () => choose(choice.value));
-      return button;
-    }),
-  );
-}
-
-function toggle(label: string, on: boolean, change: (on: boolean) => void): HTMLElement {
-  const button = h(
-    'button',
-    {
-      class: 'toggle',
-      type: 'button',
-      role: 'switch',
-      'aria-checked': String(on),
-      'data-focus-key': `toggle-${label}`,
-    },
-    h(
-      'span',
-      { class: 'toggle__track', 'aria-hidden': 'true' },
-      h('span', { class: 'toggle__thumb' }),
-    ),
-    label,
-  );
-  button.addEventListener('click', () => change(!on));
-  return button;
-}
-
-function slider(label: string, value: number, change: (value: number) => void): HTMLElement {
-  const input = h('input', {
-    class: 'slider',
-    type: 'range',
-    min: 0,
-    max: 100,
-    value: Math.round(value * 100),
-    'aria-label': `${label} volume`,
-  });
-  input.addEventListener('input', () => change(Number(input.value) / 100));
-  return h('label', { class: 'settings__slider' }, h('span', {}, label), input);
 }

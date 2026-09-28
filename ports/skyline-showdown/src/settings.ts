@@ -2,6 +2,7 @@ import type { CpuLevel } from './engine/ai';
 import type { MatchFormat, MatchOptions } from './engine/match';
 import { POWER_UP_KINDS, type PowerUpKind } from './engine/powerups';
 import type { WorldChoice } from './engine/worlds';
+import { RIVAL_IDS, type RivalId } from './tour/rivals';
 
 export type PlayersMode = 'humanVsHuman' | 'humanVsCpu' | 'cpuVsCpu';
 export type AimingMode = 'drag' | 'typed';
@@ -22,6 +23,8 @@ export interface Settings {
   weather: boolean;
   crt: boolean;
   names: [string, string];
+  /** A World Tour rival to face in a Quick Match instead of the plain CPU. */
+  rival: RivalId | null;
 }
 
 const ALL_KINDS_ON = Object.fromEntries(POWER_UP_KINDS.map((kind) => [kind, true])) as Record<
@@ -29,7 +32,7 @@ const ALL_KINDS_ON = Object.fromEntries(POWER_UP_KINDS.map((kind) => [kind, true
   boolean
 >;
 
-type PresetValues = Omit<Settings, 'names'>;
+type PresetValues = Omit<Settings, 'names' | 'rival'>;
 
 export const PRESETS: Record<PresetId, PresetValues> = {
   classic: {
@@ -65,12 +68,16 @@ export const NAME_LENGTH = 10;
 export const POINTS_RANGE = { min: 1, max: 20 } as const;
 
 export function defaultSettings(): Settings {
-  return withPreset({ ...PRESETS.neo, names: [...DEFAULT_NAMES] }, 'neo');
+  return withPreset({ ...PRESETS.neo, names: [...DEFAULT_NAMES], rival: null }, 'neo');
 }
 
-/** Switches every rule to a preset, keeping the players' names. */
+/** Switches every rule to a preset, keeping the players' names and chosen rival. */
 export function withPreset(settings: Settings, preset: PresetId): Settings {
-  return { ...structuredClone(PRESETS[preset]), names: [...settings.names] };
+  return {
+    ...structuredClone(PRESETS[preset]),
+    names: [...settings.names],
+    rival: settings.rival,
+  };
 }
 
 /** Which preset the settings match exactly, if any; anything else is "custom". */
@@ -83,7 +90,7 @@ export function matchingPreset(settings: Settings): PresetId | null {
   return found ?? null;
 }
 
-/** The rules as a comparable list; names never count. */
+/** The rules as a comparable list; names and the chosen rival never count. */
 function normalisedOrder(values: PresetValues) {
   // CPU difficulty only matters when a CPU plays, so it never makes settings "custom" alone.
   const cpuMatters = values.players !== 'humanVsHuman';
@@ -142,6 +149,7 @@ export function sanitiseSettings(raw: unknown): Settings {
     names: [0, 1].map((player) =>
       cleanName(typeof names[player] === 'string' ? names[player] : '', player as 0 | 1),
     ) as [string, string],
+    rival: RIVAL_IDS.includes(stored.rival as RivalId) ? (stored.rival as RivalId) : null,
   };
 }
 

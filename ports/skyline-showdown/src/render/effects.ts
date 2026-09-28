@@ -4,6 +4,10 @@ import { withAlpha } from './palette';
  * Everything short-lived: sparks, concrete debris, smoke, fur, flashes,
  * shock rings, the glow of freshly carved holes and roof sections falling
  * away. All in world units.
+ *
+ * A thrower's explosion style from the wardrobe adds a flourish on top of
+ * the blast (pixels, confetti, fireworks…); the blast itself, and the hole
+ * it leaves, are the same for everyone.
  */
 interface Particle {
   x: number;
@@ -20,7 +24,7 @@ interface Particle {
   gravity: number;
   /** 1 = keeps its speed, lower slows down. */
   drag: number;
-  shape: 'spark' | 'chunk' | 'puff' | 'tuft' | 'fire';
+  shape: 'spark' | 'chunk' | 'puff' | 'tuft' | 'fire' | 'pixel' | 'confetti' | 'star' | 'blob';
   /** How strongly the wind carries it. */
   windy: number;
 }
@@ -64,7 +68,15 @@ export class Effects {
   private pieces: FallingPiece[] = [];
 
   /** A banana hitting a building. */
-  explode(x: number, y: number, radius: number, facade: string, big = false) {
+  explode(
+    x: number,
+    y: number,
+    radius: number,
+    facade: string,
+    big = false,
+    style = 'boom-classic',
+    accent = '#ffd23f',
+  ) {
     const scale = radius / 7;
     this.flashes.push({ x, y, radius: radius * 2.4, life: 0, maxLife: 0.22, colour: '#ffe2a0' });
     this.rings.push({ x, y, radius: radius * 2.4, life: 0, maxLife: 0.4, colour: '#ff9a4a' });
@@ -74,10 +86,19 @@ export class Effects {
     for (let i = 0; i < 10 * scale; i++) this.chunk(x, y, facade);
     for (let i = 0; i < 6 * scale; i++) this.smoke(x, y, radius);
     if (big) for (let i = 0; i < 16; i++) this.chunk(x, y, facade);
+    this.flourish(style, x, y, radius, accent);
   }
 
-  /** A gorilla hit: the big one. */
-  gorillaBlast(x: number, y: number, fur: string, accent: string, facade: string) {
+  /** A gorilla hit: the big one, with the thrower's flourish. */
+  gorillaBlast(
+    x: number,
+    y: number,
+    fur: string,
+    accent: string,
+    facade: string,
+    style = 'boom-classic',
+    throwerAccent = accent,
+  ) {
     this.flashes.push({ x, y, radius: 46, life: 0, maxLife: 0.35, colour: '#ffe6b0' });
     for (let i = 0; i < 14; i++) this.fireball(x, y, 16);
     this.rings.push({ x, y, radius: 60, life: 0, maxLife: 0.7, colour: accent });
@@ -87,6 +108,98 @@ export class Effects {
     for (let i = 0; i < 26; i++) this.tuft(x, y, fur);
     for (let i = 0; i < 18; i++) this.chunk(x, y, facade);
     for (let i = 0; i < 20; i++) this.smoke(x, y, 20);
+    this.flourish(style, x, y, 18, throwerAccent);
+  }
+
+  /** The extra something a wardrobe explosion style adds to a blast. */
+  private flourish(style: string, x: number, y: number, radius: number, accent: string) {
+    const amount = Math.round(radius * 2.4);
+    const burst = (
+      count: number,
+      speed: [number, number],
+      values: Omit<Partial<Particle>, 'colour'> & { colour: () => string },
+    ) => {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const pace = speed[0] + Math.random() * (speed[1] - speed[0]);
+        this.particles.push(
+          this.make({
+            x,
+            y,
+            vx: Math.cos(angle) * pace,
+            vy: Math.sin(angle) * pace - 20,
+            maxLife: 1 + Math.random() * 0.8,
+            ...values,
+            spin: (values.spin ?? 0) * (Math.random() * 2 - 1),
+            colour: values.colour(),
+          }),
+        );
+      }
+    };
+    switch (style) {
+      case 'boom-pixel':
+        burst(amount, [40, 110], {
+          shape: 'pixel',
+          size: 2.2,
+          gravity: 120,
+          drag: 0.95,
+          colour: () => pickOf(['#ffe14d', '#ff8a3d', '#ff3f5a', accent]),
+        });
+        break;
+      case 'boom-confetti':
+        burst(amount * 1.5, [50, 130], {
+          shape: 'confetti',
+          size: 1.8,
+          gravity: 40,
+          drag: 0.9,
+          spin: 14,
+          maxLife: 2.2,
+          colour: () => pickOf(['#ff4d6d', '#ffd23f', '#3fe0ff', '#7dff8a', '#b388ff']),
+        });
+        break;
+      case 'boom-fireworks':
+        for (const colour of [accent, '#fff2b0']) {
+          const count = 24;
+          for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const pace = colour === accent ? 110 : 70;
+            this.particles.push(
+              this.make({
+                x,
+                y,
+                vx: Math.cos(angle) * pace,
+                vy: Math.sin(angle) * pace,
+                maxLife: 0.9,
+                size: 1.4,
+                colour,
+                gravity: 50,
+                drag: 0.94,
+                shape: 'spark',
+              }),
+            );
+          }
+        }
+        break;
+      case 'boom-stars':
+        burst(amount * 0.7, [30, 90], {
+          shape: 'star',
+          size: 2.6,
+          gravity: 30,
+          drag: 0.93,
+          spin: 6,
+          colour: () => pickOf(['#ffe680', '#fff6c8', accent]),
+        });
+        break;
+      case 'boom-paint':
+        burst(amount, [40, 120], {
+          shape: 'blob',
+          size: 2.4,
+          gravity: 150,
+          drag: 0.96,
+          colour: () => pickOf([accent, '#ff4d9a', '#4dd2ff', '#ffd23f']),
+        });
+        break;
+    }
   }
 
   /** A banana landing in the street. */
@@ -224,6 +337,7 @@ export class Effects {
 
     for (const particle of this.particles) {
       const fade = 1 - particle.life / particle.maxLife;
+      if (drawFlourishParticle(ctx, particle, fade)) continue;
       if (particle.shape === 'puff') {
         const radius = particle.size * (1 + (1 - fade) * 2.2);
         ctx.fillStyle = withAlpha(particle.colour, 0.42 * fade);
@@ -435,4 +549,73 @@ export class Effects {
 
 function easeOut(progress: number): number {
   return 1 - (1 - progress) ** 3;
+}
+
+function pickOf(colours: readonly string[]): string {
+  return colours[Math.floor(Math.random() * colours.length)] ?? '#ffffff';
+}
+
+/** Draws the wardrobe flourish shapes; returns false for everything else. */
+function drawFlourishParticle(
+  ctx: CanvasRenderingContext2D,
+  particle: Particle,
+  fade: number,
+): boolean {
+  const alpha = Math.min(1, fade * 2);
+  switch (particle.shape) {
+    case 'pixel': {
+      // Snapped to a coarse grid, like an old sprite breaking up.
+      const size = particle.size;
+      ctx.fillStyle = withAlpha(particle.colour, alpha);
+      ctx.fillRect(
+        Math.round(particle.x / size) * size,
+        Math.round(particle.y / size) * size,
+        size,
+        size,
+      );
+      return true;
+    }
+    case 'confetti':
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(particle.angle);
+      ctx.scale(1, Math.cos(particle.angle * 2));
+      ctx.fillStyle = withAlpha(particle.colour, alpha);
+      ctx.fillRect(-particle.size / 2, -particle.size / 4, particle.size, particle.size / 2);
+      ctx.restore();
+      return true;
+    case 'star': {
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(particle.angle);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = withAlpha(particle.colour, alpha);
+      ctx.beginPath();
+      for (let point = 0; point < 10; point++) {
+        const radius = point % 2 === 0 ? particle.size : particle.size * 0.45;
+        const angle = (point / 10) * Math.PI * 2 - Math.PI / 2;
+        ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      return true;
+    }
+    case 'blob':
+      ctx.fillStyle = withAlpha(particle.colour, alpha);
+      ctx.beginPath();
+      ctx.ellipse(
+        particle.x,
+        particle.y,
+        particle.size,
+        particle.size * 0.75,
+        particle.angle,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      return true;
+    default:
+      return false;
+  }
 }

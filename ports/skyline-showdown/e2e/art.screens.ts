@@ -4,12 +4,17 @@ import { test, type Page } from '@playwright/test';
 import { STEPS_PER_SECOND } from '../src/engine/constants';
 import { gorillaCentre, throwingHand } from '../src/engine/gorillas';
 import type { WorldId } from '../src/engine/worlds';
+import { emptyTour, type TourSave } from '../src/tour/save';
+import { STAGES, stageById, type Stage } from '../src/tour/stages';
 import {
   findThrow,
   mirrorMatch,
   mirrorThrow,
   onScreen,
   openGame,
+  planFlawlessWin,
+  playPlan,
+  playTourStage,
   run,
   runUntilPhase,
   startFromTitle,
@@ -76,6 +81,26 @@ function planFor(world: WorldId): Plan {
   throw new Error(`No suitable city found on ${world}.`);
 }
 
+const TOUR_KEY = 'neoarcade:skyline-showdown:tour';
+const tourSettings = testSettings({ players: 'humanVsCpu', aiming: 'typed' });
+
+/** A tour with the first `count` stages won on these stars, and their rivals beaten. */
+function tourAfter(count: number, stars: (index: number) => number = () => 3): TourSave {
+  const save = emptyTour();
+  STAGES.slice(0, count).forEach((stage, index) => {
+    save.stages[stage.id] = { stars: stars(index), won: true, bestThrows: 6, plays: 1 };
+    if (!save.rivalsBeaten.includes(stage.rival)) save.rivalsBeaten.push(stage.rival);
+  });
+  save.outfits[0] = {
+    ...save.outfits[0],
+    headwear: 'hat-top',
+    eyewear: 'eyes-shades',
+    neckwear: 'neck-scarf',
+    trail: 'trail-sparkle',
+  };
+  return save;
+}
+
 for (const viewport of VIEWPORTS) {
   test.describe(viewport.name, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
@@ -84,9 +109,57 @@ for (const viewport of VIEWPORTS) {
       await openGame(page, testSettings(), 3);
       await run(page, 3000);
       await shoot(page, `title-${viewport.name}`);
-      await page.getByRole('button', { name: 'Match settings' }).click({ force: true });
+      await page.getByRole('button', { name: 'Quick Match' }).click({ force: true });
       await run(page, 600);
       await shoot(page, `settings-${viewport.name}`);
+    });
+
+    test('the World Tour map and a stage card', async ({ page }) => {
+      await openGame(page, tourSettings, 5, {
+        [TOUR_KEY]: tourAfter(7, (index) => [3, 2, 3, 2, 3, 2, 1][index] ?? 0),
+      });
+      await page.locator('.title__tour').click({ force: true });
+      await run(page, 1200);
+      await shoot(page, `tour-map-${viewport.name}`);
+      await page.locator('[data-stage="dubai"]').click({ force: true });
+      await run(page, 1400);
+      await shoot(page, `stage-card-${viewport.name}`);
+    });
+
+    test('a flawless win on the tour, and the badges it earns', async ({ page }) => {
+      test.setTimeout(600_000);
+      const plan = planFlawlessWin(stageById('jakarta') as Stage, tourSettings);
+      await openGame(page, tourSettings, plan.seed, { [TOUR_KEY]: tourAfter(0) });
+      await playTourStage(page, 'jakarta');
+      await run(page, 1500);
+      await shoot(page, `tour-hello-${viewport.name}`);
+      await playPlan(page, plan);
+      await run(page, 2600);
+      await shoot(page, `results-${viewport.name}`);
+      await page.getByRole('button', { name: 'Map' }).click({ force: true });
+      await page.getByRole('button', { name: 'Back' }).click({ force: true });
+      await page.getByRole('button', { name: 'Badges' }).click({ force: true });
+      await run(page, 800);
+      await shoot(page, `badges-${viewport.name}`);
+    });
+
+    test('the wardrobe', async ({ page }) => {
+      await openGame(page, tourSettings, 5, { [TOUR_KEY]: tourAfter(8) });
+      await page.getByRole('button', { name: 'Wardrobe' }).click({ force: true });
+      await run(page, 1500);
+      await shoot(page, `wardrobe-${viewport.name}`);
+      await page.getByRole('tab', { name: 'Headwear' }).click({ force: true });
+      await run(page, 800);
+      await shoot(page, `wardrobe-hats-${viewport.name}`);
+    });
+
+    test('so close', async ({ page }) => {
+      await openGame(page, testSettings({ points: 1 }), 6);
+      await startFromTitle(page);
+      await typeThrow(page, 45, 52);
+      await runUntilPhase(page, 'settle');
+      await run(page, 500);
+      await shoot(page, `so-close-${viewport.name}`);
     });
 
     test('slingshot aiming', async ({ page }) => {
@@ -171,6 +244,23 @@ for (const viewport of VIEWPORTS) {
       await shoot(page, `classic-crt-${viewport.name}`);
     });
 
+    const cities = viewport.name === 'desktop' ? STAGES : [];
+    for (const stage of cities) {
+      test(`the tour in ${stage.city}`, async ({ page }) => {
+        await openGame(page, tourSettings, 41, { [TOUR_KEY]: tourAfter(STAGES.length) });
+        await playTourStage(page, stage.id);
+        await run(page, 2600);
+        await shoot(page, `city-${stage.id}`);
+        await typeThrow(
+          page,
+          55,
+          stage.world === 'moon' ? 24 : stage.world === 'jupiter' ? 110 : 68,
+        );
+        await run(page, RELEASE_MS + 1100);
+        await shoot(page, `city-${stage.id}-flight`);
+      });
+    }
+
     const worlds =
       viewport.name === 'desktop'
         ? (['earth', 'moon', 'mars', 'jupiter'] as const)
@@ -196,7 +286,8 @@ for (const viewport of VIEWPORTS) {
         await run(page, RELEASE_MS + stepsToMs(plan.hit.steps) + 650);
         await shoot(page, `gorilla-hit-${tag}`);
         await runUntilPhase(page, 'replay');
-        await run(page, (stepsToMs(plan.hit.steps) / 0.35) * 0.85);
+        // The replay joins long flights for their last 2.5 seconds.
+        await run(page, (Math.min(stepsToMs(plan.hit.steps), 2500) / 0.35) * 0.85);
         await shoot(page, `replay-${tag}`);
         await runUntilPhase(page, 'celebrate');
         await run(page, 900);

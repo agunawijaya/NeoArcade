@@ -1,5 +1,14 @@
 import type { Point } from '../engine/geometry';
 import type { Gorilla, PlayerIndex } from '../engine/gorillas';
+import { furColour, type Outfit } from '../wardrobe/items';
+import {
+  drawBanana,
+  drawCape,
+  drawEyewear,
+  drawHeadBandana,
+  drawHeadwear,
+  drawNeckwear,
+} from './outfit';
 import { shade, withAlpha } from './palette';
 
 /**
@@ -26,15 +35,19 @@ interface Pose {
   eyes: Eyes;
 }
 
+/** How one gorilla looks: its outfit, and the signature colour of whoever plays it. */
 export interface GorillaLook {
   fur: string;
   accent: string;
+  outfit: Outfit;
 }
 
-export const GORILLA_LOOKS: [GorillaLook, GorillaLook] = [
-  { fur: '#6e4a3a', accent: '#ff7a3d' },
-  { fur: '#56627e', accent: '#3fe0ff' },
-];
+/** Player 1 is orange and player 2 cyan, as the name plates have always been. */
+export const PLAYER_ACCENTS: readonly [string, string] = ['#ff7a3d', '#3fe0ff'];
+
+export function lookFor(outfit: Outfit, accent: string): GorillaLook {
+  return { fur: furColour(outfit), accent, outfit };
+}
 
 const SHOULDER_BACK = { x: 7, y: 11.5 };
 const SHOULDER_FRONT = { x: 23, y: 11.5 };
@@ -51,12 +64,15 @@ export class GorillaActor {
   lookAt: Point | null = null;
   holdingBanana = false;
   shielded = false;
-  private pose: Pose = poseFor('idle', 0, 45, 0);
+  private pose: Pose = poseFor('idle', 0, 45, 0, 'dance-classic');
   private breath = Math.random() * 10;
   private blinkIn = 2 + Math.random() * 3;
   private blinking = 0;
 
-  constructor(readonly player: PlayerIndex) {}
+  constructor(
+    readonly player: PlayerIndex,
+    public look: GorillaLook,
+  ) {}
 
   setMood(mood: Mood) {
     if (mood === this.mood) return;
@@ -74,24 +90,23 @@ export class GorillaActor {
     }
     this.blinking = Math.max(0, this.blinking - delta);
 
-    const target = poseFor(this.mood, this.moodTime, this.aimAngle, this.breath);
-    // Snappy for a throw, softer for everything else.
-    const ease = 1 - Math.exp(-delta * (this.mood === 'throw' ? 40 : 14));
+    const target = poseFor(this.mood, this.moodTime, this.aimAngle, this.breath, this.dance);
+    // Snappy for a throw or a robot's step, softer for everything else.
+    const snappy = this.mood === 'throw' || (this.mood === 'dance' && this.dance === 'dance-robot');
+    const ease = 1 - Math.exp(-delta * (snappy ? 40 : 14));
     this.pose = blendPose(this.pose, target, ease);
   }
 
-  draw(
-    ctx: CanvasRenderingContext2D,
-    gorilla: Gorilla,
-    look: GorillaLook,
-    rimLight: string,
-    time: number,
-  ) {
+  private get dance(): string {
+    return this.look.outfit.dance;
+  }
+
+  draw(ctx: CanvasRenderingContext2D, gorilla: Gorilla, rimLight: string, time: number) {
     if (this.mood === 'gone') return;
     const pose = this.pose;
     const facingRight = this.player === 0;
-    const bounce =
-      this.mood === 'dance' ? Math.abs(Math.sin(this.moodTime * Math.PI * 2.4)) * 2.2 : 0;
+    const dancing = this.mood === 'dance';
+    const bounce = dancing ? danceLift(this.dance, this.moodTime) : 0;
 
     ctx.save();
     ctx.translate(gorilla.x, gorilla.y - bounce);
@@ -99,12 +114,18 @@ export class GorillaActor {
       ctx.translate(30, 0);
       ctx.scale(-1, 1);
     }
+    if (dancing && this.dance === 'dance-spin') {
+      // Turning on the spot: the body narrows to nothing and comes back facing the other way.
+      ctx.translate(15, 0);
+      ctx.scale(Math.cos(this.moodTime * Math.PI * 1.6), 1);
+      ctx.translate(-15, 0);
+    }
     const lookDirection = this.lookDirection(gorilla, facingRight);
     const eyes = this.blinking > 0 && pose.eyes !== 'closed' ? 'closed' : pose.eyes;
-    drawBody(ctx, pose, look, rimLight, lookDirection, eyes, this.holdingBanana);
+    drawBody(ctx, pose, this.look, rimLight, lookDirection, eyes, this.holdingBanana, time);
     ctx.restore();
 
-    if (this.shielded) drawShield(ctx, gorilla, look.accent, time);
+    if (this.shielded) drawShield(ctx, gorilla, this.look.accent, time);
   }
 
   /** Unit-ish vector from the eyes to whatever the gorilla is watching, in its own facing. */
@@ -117,7 +138,7 @@ export class GorillaActor {
   }
 }
 
-function poseFor(mood: Mood, time: number, aimAngle: number, breath: number): Pose {
+function poseFor(mood: Mood, time: number, aimAngle: number, breath: number, dance: string): Pose {
   const sway = Math.sin(breath * 2.1) * 0.05;
   const idle: Pose = {
     backShoulder: -0.28 + sway,
@@ -195,21 +216,94 @@ function poseFor(mood: Mood, time: number, aimAngle: number, breath: number): Po
         eyes: 'wide',
       };
     }
-    case 'dance': {
-      const left = Math.sin(time * Math.PI * 2.4) > 0;
+    case 'dance':
+      return dancePose(dance, idle, time);
+  }
+}
+
+/** The victory dances from the wardrobe. */
+function dancePose(dance: string, idle: Pose, time: number): Pose {
+  const happy: Pose = { ...idle, mouth: 'grin', eyes: 'happy' };
+  switch (dance) {
+    case 'dance-jump': {
+      const airborne = Math.sin(time * Math.PI * 2) > 0;
+      return {
+        ...happy,
+        backShoulder: -Math.PI + 0.3,
+        backElbow: airborne ? -0.1 : -0.6,
+        frontShoulder: Math.PI - 0.3,
+        frontElbow: airborne ? 0.1 : 0.6,
+        crouch: airborne ? 0 : 0.6,
+      };
+    }
+    case 'dance-robot': {
+      const step = Math.floor(time * 4) % 4;
+      const up = step % 2 === 0;
       return {
         ...idle,
+        backShoulder: -Math.PI / 2,
+        backElbow: up ? -Math.PI / 2 : Math.PI / 2,
+        frontShoulder: Math.PI / 2,
+        frontElbow: up ? Math.PI / 2 : -Math.PI / 2,
+        crouch: 0.15,
+        headTilt: step < 2 ? -0.12 : 0.12,
+        mouth: 'flat',
+      };
+    }
+    case 'dance-spin':
+      return {
+        ...happy,
+        backShoulder: -1.9,
+        backElbow: 0.2,
+        frontShoulder: 1.9,
+        frontElbow: -0.2,
+        crouch: 0.1,
+      };
+    case 'dance-flex': {
+      const squeeze = (1 + Math.sin(time * Math.PI * 3)) / 2;
+      return {
+        ...happy,
+        backShoulder: -Math.PI / 2 - 0.25 * squeeze,
+        backElbow: -Math.PI / 2 - 0.2 * squeeze,
+        frontShoulder: Math.PI / 2 + 0.25 * squeeze,
+        frontElbow: Math.PI / 2 + 0.2 * squeeze,
+        crouch: 0.3 - 0.15 * squeeze,
+      };
+    }
+    case 'dance-thump': {
+      const left = Math.sin(time * Math.PI * 6) > 0;
+      return {
+        ...idle,
+        backShoulder: left ? 0.6 : 0.2,
+        backElbow: left ? 1.6 : 0.4,
+        frontShoulder: left ? 0.3 : -0.6,
+        frontElbow: left ? -0.4 : -1.6,
+        crouch: 0.25,
+        headTilt: -0.18,
+        mouth: 'o',
+        eyes: 'closed',
+      };
+    }
+    default: {
+      const left = Math.sin(time * Math.PI * 2.4) > 0;
+      return {
+        ...happy,
         backShoulder: left ? -Math.PI + 0.2 : -0.35,
         backElbow: left ? -0.3 : 0.4,
         frontShoulder: left ? 0.35 : Math.PI - 0.2,
         frontElbow: left ? -0.4 : 0.3,
         crouch: 0.2,
         headTilt: left ? -0.08 : 0.08,
-        mouth: 'grin',
-        eyes: 'happy',
       };
     }
   }
+}
+
+/** How high a dance lifts the gorilla off its roof. */
+function danceLift(dance: string, time: number): number {
+  if (dance === 'dance-jump') return Math.max(0, Math.sin(time * Math.PI * 2)) * 7;
+  if (dance === 'dance-robot' || dance === 'dance-spin') return 0;
+  return Math.abs(Math.sin(time * Math.PI * 2.4)) * 2.2;
 }
 
 function blendPose(from: Pose, to: Pose, amount: number): Pose {
@@ -253,9 +347,10 @@ function drawBody(
   lookDirection: Point,
   eyes: Eyes,
   holdingBanana: boolean,
+  time: number,
 ) {
   const drop = pose.crouch * 1.6;
-  const fur = look.fur;
+  const { fur, outfit, accent } = look;
   const furDark = shade(fur, -0.35);
   const skin = shade(fur, 0.42);
   const outline = shade(fur, -0.75);
@@ -274,9 +369,11 @@ function drawBody(
     pose.frontElbow,
   );
 
+  if (outfit.neckwear === 'neck-cape') drawCape(ctx, accent, drop, time);
+
   // Back arm and back leg sit behind the body, a shade darker.
   drawArm(ctx, back, furDark, outline);
-  if (holdingBanana) drawHeldBanana(ctx, back.hand);
+  if (holdingBanana) drawHeldBanana(ctx, back.hand, outfit.banana, time);
   drawLeg(ctx, 11, 21 + drop, 9.3, 29.2, furDark, outline);
 
   // Torso: broad shoulders tapering to the hips.
@@ -309,7 +406,8 @@ function drawBody(
   ctx.lineWidth = 0.9;
   ctx.stroke();
 
-  drawHead(ctx, pose, look, skin, furDark, outline, rimLight, lookDirection, eyes, drop);
+  drawNeckwear(ctx, outfit.neckwear, accent, drop, time);
+  drawHead(ctx, pose, look, skin, furDark, outline, rimLight, lookDirection, eyes, drop, time);
   drawArm(ctx, front, fur, outline);
 }
 
@@ -375,7 +473,9 @@ function drawHead(
   lookDirection: Point,
   eyes: Eyes,
   drop: number,
+  time: number,
 ) {
+  const { outfit, accent } = look;
   ctx.save();
   ctx.translate(16, 6 + drop);
   ctx.rotate(pose.headTilt);
@@ -397,23 +497,7 @@ function drawHead(
   ctx.lineWidth = 0.7;
   ctx.stroke();
 
-  // Bandana in the player's colour, tails streaming behind.
-  ctx.beginPath();
-  ctx.moveTo(-5.6, -1.6);
-  ctx.quadraticCurveTo(0.3, -3.6, 5.9, -1.9);
-  ctx.lineTo(5.9, -0.4);
-  ctx.quadraticCurveTo(0.3, -2.1, -5.7, -0.1);
-  ctx.closePath();
-  ctx.fillStyle = look.accent;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-5.4, -0.9);
-  ctx.quadraticCurveTo(-8.2, -1.8, -9.6, 0.6);
-  ctx.moveTo(-5.4, -0.6);
-  ctx.quadraticCurveTo(-7.8, 0.6, -8.4, 2.8);
-  ctx.strokeStyle = look.accent;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  if (outfit.neckwear === 'neck-bandana') drawHeadBandana(ctx, accent);
 
   // Muzzle.
   ctx.beginPath();
@@ -439,6 +523,8 @@ function drawHead(
   ctx.fill();
 
   drawMouth(ctx, pose.mouth, outline);
+  drawEyewear(ctx, outfit.eyewear, accent);
+  drawHeadwear(ctx, outfit.headwear, accent, time);
   ctx.restore();
 }
 
@@ -505,32 +591,12 @@ function drawMouth(ctx: CanvasRenderingContext2D, mouth: Mouth, outline: string)
   }
 }
 
-function drawHeldBanana(ctx: CanvasRenderingContext2D, hand: Point) {
+function drawHeldBanana(ctx: CanvasRenderingContext2D, hand: Point, skin: string, time: number) {
   ctx.save();
   ctx.translate(hand.x, hand.y - 1.5);
   ctx.rotate(-0.6);
-  drawBananaShape(ctx);
+  drawBanana(ctx, skin, false, time);
   ctx.restore();
-}
-
-/** The banana itself, centred on the origin, about 8 units long. */
-export function drawBananaShape(ctx: CanvasRenderingContext2D, golden = false) {
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(0, -2.4, 4.2, Math.PI * 0.18, Math.PI * 0.82);
-  ctx.strokeStyle = golden ? '#8a5a00' : '#5a3a08';
-  ctx.lineWidth = 3.4;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, -2.4, 4.2, Math.PI * 0.2, Math.PI * 0.8);
-  ctx.strokeStyle = golden ? '#ffd54a' : '#ffe14d';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, -2.4, 3.6, Math.PI * 0.3, Math.PI * 0.62);
-  ctx.strokeStyle = golden ? '#fff6c0' : '#fff7b8';
-  ctx.lineWidth = 0.7;
-  ctx.stroke();
 }
 
 function drawShield(ctx: CanvasRenderingContext2D, gorilla: Gorilla, colour: string, time: number) {

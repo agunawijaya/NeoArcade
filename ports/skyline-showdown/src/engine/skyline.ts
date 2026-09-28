@@ -11,7 +11,7 @@ import { GORILLA_SIZE, STREET_Y, WORLD_WIDTH } from './constants';
  * and slope 6 had no branch at all, so it produced a flat, tall city. Here
  * every pattern gets its own rule.
  */
-export type SlopePattern = 'upward' | 'downward' | 'v' | 'invertedV';
+export type SlopePattern = 'upward' | 'downward' | 'v' | 'invertedV' | 'hillUp' | 'hillDown';
 
 export interface CityWindow {
   x: number;
@@ -42,14 +42,32 @@ const WINDOW_HEIGHT = 7;
 const WINDOW_ROW_SPACING = 15;
 const WINDOW_COLUMN_SPACING = 10;
 /** Keeps the tallest roof low enough for a gorilla (and a little air) above it. */
-const HIGHEST_ROOF = GORILLA_SIZE + 5;
+export const HIGHEST_ROOF = GORILLA_SIZE + 5;
 
+/*
+ * The two hill patterns are the World Tour's, never rolled by the dice: a
+ * city climbing a steep slope from one side to the other, with less
+ * randomness, so the gorillas stand far apart in height.
+ */
 const STARTING_TREND: Record<SlopePattern, number> = {
   upward: 15,
   downward: 130,
   v: 15,
   invertedV: 130,
+  hillUp: 10,
+  hillDown: 270,
 };
+
+/** Random height added on top of the trend, per building. */
+const RANDOM_HEIGHT_FOR: Record<SlopePattern, number> = {
+  upward: RANDOM_HEIGHT,
+  downward: RANDOM_HEIGHT,
+  v: RANDOM_HEIGHT,
+  invertedV: RANDOM_HEIGHT,
+  hillUp: 25,
+  hillDown: 25,
+};
+const HILL_STEP = 24;
 
 /** One roll of a six-sided die, as in the original: the "V" city wins half the time. */
 export function pickSlopePattern(rng: Rng): SlopePattern {
@@ -73,6 +91,10 @@ function trendChange(pattern: SlopePattern, x: number): number {
       return leftHalf ? 2 * HEIGHT_STEP : -2 * HEIGHT_STEP;
     case 'invertedV':
       return leftHalf ? -2 * HEIGHT_STEP : 2 * HEIGHT_STEP;
+    case 'hillUp':
+      return HILL_STEP;
+    case 'hillDown':
+      return -HILL_STEP;
   }
 }
 
@@ -87,7 +109,7 @@ export function makeSkyline(rng: Rng, pattern: SlopePattern = pickSlopePattern(r
     let width = rng.int(1, MIN_WIDTH) + MIN_WIDTH;
     if (x + width > WORLD_WIDTH) width = WORLD_WIDTH - x - 2;
 
-    let height = rng.int(1, RANDOM_HEIGHT) + trend;
+    let height = rng.int(1, RANDOM_HEIGHT_FOR[pattern]) + trend;
     height = Math.max(HEIGHT_STEP, height);
     // The original clamped against an undeclared variable (always 0), which
     // shrank an over-tall building to 20 units. Capping it is what it meant.
@@ -99,6 +121,17 @@ export function makeSkyline(rng: Rng, pattern: SlopePattern = pickSlopePattern(r
   } while (x <= WORLD_WIDTH - HEIGHT_STEP);
 
   return { pattern, buildings };
+}
+
+/**
+ * Makes one building far taller than its neighbours, windows and all: the
+ * World Tour's supertall tower.
+ */
+export function raiseBuilding(skyline: Skyline, index: number, top: number, rng: Rng): void {
+  const building = skyline.buildings[index];
+  if (!building) throw new Error(`No building ${index} to raise.`);
+  building.top = Math.max(HIGHEST_ROOF, top);
+  building.windows = makeWindows(rng, building.x, building.width, STREET_Y - building.top);
 }
 
 /** Columns every 10 units, rows every 15 from the roof down; one in four is dark. */

@@ -3,17 +3,25 @@
     "slug": "skyline-showdown",
     "title": "Skyline Showdown",
     "tagline": "Two gorillas, a city at dusk and a lot of exploding bananas.",
-    "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city. Every miss blows a hole in the skyline and teaches you something; the first clean hit brings the house down.",
+    "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city. Every miss blows a hole in the skyline and teaches you something; the first clean hit brings the house down. Then take the World Tour, from Jakarta to the eye of Jupiter's storm.",
     "highlights": [
       "Learn it in one throw, master it in the wind",
+      "A World Tour of fifteen stops, each with a twist and a rival",
       "Play a friend on one keyboard, or a CPU at four levels",
-      "Earth, the Moon, Mars and Jupiter, each with its own gravity",
-      "Power-ups on balloons, slow-motion replays, a city you can blow apart"
+      "A wardrobe of sixty things to wear, and badges on your Arcade Pass"
     ],
     "screens": [
       {
+        "image": "media/tour-map.jpg",
+        "caption": "Fifteen stops, from Jakarta to the eye of the storm."
+      },
+      {
         "image": "media/aiming.jpg",
         "caption": "Pull back, read the wind, let it fly."
+      },
+      {
+        "image": "media/tokyo.jpg",
+        "caption": "In Tokyo a billboard drone patrols the sky."
       },
       {
         "image": "media/building-hit.jpg",
@@ -28,8 +36,8 @@
         "caption": "On Jupiter it drops like a stone."
       },
       {
-        "image": "media/night.jpg",
-        "caption": "Play on from dusk into the night."
+        "image": "media/wardrobe.jpg",
+        "caption": "Dress your gorilla from a wardrobe of sixty items."
       },
       {
         "image": "media/light.jpg",
@@ -56,5 +64,63 @@
       "architecture": "docs/ARCHITECTURE.md"
     },
     "added": "2026-09-25"
+  },
+  {
+    "slug": "donkey-dash",
+    "title": "Donkey Dash",
+    "tagline": "One button, two lanes and a great many donkeys.",
+    "pitch": "There is a donkey in the road, and it is not moving. Press once to switch lanes, just as in 1981, then take the long way round: a Road Trip across five routes, an Endless road that keeps getting faster, a Daily Road everyone drives the same, and a mode where a friend gets to be the donkey.",
+    "highlights": [
+      "One button: the whole game fits under a thumb",
+      "Chase, top-down or isometric: three views, all equally fair",
+      "Road Trip, Endless, a Daily Road and the 1981 duel",
+      "Two players on one screen: a friend picks the donkey's lane"
+    ],
+    "screens": [
+      {
+        "image": "media/chase.jpg",
+        "caption": "A donkey over the hill, and carrots in the lane."
+      },
+      {
+        "image": "media/crash.jpg",
+        "caption": "BOOM! The 1981 crash, four halves and all."
+      },
+      {
+        "image": "media/iso.jpg",
+        "caption": "Or watch the road as a tiny model world."
+      },
+      {
+        "image": "media/classic.jpg",
+        "caption": "Top-down like 1981, with headlights at night."
+      },
+      {
+        "image": "media/mountain.jpg",
+        "caption": "Five routes, from the farm to the snow."
+      },
+      {
+        "image": "media/versus.jpg",
+        "caption": "Donkey vs Driver: a friend decides where it goes."
+      }
+    ],
+    "original": {
+      "title": "DONKEY.BAS",
+      "author": "IBM Corp.",
+      "year": 1981,
+      "platform": "IBM PC (BASICA)"
+    },
+    "genres": ["Arcade", "Reflex"],
+    "players": {
+      "min": 1,
+      "max": 2
+    },
+    "accent": "#ffb238",
+    "path": "donkey-dash/",
+    "cover": "donkey-dash",
+    "docs": {
+      "howToPlay": "docs/HOW-TO-PLAY.md",
+      "about": "docs/ABOUT.md",
+      "architecture": "docs/ARCHITECTURE.md"
+    },
+    "added": "2026-09-28"
   }
 ]

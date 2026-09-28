@@ -65,6 +65,8 @@ test('pauses, resumes and asks before leaving mid-match', async ({ page }) => {
 });
 
 test('classic typed input plays a whole point to victory', async ({ page }) => {
+  // A whole point, replay and victory, every frame rendered: it takes a while.
+  test.setTimeout(240_000);
   const settings = testSettings({ points: 1, world: 'earth' });
   const seed = 6;
   const state = mirrorMatch(settings, seed);
@@ -81,6 +83,7 @@ test('classic typed input plays a whole point to victory', async ({ page }) => {
 });
 
 test('the hidden aim guide against the CPU predicts the hit', async ({ page }) => {
+  test.setTimeout(240_000);
   const settings = testSettings({ players: 'humanVsCpu', points: 1, world: 'earth' });
   const seed = 6;
   const hit = findThrow(mirrorMatch(settings, seed), (shot) => shot.victim === 1);
@@ -125,7 +128,7 @@ test('popping a balloon hands its crate to the thrower', async ({ page }) => {
 
 test('remembers the chosen settings', async ({ page }) => {
   await openGame(page, testSettings(), 1);
-  await page.getByRole('button', { name: 'Match settings' }).click({ force: true });
+  await page.getByRole('button', { name: 'Quick Match' }).click({ force: true });
   await page.getByRole('radio', { name: /Mars/ }).click({ force: true });
   await page.getByRole('button', { name: 'Start match' }).click({ force: true });
   await runUntilPhase(page, 'aim');
@@ -140,7 +143,7 @@ test('aim assist, switched on in the settings, shows the opening of the throw', 
   page,
 }) => {
   await openGame(page, testSettings({ aiming: 'drag' }), 1);
-  await page.getByRole('button', { name: 'Match settings' }).click({ force: true });
+  await page.getByRole('button', { name: 'Quick Match' }).click({ force: true });
   await page.getByRole('switch', { name: 'Aim assist' }).click({ force: true });
   await page.getByRole('button', { name: 'Start match' }).click({ force: true });
   await runUntilPhase(page, 'aim');
@@ -163,7 +166,7 @@ test('follows the device theme until a theme is chosen, then remembers it', asyn
   );
   expect(JSON.parse(stored ?? 'null')).toBe('dark');
 
-  await page.getByRole('button', { name: 'Match settings' }).click({ force: true });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click({ force: true });
   await page.getByRole('radio', { name: /Auto/ }).click({ force: true });
   expect(await theme()).toBe('light');
 });

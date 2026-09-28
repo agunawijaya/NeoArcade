@@ -1,8 +1,11 @@
 import { createMatch } from '../engine/match';
 import { gorillaCentre } from '../engine/gorillas';
+import { lookFor, PLAYER_ACCENTS } from '../render/gorilla';
+import { classicKit } from '../render/kits';
 import type { Theme } from '../render/palette';
 import { Scene } from '../render/scene';
 import type { Stage } from '../render/stage';
+import type { Outfit } from '../wardrobe/items';
 
 /** The city the title screen opens on: chosen for a handsome, varied skyline. */
 const SHOWCASE_SEED = 1990;
@@ -22,6 +25,8 @@ export class TitleShow {
     private readonly stage: Stage,
     weather: boolean,
     theme: Theme,
+    /** Player 1's outfit, worn by the gorilla on the rooftop. */
+    outfit: Outfit,
   ) {
     const match = createMatch({
       seed: SHOWCASE_SEED,
@@ -34,6 +39,8 @@ export class TitleShow {
       timeOfDay: 0.15,
       theme,
       weather,
+      kit: classicKit('earth'),
+      looks: [lookFor(outfit, PLAYER_ACCENTS[0]), lookFor(outfit, PLAYER_ACCENTS[0])],
       onThunder: () => {},
     });
     this.scene.wind = 3;

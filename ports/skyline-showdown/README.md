@@ -4,9 +4,11 @@ Two gorillas, two rooftops, one city at dusk, and a lot of exploding
 bananas. Skyline Showdown keeps the physics and the rules of QBasic Gorillas
 step for step: angle, velocity, wind, gravity, and the holes every miss
 leaves in the skyline. Around them it builds a living city, expressive
-gorillas, four worlds, a CPU that learns from its misses, power-ups on
-balloons and slow-motion replays. Play a friend on one keyboard, or take on
-the CPU from Easy to Brutal.
+gorillas, four worlds, a CPU that learns from its misses, and a **World
+Tour**: fifteen stops from Jakarta to the eye of Jupiter's storm, each with
+a twist and a rival with a style of their own. Earn stars, dress your
+gorilla from a wardrobe of sixty items, collect badges on your Arcade Pass,
+or play a friend on one keyboard in a Quick Match.
 
 *Inspired by QBasic Gorillas, © Microsoft Corporation 1990.*
 
@@ -22,15 +24,17 @@ npm run dev     # then open http://localhost:5173/ports/skyline-showdown/
 npm run build   # the built game is in dist/skyline-showdown/
 ```
 
-Tests: `npm test` runs the engine tests. The browser tests are
+Tests: `npm test` runs the engine, tour and wardrobe tests (including the
+World Tour's tuning). The browser tests are
 `npx playwright test -c ports/skyline-showdown --project=smoke`, with
-`screens` and `playtest` projects for screenshots and full matches against
-the CPU.
+`screens` and `playtest` projects for screenshots, full matches against the
+CPU and the whole World Tour played through.
 
 ## Read more
 
 - [About](docs/ABOUT.md): the original, and what this version adds.
-- [How to play](docs/HOW-TO-PLAY.md): controls, settings, power-ups, tips.
+- [How to play](docs/HOW-TO-PLAY.md): controls, the World Tour, stars,
+  twists, the wardrobe, badges, settings, tips.
 - [Architecture](docs/ARCHITECTURE.md): how the code fits together.
 - [Behaviour notes and change log](../../docs/games/skyline-showdown.md).
 

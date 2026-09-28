@@ -26,7 +26,7 @@ import {
   type PowerUpKind,
 } from './powerups';
 import { buildingRect, copyTerrain, discHitsTerrain, type Terrain } from './terrain';
-import { windAcceleration } from './wind';
+import { airAt, droneAt, NO_HAZARDS, type Hazards } from './twists';
 
 export interface ShotSetup {
   terrain: Terrain;
@@ -35,6 +35,8 @@ export interface ShotSetup {
   gravity: number;
   balloon: Balloon | null;
   shields: readonly [boolean, boolean];
+  /** The World Tour's drones, jet streams, dust devils and springy ground. */
+  hazards?: Hazards;
 }
 
 export interface ThrowInput {
@@ -59,6 +61,8 @@ export type ShotEvent =
   | (EventBase & { type: 'balloon'; kind: PowerUpKind })
   | (EventBase & { type: 'split'; children: number[] })
   | (EventBase & { type: 'bounce' })
+  /** A banana stopped by the patrolling drone. */
+  | (EventBase & { type: 'drone' })
   | (EventBase & { type: 'explosion'; radius: number; building: number })
   | (EventBase & { type: 'topple'; cut: Rect; building: number })
   | (EventBase & { type: 'shield'; player: PlayerIndex })
@@ -98,13 +102,22 @@ const BOUNCE_KEEPS = 0.75;
 /** Collisions are checked at most this far apart, so fast bananas cannot tunnel. */
 const COLLISION_SPACING = 2;
 
+/**
+ * A banana's flight is a chain of segments, each a closed-form arc from its
+ * own origin. Anything that changes the arc (a bounce, a split, entering a
+ * jet stream or a dust devil) starts a new segment from where the banana is,
+ * so the path stays continuous and exactly repeatable.
+ */
 interface Flight {
   track: BananaTrack;
   origin: Point;
   velocity: Point;
   segmentStart: number;
+  /** Sideways acceleration in this segment: the wind, or the air of a zone it is in. */
+  push: number;
   canSplit: boolean;
-  canBounce: boolean;
+  /** Bounces left: one from a Bouncer, one from springy ground. */
+  bounces: number;
   previous: Point;
   done: boolean;
 }
@@ -131,6 +144,7 @@ class ShotSimulation {
   private readonly flights: Flight[] = [];
   private readonly shields: [boolean, boolean];
   private readonly wind: number;
+  private readonly hazards: Hazards;
   private readonly golden: boolean;
   private balloon: Balloon | null;
   private collected: PowerUpKind | null = null;
@@ -144,7 +158,11 @@ class ShotSimulation {
   ) {
     this.terrain = copyTerrain(setup.terrain);
     this.shields = [...setup.shields];
-    this.wind = input.powerUp === 'calm' ? 0 : setup.wind;
+    const calm = input.powerUp === 'calm';
+    this.wind = calm ? 0 : setup.wind;
+    // Calm Air stills all the air, jet stream and dust devil included.
+    const hazards = setup.hazards ?? NO_HAZARDS;
+    this.hazards = calm ? { ...hazards, jetStream: null, dustDevil: null } : hazards;
     this.golden = input.powerUp === 'golden';
     this.balloon = setup.balloon;
   }
@@ -188,8 +206,9 @@ class ShotSimulation {
       origin,
       velocity,
       segmentStart: step,
+      push: this.airAt(origin),
       canSplit,
-      canBounce: this.input.powerUp === 'bouncer',
+      bounces: (this.input.powerUp === 'bouncer' ? 1 : 0) + (this.hazards.bouncy ? 1 : 0),
       previous: origin,
       done: false,
     };
@@ -216,13 +235,14 @@ class ShotSimulation {
     }
   }
 
+  private airAt(point: Point): number {
+    return airAt(this.hazards, this.wind, point.x, point.y);
+  }
+
   private positionAt(flight: Flight, step: number): Point {
     const time = (step - flight.segmentStart) * STEP_TIME;
     return {
-      x:
-        flight.origin.x +
-        flight.velocity.x * time +
-        0.5 * windAcceleration(this.wind) * time * time,
+      x: flight.origin.x + flight.velocity.x * time + 0.5 * flight.push * time * time,
       y: flight.origin.y + flight.velocity.y * time + 0.5 * this.setup.gravity * time * time,
     };
   }
@@ -230,9 +250,17 @@ class ShotSimulation {
   private velocityAt(flight: Flight, step: number): Point {
     const time = (step - flight.segmentStart) * STEP_TIME;
     return {
-      x: flight.velocity.x + windAcceleration(this.wind) * time,
+      x: flight.velocity.x + flight.push * time,
       y: flight.velocity.y + this.setup.gravity * time,
     };
+  }
+
+  /** Starts a new segment here with new motion, keeping the path continuous. */
+  private resegment(flight: Flight, origin: Point, velocity: Point, step: number) {
+    flight.origin = origin;
+    flight.velocity = velocity;
+    flight.segmentStart = step;
+    flight.push = this.airAt(origin);
   }
 
   private advance(flight: Flight, step: number) {
@@ -268,6 +296,10 @@ class ShotSimulation {
     flight.track.points.push(position);
     flight.previous = position;
     this.lastStep = Math.max(this.lastStep, step);
+    // Crossing into or out of a jet stream or a dust devil changes the push from here on.
+    if (this.airAt(position) !== flight.push) {
+      this.resegment(flight, position, this.velocityAt(flight, step), step);
+    }
   }
 
   /** Walks from the last point to this one in small hops; returns true if the flight ended. */
@@ -309,6 +341,13 @@ class ShotSimulation {
       }
     }
 
+    const drone = this.hazards.drone;
+    if (drone && discTouchesRect(x, y, BANANA_RADIUS, droneAt(drone, step))) {
+      this.finish(flight, point, step);
+      this.record({ type: 'drone', ...this.at(flight, point, step) });
+      return true;
+    }
+
     for (const player of [0, 1] as const) {
       const gorilla = this.setup.gorillas[player];
       if (gorillaHitboxes(gorilla).some((box) => discTouchesRect(x, y, BANANA_RADIUS, box))) {
@@ -321,7 +360,7 @@ class ShotSimulation {
     const building = discHitsTerrain(this.terrain, x, y, BANANA_RADIUS);
     if (building === -1) return false;
 
-    if (flight.canBounce) {
+    if (flight.bounces > 0) {
       this.bounce(flight, building, clear, step);
       return true;
     }
@@ -425,13 +464,16 @@ class ShotSimulation {
     const incoming = this.velocityAt(flight, step);
     const hitWall =
       rect !== undefined && (clear.x < rect.x || clear.x > rect.x + buildingRect(rect).width);
-    flight.origin = clear;
-    flight.velocity = {
-      x: (hitWall ? -incoming.x : incoming.x) * BOUNCE_KEEPS,
-      y: (hitWall ? incoming.y : -incoming.y) * BOUNCE_KEEPS,
-    };
-    flight.segmentStart = step;
-    flight.canBounce = false;
+    this.resegment(
+      flight,
+      clear,
+      {
+        x: (hitWall ? -incoming.x : incoming.x) * BOUNCE_KEEPS,
+        y: (hitWall ? incoming.y : -incoming.y) * BOUNCE_KEEPS,
+      },
+      step,
+    );
+    flight.bounces -= 1;
     flight.track.points.push(clear);
     flight.previous = clear;
     this.lastStep = Math.max(this.lastStep, step);
@@ -448,7 +490,7 @@ class ShotSimulation {
         y: heading.x * Math.sin(turn) + heading.y * Math.cos(turn),
       };
       const child = this.launch(position, velocity, step, false);
-      child.canBounce = false;
+      child.bounces = this.hazards.bouncy ? 1 : 0;
       return child.track.id;
     });
     this.record({ type: 'split', children, ...this.at(flight, position, step) });

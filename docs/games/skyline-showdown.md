@@ -188,9 +188,62 @@ flights take the same wall-clock time. The physics is unchanged.
 - Names default to "Player 1" / "Player 2" and are cut to 10 characters, as
   before. A CPU with a default name is shown as "CPU".
 
+### World Tour, rivals, wardrobe and badges (prompt 003)
+
+None of this changes a Quick Match: its rules, cities and CPU play exactly
+as before, and old `?seed=` links replay the same cities.
+
+- **Main menu.** Title → World Tour · Quick Match · Wardrobe · Badges ·
+  Settings · How to play · Back to Hall. "Match settings" is now **Quick
+  Match**; the new **Settings** holds what both modes share (aiming, aim
+  assist, names, theme, CRT, sound).
+- **World Tour.** Fifteen stages in four chapters (Earth, Moon, Mars,
+  Jupiter), first to 2, bosses first to 3, no balloons. Three stars per
+  stage (win; within a throw budget; never hit), capped at one with aim
+  assist. Chapters open with a star total (10, 17, 24) and the previous
+  boss. Stages, rivals and chapters are data (`src/tour/`).
+- **Stage twists** as engine data (ADR 0007): gusts, a patrol drone, a
+  supertall tower, a jet stream, a hidden wind gauge, a hillside, springy
+  ground, a dust devil and lightning. Two differ from the suggestions in
+  the brief:
+  - The Moon's "craters in the street that launch debris" became **springy
+    ground**: in a city packed with buildings the street is only exposed in
+    2-unit gaps, so a street-based twist almost never triggered.
+  - **Gusts** shift the wind by 2–5 notches (scaled by the world) instead
+    of re-rolling it. Re-rolling made gust stages long lotteries in
+    playtests; a shift keeps the wind changing every throw but readable.
+  - New York mixes the drone and gusts; Jupiter's lightning is telegraphed
+    a full throw ahead and never strikes a gorilla's roof or its
+    neighbours.
+- **Rivals** (ADR 0008): ten characters, each a CPU level plus a play style
+  (favourite angle, correction, rattle, wind sense), a colour, an outfit
+  and a few lines. Beaten rivals can be picked in Quick Match. Their
+  personalities come from how they play and what they say, never from
+  where they are from.
+- **CPU and gusts / hidden wind.** When the wind gauge is hidden the CPU
+  reads 40 % of the wind. After a gust it corrects from its last throw,
+  allowing for the change, instead of guessing afresh.
+- **Drone height.** The drone flies above the roofs under its rail where
+  it can, rather than at a fixed height, so it never sits inside a tower.
+- **"So close!"** after every miss: a pin where it landed, the distance in
+  metres (a gorilla is 2 m), short, long, over or blocked, and for people a
+  comment that never repeats twice running.
+- **Wardrobe.** Sixty cosmetic items in eight slots for each player: fur,
+  headwear, eyewear, neckwear, banana skin, trail, explosion, victory dance.
+  The classic look is the default outfit (the head bandana in the player's
+  colour). Cosmetics never change hitboxes, physics or information; the
+  Golden Banana always looks golden.
+- **Arcade Pass.** A manifest of 28 badges, the wardrobe items badges and
+  levels unlock, and profile stats; XP for matches, wins, stages, stars and
+  rivals; unlock toasts held during turns and shown between rounds.
+- **City kits.** Each tour city has its own facades, tints, rooftop props,
+  silhouettes and horizon; each stage fixes its light and weather.
+- **Instant replay** now shows at most the last 2.5 seconds of flight before
+  a hit, so slow lunar arcs don't take half a minute to replay.
+
 ## Known differences that stay on purpose
 
-- Rooftop props (water towers, antennas, chimneys, flags) never stop a
-  banana.
+- Rooftop props (water towers, antennas, chimneys, flags, billboards,
+  domes) never stop a banana, and neither does anything a gorilla wears.
 - Carving is exact geometry, so holes are perfectly round and edges never
   "leak" a pixel the way EGA circles could.

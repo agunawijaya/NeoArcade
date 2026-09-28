@@ -2,7 +2,9 @@ import { createRng, type Rng } from '@shared/rng';
 import { STREET_Y, WORLD_HEIGHT, WORLD_WIDTH } from '../engine/constants';
 import type { Circle, Point, Rect } from '../engine/geometry';
 import type { Building } from '../engine/skyline';
-import { shade, withAlpha, type Palette } from './palette';
+import type { CityKit, FacadeStyle } from './kits';
+import { shade, tintKeepingLight, withAlpha, type Palette } from './palette';
+import { paintRoofProp, PROP_MIN_WIDTH } from './rooftop-props';
 
 /**
  * The playable row of buildings, painted once into an offscreen canvas.
@@ -10,8 +12,8 @@ import { shade, withAlpha, type Palette } from './palette';
  * nothing per frame. Windows are repainted one at a time when they switch
  * on or off. Rooftop props sit set back on the roof: they are scenery and
  * never stop a banana, just as the original's roofs had nothing on them.
+ * What the city is built from (facades, tints, props) comes from its kit.
  */
-type FacadeStyle = 'brick' | 'panels' | 'glass' | 'deco';
 
 interface WindowState {
   rect: Rect;
@@ -48,6 +50,7 @@ export class City {
     private readonly occupied: readonly number[],
     seed: number,
     private readonly palette: Palette,
+    private readonly kit: CityKit,
   ) {
     const context = this.canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D is not available.');
@@ -55,14 +58,18 @@ export class City {
     const rng = createRng(seed);
     this.flickerRng = rng.clone();
     this.propSeed = rng.int(0, 2 ** 31 - 1);
-    this.facades = buildings.map((building, index) => ({
-      colour: rng.pick(palette.facades),
-      style: rng.pick(['brick', 'panels', 'glass', 'deco'] as const),
-      neon:
-        !occupied.includes(index) && building.width > 44 && rng.chance(0.22)
-          ? rng.pick(NEON)
-          : null,
-    }));
+    this.facades = buildings.map((building, index) => {
+      const base = rng.pick(palette.facades);
+      return {
+        colour:
+          kit.tints.length > 0 ? tintKeepingLight(base, rng.pick(kit.tints), kit.tintAmount) : base,
+        style: rng.pick(kit.styles),
+        neon:
+          !occupied.includes(index) && building.width > 44 && rng.chance(kit.neon)
+            ? rng.pick(NEON)
+            : null,
+      };
+    });
     this.windows = buildings.flatMap((building, index) =>
       building.windows.map((window) => ({
         rect: { x: window.x, y: window.y, width: window.width, height: window.height },
@@ -284,16 +291,16 @@ export class City {
     this.buildings.forEach((building, index) => {
       if (this.occupied.includes(index) || building.width < 20) return;
       const roofX = (share: number) => building.x + 4 + (building.width - 8) * share;
-      if (rng.chance(0.3)) {
+      if (rng.chance(this.kit.antennas)) {
         this.rooftops.antennas.push({
           x: roofX(rng.float(0.1, 0.9)),
           y: building.top - rng.float(9, 16),
           roof: building.top,
         });
       }
-      if (rng.chance(0.22))
+      if (rng.chance(this.kit.chimneys))
         this.rooftops.chimneys.push({ x: roofX(rng.float(0.1, 0.9)), y: building.top - 4 });
-      if (rng.chance(0.14))
+      if (rng.chance(this.kit.flags))
         this.rooftops.flags.push({ x: roofX(rng.float(0.2, 0.8)), y: building.top - 13 });
     });
   }
@@ -304,20 +311,11 @@ export class City {
     this.buildings.forEach((building, index) => {
       if (this.occupied.includes(index) || building.width < 20) return;
       const colour = shade(this.facades[index]?.colour ?? '#444', -0.3);
-      ctx.fillStyle = colour;
-      if (building.width >= 50 && propRng.chance(0.3)) {
-        // A little water tower on stilts.
-        const towerX = building.x + building.width * propRng.float(0.25, 0.65);
-        const baseY = building.top;
-        ctx.fillRect(towerX + 0.8, baseY - 3, 0.6, 3);
-        ctx.fillRect(towerX + 4.6, baseY - 3, 0.6, 3);
-        ctx.fillRect(towerX, baseY - 8, 6, 5);
-        ctx.beginPath();
-        ctx.moveTo(towerX - 0.4, baseY - 8);
-        ctx.lineTo(towerX + 3, baseY - 10.5);
-        ctx.lineTo(towerX + 6.4, baseY - 8);
-        ctx.fill();
+      const prop = propRng.pick(this.kit.props);
+      if (building.width >= PROP_MIN_WIDTH[prop] && propRng.chance(this.kit.propChance)) {
+        paintRoofProp(ctx, prop, building, colour, propRng);
       }
+      ctx.fillStyle = colour;
       const boxes = propRng.int(0, 2);
       for (let box = 0; box < boxes; box++) {
         ctx.fillRect(building.x + 3 + propRng.float(0, building.width - 9), building.top - 2, 3, 2);

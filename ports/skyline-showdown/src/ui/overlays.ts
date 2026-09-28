@@ -1,12 +1,18 @@
 import type { MatchSummary } from '../game/session';
-import { GORILLA_LOOKS } from '../render/gorilla';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
 
 export interface PauseHandlers {
   resume(): void;
   restart(): void;
-  settings(): void;
+  /** Back to Quick Match's settings, or to the World Tour map. */
+  leave(): void;
+}
+
+/** What the pause menu offers depends on where the match came from. */
+export interface PauseLabels {
+  restart: string;
+  leave: string;
 }
 
 export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, hallHref: string) {
@@ -19,8 +25,8 @@ export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, h
   resume.addEventListener('click', handlers.resume);
   const restart = h('button', { class: 'button', type: 'button' }, 'Restart match');
   restart.addEventListener('click', handlers.restart);
-  const settings = h('button', { class: 'button', type: 'button' }, 'Match settings');
-  settings.addEventListener('click', handlers.settings);
+  const leave = h('button', { class: 'button', type: 'button' }, 'Match settings');
+  leave.addEventListener('click', handlers.leave);
   const note = h('p', { class: 'panel__note' });
 
   const element = h(
@@ -42,7 +48,7 @@ export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, h
         { class: 'menu' },
         resume,
         restart,
-        settings,
+        leave,
         h('a', { class: 'button button--quiet', href: howToPlayHref }, 'How to play'),
         h('a', { class: 'button button--quiet', href: hallHref }, 'Back to the Hall'),
       ),
@@ -50,7 +56,9 @@ export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, h
   );
   return {
     element,
-    open(message: string | null = null) {
+    open(labels: PauseLabels, message: string | null = null) {
+      restart.textContent = labels.restart;
+      leave.textContent = labels.leave;
       note.textContent = message ?? '';
       note.hidden = !message;
       element.hidden = false;
@@ -67,9 +75,16 @@ export interface VictoryHandlers {
   settings(): void;
 }
 
+/** A rival's parting words under the result. */
+export interface PartingLine {
+  text: string;
+  speaker: string;
+}
+
 export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) {
   const title = h('h2', { class: 'victory__title', id: 'victory-title' });
   const score = h('p', { class: 'victory__score' });
+  const parting = h('blockquote', { class: 'victory__line' });
   const rematch = h(
     'button',
     { class: 'button button--primary', type: 'button' },
@@ -93,6 +108,7 @@ export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) 
       { class: 'victory' },
       title,
       score,
+      parting,
       h(
         'div',
         { class: 'menu menu--row' },
@@ -104,14 +120,13 @@ export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) 
   );
   return {
     element,
-    show(summary: MatchSummary) {
-      const { names, scores, winner } = summary;
+    show(summary: MatchSummary, line: PartingLine | null = null) {
+      const { names, scores, winner, accents } = summary;
       title.textContent = winner === null ? 'A draw!' : `${names[winner]} wins!`;
-      element.style.setProperty(
-        '--accent',
-        winner === null ? '#ffffff' : GORILLA_LOOKS[winner].accent,
-      );
+      element.style.setProperty('--accent', winner === null ? '#ffffff' : accents[winner]);
       score.textContent = `${names[0]} ${scores[0]} – ${scores[1]} ${names[1]}`;
+      parting.hidden = line === null;
+      parting.textContent = line ? `“${line.text}” — ${line.speaker}` : '';
       element.hidden = false;
       rematch.focus();
     },

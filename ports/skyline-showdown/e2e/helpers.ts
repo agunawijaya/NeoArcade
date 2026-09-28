@@ -1,9 +1,14 @@
 import type { Page } from '@playwright/test';
+import { createRng } from '@shared/rng';
+import { createCpuMemory, observeThrow, planThrow, thinkingSeconds } from '../src/engine/ai';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/engine/constants';
 import type { Point } from '../src/engine/geometry';
 import { createMatch, startNextRound, takeTurn, type MatchState } from '../src/engine/match';
 import { simulateShot, type ShotRecord } from '../src/engine/shot';
+import { tourSetup } from '../src/game/setup';
 import { defaultSettings, matchOptionsFrom, type Settings } from '../src/settings';
+import type { Stage } from '../src/tour/stages';
+import { DEFAULT_OUTFITS } from '../src/wardrobe/items';
 
 /**
  * Helpers shared by the browser tests.
@@ -29,12 +34,27 @@ export function testSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-export async function openGame(page: Page, settings: Settings, seed: number) {
+/**
+ * Opens the game on its title screen with these settings (and anything else
+ * put in storage first, such as a World Tour save), its cities seeded.
+ */
+export async function openGame(
+  page: Page,
+  settings: Settings,
+  seed: number,
+  storage: Record<string, unknown> = {},
+) {
   await page.clock.install({ time: CLOCK_START });
   await page.clock.pauseAt(new Date(CLOCK_START.getTime() + 1000));
+  const entries = { 'neoarcade:skyline-showdown:settings': settings, ...storage };
   await page.addInitScript((stored) => {
-    localStorage.setItem('neoarcade:skyline-showdown:settings', stored);
-  }, JSON.stringify(settings));
+    // Only on the first load: a test that reloads keeps what the game saved.
+    if (sessionStorage.getItem('stored')) return;
+    sessionStorage.setItem('stored', 'yes');
+    for (const [key, value] of Object.entries(JSON.parse(stored) as Record<string, unknown>)) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  }, JSON.stringify(entries));
   await page.goto(`./?seed=${seed}`);
   await runUntil(page, (screen) => document.body.dataset.screen === screen, 'title');
 }
@@ -63,8 +83,18 @@ export async function runUntilPhase(page: Page, phase: string, limitMs = 120_000
   await runUntil(page, (wanted) => document.body.dataset.phase === wanted, phase, limitMs);
 }
 
+/** Starts a Quick Match with the stored settings. */
 export async function startFromTitle(page: Page) {
   // The clock is paused, so skip Playwright's wait for animations to settle.
+  await page.getByRole('button', { name: 'Quick Match', exact: true }).click({ force: true });
+  await page.getByRole('button', { name: 'Start match' }).click({ force: true });
+  await runUntilPhase(page, 'aim');
+}
+
+/** From the title: the World Tour map, a stop's card, and its first throw. */
+export async function playTourStage(page: Page, stage: string) {
+  await page.locator('.title__tour').click({ force: true });
+  await page.locator(`[data-stage="${stage}"]`).click({ force: true });
   await page.getByRole('button', { name: 'Play', exact: true }).click({ force: true });
   await runUntilPhase(page, 'aim');
 }
@@ -107,6 +137,7 @@ export function findThrow(
           gravity: round.world.gravity,
           balloon: round.balloon,
           shields: round.shields,
+          hazards: round.hazards,
         },
         { thrower: state.turn, angle, velocity, powerUp: null },
       );
@@ -114,6 +145,70 @@ export function findThrow(
     }
   }
   return null;
+}
+
+export interface WinPlan {
+  seed: number;
+  throws: { angle: number; velocity: number }[];
+}
+
+/**
+ * A seed where player 1 can win a tour stage without ever being hit: a sure
+ * hit found for every one of its turns, while the rival's own throws
+ * (planned exactly as the page plans them) all miss.
+ */
+export function planFlawlessWin(stage: Stage, settings: Settings): WinPlan {
+  for (let seed = 1; seed < 300; seed++) {
+    const setup = tourSetup(stage, settings, seed, DEFAULT_OUTFITS[0]);
+    const rival = setup.players[1].cpu;
+    if (!rival) throw new Error('A tour stage always has a rival.');
+    const state = createMatch(setup.match);
+    const memory = createCpuMemory();
+    const rng = createRng(seed ^ 0x5eed);
+    const throws: WinPlan['throws'] = [];
+    let spoiled = false;
+    while (!spoiled && statusOf(state) !== 'matchOver') {
+      if (state.turn === 0) {
+        const hit = findThrow(state, (shot) => shot.victim === 1);
+        if (!hit) {
+          spoiled = true;
+          break;
+        }
+        throws.push({ angle: hit.angle, velocity: hit.velocity });
+        takeTurn(state, hit);
+      } else {
+        const aim = planThrow(state, memory, rival.level, rng, rival.style);
+        thinkingSeconds(rival.level, rng);
+        const result = takeTurn(state, aim);
+        observeThrow(memory, aim, result.shot, state);
+        if (result.scorer === 1) spoiled = true;
+      }
+      if (statusOf(state) === 'roundOver') startNextRound(state);
+    }
+    if (!spoiled && state.winner === 0) return { seed, throws };
+  }
+  throw new Error(`No flawless win found in ${stage.city}.`);
+}
+
+/** Reads the status through a function, since takeTurn changes it behind TypeScript's back. */
+function statusOf(state: MatchState): MatchState['status'] {
+  return state.status;
+}
+
+/** Types each planned throw on the player's turns, skipping the replays, until the results. */
+export async function playPlan(page: Page, plan: WinPlan) {
+  for (const aim of plan.throws) {
+    await runUntil(
+      page,
+      () => document.body.dataset.phase === 'aim' && document.body.dataset.turn === '0',
+      '',
+      180_000,
+    );
+    await typeThrow(page, aim.angle, aim.velocity);
+    await runUntilPhase(page, 'replay', 180_000);
+    await page.locator('.hud__replay').click({ force: true });
+  }
+  await runUntil(page, () => !document.querySelector<HTMLElement>('.overlay--results')?.hidden, '');
 }
 
 export function range(from: number, to: number, step: number): number[] {

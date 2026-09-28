@@ -4,12 +4,15 @@ import { gorillaCentre, type PlayerIndex } from '../engine/gorillas';
 import type { Round } from '../engine/match';
 import type { Balloon, PowerUpKind } from '../engine/powerups';
 import type { ShotRecord } from '../engine/shot';
-import { Atmosphere, rollWeather } from './atmosphere';
+import { Atmosphere, rollWeather, type Weather } from './atmosphere';
 import { Backdrop } from './backdrop';
 import type { Camera } from './camera';
 import { City } from './city';
 import { Effects } from './effects';
-import { drawBananaShape, GORILLA_LOOKS, GorillaActor } from './gorilla';
+import { GorillaActor, type GorillaLook } from './gorilla';
+import { HazardView } from './hazards';
+import type { CityKit } from './kits';
+import { drawBanana, drawTrail } from './outfit';
 import {
   isNight,
   paletteFor,
@@ -38,6 +41,7 @@ export interface FlyingBanana {
 interface Trail {
   points: Point[];
   golden: boolean;
+  owner: PlayerIndex;
 }
 
 const TRAIL_LENGTH = 16;
@@ -50,7 +54,10 @@ const ASSIST_SHARE = 1 / 3;
 export interface SceneLook {
   timeOfDay: TimeOfDay;
   theme: Theme;
-  weather: boolean;
+  /** Random weather (on or off), or a World Tour city's own. */
+  weather: boolean | Weather;
+  kit: CityKit;
+  looks: readonly [GorillaLook, GorillaLook];
   onThunder: () => void;
 }
 
@@ -73,7 +80,8 @@ export class Scene {
   readonly atmosphere: Atmosphere;
   readonly skyBody: SkyBody;
   readonly effects = new Effects();
-  readonly actors: [GorillaActor, GorillaActor] = [new GorillaActor(0), new GorillaActor(1)];
+  readonly actors: [GorillaActor, GorillaActor];
+  readonly hazards: HazardView;
 
   bananas: FlyingBanana[] = [];
   /** Where the current thrower's previous banana went, drawn faintly. */
@@ -84,8 +92,11 @@ export class Scene {
   /** Aim assist, or the hidden whole-path guide, for the throw being aimed. */
   guide: ThrowPreview | null = null;
   activePlayer: PlayerIndex | null = null;
+  /** Whose bananas are in the air, for their skin and trail. */
+  thrower: PlayerIndex = 0;
   wind: number;
   time = 0;
+  private reducedMotion = false;
 
   private trails = new Map<number, Trail>();
   private windowTimer = 0;
@@ -98,13 +109,24 @@ export class Scene {
     this.palette = paletteFor(world, look.timeOfDay, look.theme);
     this.night = isNight(look.timeOfDay);
     const occupied = round.gorillas.map((gorilla) => gorilla.building);
-    this.city = new City(round.terrain.buildings, occupied, round.seed, this.palette);
-    this.backdrop = new Backdrop(round.seed, this.palette, world);
-    const weather = rollWeather(createRng(round.seed + 5), world, look.weather);
+    this.city = new City(round.terrain.buildings, occupied, round.seed, this.palette, look.kit);
+    this.backdrop = new Backdrop(round.seed, this.palette, world, look.kit);
+    const weather =
+      typeof look.weather === 'boolean'
+        ? rollWeather(createRng(round.seed + 5), world, look.weather)
+        : look.weather;
     this.atmosphere = new Atmosphere(round.seed, this.palette, weather, world, look.onThunder);
     this.skyBody = new SkyBody(world, this.night);
+    this.actors = [new GorillaActor(0, look.looks[0]), new GorillaActor(1, look.looks[1])];
+    this.hazards = new HazardView(() => round.terrain.buildings);
+    this.hazards.show(round.hazards, round.lightningTarget);
+    this.hazards.hiddenWind = round.twists.includes('hiddenWind');
     this.wind = round.wind;
     this.balloon = round.balloon;
+  }
+
+  accentOf(player: PlayerIndex): string {
+    return this.actors[player].look.accent;
   }
 
   get weather() {
@@ -118,6 +140,8 @@ export class Scene {
 
   update(delta: number, reducedMotion: boolean) {
     this.time += delta;
+    this.reducedMotion = reducedMotion;
+    this.hazards.update(delta);
     this.windowTimer -= delta;
     if (this.windowTimer <= 0) {
       this.windowTimer = 0.35;
@@ -130,7 +154,11 @@ export class Scene {
 
     const live = new Set(this.bananas.map((banana) => banana.id));
     for (const banana of this.bananas) {
-      const trail = this.trails.get(banana.id) ?? { points: [], golden: banana.golden };
+      const trail = this.trails.get(banana.id) ?? {
+        points: [],
+        golden: banana.golden,
+        owner: this.thrower,
+      };
       trail.points.push({ x: banana.x, y: banana.y });
       if (trail.points.length > TRAIL_LENGTH) trail.points.shift();
       this.trails.set(banana.id, trail);
@@ -152,24 +180,27 @@ export class Scene {
     const { time } = this;
     camera.apply(ctx);
 
-    this.backdrop.drawSky(ctx, area, time, this.atmosphere.flash + this.effects.brightness * 0.08);
+    const flash = this.atmosphere.flash + this.hazards.flash + this.effects.brightness * 0.08;
+    this.backdrop.drawSky(ctx, area, time, flash);
     this.skyBody.draw(ctx, time, this.palette.bodyGlow);
     this.atmosphere.drawBolt(ctx);
     this.backdrop.drawFar(ctx, camera.panX);
     this.atmosphere.drawClouds(ctx);
     this.backdrop.drawMid(ctx, camera.panX * 0.5);
     this.atmosphere.drawFog(ctx, area, time);
+    this.hazards.drawBehind(ctx, area, this.reducedMotion);
 
     this.city.draw(ctx);
     this.effects.drawEmbers(ctx);
     this.atmosphere.drawRooftops(ctx, this.city.rooftops, this.wind, time);
     this.backdrop.drawStreet(ctx, area, this.weather.rain, time);
+    this.hazards.drawFront(ctx, area, this.reducedMotion);
 
     this.drawGhost(ctx);
     this.drawBalloon(ctx);
     this.actors.forEach((actor, index) => {
       const gorilla = this.round.gorillas[index as PlayerIndex];
-      actor.draw(ctx, gorilla, GORILLA_LOOKS[index as PlayerIndex], this.palette.rimLight, time);
+      actor.draw(ctx, gorilla, this.palette.rimLight, time);
     });
     this.drawTurnMarker(ctx);
     this.drawGuide(ctx);
@@ -182,7 +213,7 @@ export class Scene {
   private drawTurnMarker(ctx: CanvasRenderingContext2D) {
     if (this.activePlayer === null) return;
     const gorilla = this.round.gorillas[this.activePlayer];
-    const accent = GORILLA_LOOKS[this.activePlayer].accent;
+    const accent = this.accentOf(this.activePlayer);
     const bob = Math.sin(this.time * 4) * 1.5;
     const x = gorilla.x + 15;
     const y = gorilla.y - 16 + bob;
@@ -228,7 +259,7 @@ export class Scene {
 
   /** Aim assist: dots that fade out a third of the way into the flight. */
   private drawOpeningPath(ctx: CanvasRenderingContext2D, shot: ShotRecord) {
-    const colour = GORILLA_LOOKS[shot.input.thrower].accent;
+    const colour = this.accentOf(shot.input.thrower);
     const lastStep = shot.steps * ASSIST_SHARE;
     for (const track of shot.tracks) {
       track.points.forEach((point, index) => {
@@ -247,7 +278,7 @@ export class Scene {
   private drawWholePath(ctx: CanvasRenderingContext2D, shot: ShotRecord) {
     const thrower = shot.input.thrower;
     const hitsOpponent = shot.victim !== null && shot.victim !== thrower;
-    const colour = hitsOpponent ? GUIDE_HIT_COLOUR : GORILLA_LOOKS[thrower].accent;
+    const colour = hitsOpponent ? GUIDE_HIT_COLOUR : this.accentOf(thrower);
     ctx.strokeStyle = withAlpha(colour, 0.75);
     ctx.lineWidth = 0.9;
     ctx.setLineDash([2.5, 2.5]);
@@ -274,7 +305,7 @@ export class Scene {
 
   private drawGhost(ctx: CanvasRenderingContext2D) {
     if (!this.ghost || this.activePlayer === null) return;
-    const accent = GORILLA_LOOKS[this.activePlayer].accent;
+    const accent = this.accentOf(this.activePlayer);
     ctx.fillStyle = withAlpha(accent, 0.28);
     this.ghost.forEach((point, index) => {
       if (index % 3 !== 0) return;
@@ -285,31 +316,18 @@ export class Scene {
   }
 
   private drawBananas(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
     for (const trail of this.trails.values()) {
-      const colour = trail.golden ? '#ffd23f' : '#ffe68a';
-      for (let index = 1; index < trail.points.length; index++) {
-        const from = trail.points[index - 1] as Point;
-        const to = trail.points[index] as Point;
-        const share = index / trail.points.length;
-        ctx.strokeStyle = withAlpha(colour, share * 0.7);
-        ctx.lineWidth = share * 3.2;
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
-      }
+      const { outfit, accent } = this.actors[trail.owner].look;
+      drawTrail(ctx, trail.points, outfit.trail, accent, trail.golden, this.time);
     }
-    ctx.restore();
 
+    const skin = this.actors[this.thrower].look.outfit.banana;
     for (const banana of this.bananas) {
       ctx.save();
       ctx.translate(banana.x, banana.y);
       ctx.rotate(this.time * 13 + banana.id);
       ctx.scale(1.35, 1.35);
-      drawBananaShape(ctx, banana.golden);
+      drawBanana(ctx, skin, banana.golden, this.time);
       ctx.restore();
     }
   }

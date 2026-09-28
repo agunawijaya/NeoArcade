@@ -1,6 +1,7 @@
 import { createRng, type Rng } from '@shared/rng';
 import { STREET_Y, WORLD_HEIGHT, WORLD_WIDTH } from '../engine/constants';
 import type { WorldId } from '../engine/worlds';
+import type { CityKit, Horizon, Silhouette } from './kits';
 import { shade, withAlpha, type Palette } from './palette';
 
 /**
@@ -23,8 +24,6 @@ interface Star {
   size: number;
   phase: number;
 }
-
-type Silhouette = 'tower' | 'spire' | 'dome' | 'stepped';
 
 /** One street lamp's pool of light, painted once and stamped along the street. */
 const LAMP_GLOW = paintLampGlow();
@@ -54,6 +53,7 @@ export class Backdrop {
     seed: number,
     private readonly palette: Palette,
     private readonly world: WorldId,
+    private readonly kit: CityKit,
   ) {
     this.seed = seed;
     const rng = createRng(seed);
@@ -68,12 +68,15 @@ export class Backdrop {
   render(scale: number) {
     this.scale = scale;
     const rng = createRng(this.seed + 1);
+    // Cities with something on the horizon keep their far towers low enough to show it.
+    const lowFar = this.kit.horizon === 'pyramids' || this.kit.horizon === 'dunes';
     this.paintSkyline(this.far, rng, {
       colour: this.palette.farCity,
-      minHeight: 90,
-      maxHeight: 250,
+      minHeight: lowFar ? 40 : 90,
+      maxHeight: lowFar ? 130 : 250,
       windows: 0.25,
       haze: 0.55,
+      horizon: this.kit.horizon,
     });
     this.paintSkyline(this.mid, rng, {
       colour: this.palette.midCity,
@@ -81,6 +84,7 @@ export class Backdrop {
       maxHeight: 170,
       windows: 0.45,
       haze: 0.3,
+      horizon: 'none',
     });
   }
 
@@ -192,7 +196,14 @@ export class Backdrop {
   private paintSkyline(
     canvas: HTMLCanvasElement,
     rng: Rng,
-    layer: { colour: string; minHeight: number; maxHeight: number; windows: number; haze: number },
+    layer: {
+      colour: string;
+      minHeight: number;
+      maxHeight: number;
+      windows: number;
+      haze: number;
+      horizon: Horizon;
+    },
   ) {
     const width = WORLD_WIDTH + BACKDROP_MARGIN * 2;
     canvas.width = Math.ceil(width * this.scale);
@@ -202,10 +213,9 @@ export class Backdrop {
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.clearRect(0, 0, width, WORLD_HEIGHT);
 
-    const shapes: Silhouette[] =
-      this.world === 'earth' || this.world === 'jupiter'
-        ? ['tower', 'tower', 'spire', 'stepped']
-        : ['tower', 'dome', 'dome', 'stepped'];
+    ctx.fillStyle = shade(layer.colour, 0.08);
+    paintHorizon(ctx, layer.horizon, width);
+    const shapes = this.kit.skyline;
 
     for (let x = -10; x < width;) {
       const buildingWidth = rng.float(16, 44);
@@ -261,6 +271,108 @@ export class Backdrop {
       case 'tower':
         ctx.fillRect(x + width / 2 - 0.3, top - 10, 0.6, 10);
         break;
+      case 'needle':
+        ctx.fillRect(x + width * 0.25, top - 12, width * 0.5, 12);
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.4, top - 12);
+        ctx.lineTo(x + width / 2, top - 12 - width * 1.6);
+        ctx.lineTo(x + width * 0.6, top - 12);
+        ctx.fill();
+        break;
+      case 'minaret': {
+        const column = x + width * 0.75;
+        ctx.fillRect(column - 1.6, top - 28, 3.2, 28);
+        ctx.fillRect(column - 2.6, top - 20, 5.2, 1.4);
+        ctx.beginPath();
+        ctx.moveTo(column - 1.8, top - 28);
+        ctx.lineTo(column, top - 34);
+        ctx.lineTo(column + 1.8, top - 28);
+        ctx.fill();
+        break;
+      }
+      case 'deco':
+        ctx.fillRect(x + width * 0.15, top - 9, width * 0.7, 9);
+        ctx.fillRect(x + width * 0.3, top - 17, width * 0.4, 8);
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.38, top - 17);
+        ctx.lineTo(x + width / 2, top - 32);
+        ctx.lineTo(x + width * 0.62, top - 17);
+        ctx.fill();
+        break;
+      case 'mast': {
+        const middle = x + width / 2;
+        ctx.fillRect(middle - 0.4, top - 30, 0.8, 30);
+        for (let bar = 6; bar < 30; bar += 7) ctx.fillRect(middle - 2.5, top - bar, 5, 0.6);
+        break;
+      }
+      case 'house':
+        ctx.beginPath();
+        ctx.moveTo(x - 1, top);
+        ctx.lineTo(x + width / 2, top - width * 0.35);
+        ctx.lineTo(x + width + 1, top);
+        ctx.fill();
+        break;
     }
   }
+}
+
+/** What rises behind a city's far towers: peaks, pyramids, dunes, mesas or crater rims. */
+function paintHorizon(ctx: CanvasRenderingContext2D, horizon: Horizon, width: number) {
+  const ground = STREET_Y;
+  ctx.beginPath();
+  switch (horizon) {
+    case 'none':
+      return;
+    case 'mountains':
+      // A steep, rounded rock and a long wooded ridge.
+      ctx.moveTo(width * 0.52, ground);
+      ctx.bezierCurveTo(width * 0.55, 150, width * 0.58, 70, width * 0.62, 72);
+      ctx.bezierCurveTo(width * 0.66, 74, width * 0.67, 150, width * 0.7, ground);
+      ctx.moveTo(width * 0.05, ground);
+      ctx.bezierCurveTo(width * 0.15, 120, width * 0.3, 100, width * 0.4, 150);
+      ctx.bezierCurveTo(width * 0.45, 170, width * 0.48, 200, width * 0.52, ground);
+      ctx.moveTo(width * 0.72, ground);
+      ctx.bezierCurveTo(width * 0.8, 130, width * 0.9, 110, width * 0.98, ground);
+      break;
+    case 'pyramids':
+      for (const [middle, half, height] of [
+        [0.3, 70, 120],
+        [0.42, 52, 92],
+        [0.72, 60, 105],
+      ] as const) {
+        ctx.moveTo(width * middle - half, ground);
+        ctx.lineTo(width * middle, ground - height - 60);
+        ctx.lineTo(width * middle + half, ground);
+      }
+      break;
+    case 'dunes':
+      ctx.moveTo(0, ground);
+      for (let x = 0; x <= width; x += 60) {
+        ctx.quadraticCurveTo(x + 30, ground - 120 - Math.sin(x) * 20, x + 60, ground - 80);
+      }
+      ctx.lineTo(width, ground);
+      break;
+    case 'mesas':
+      for (const [left, right, top] of [
+        [0.05, 0.28, 150],
+        [0.55, 0.75, 170],
+        [0.8, 0.95, 140],
+      ] as const) {
+        ctx.moveTo(width * left, ground);
+        ctx.lineTo(width * left + 20, top);
+        ctx.lineTo(width * right - 20, top);
+        ctx.lineTo(width * right, ground);
+      }
+      break;
+    case 'craterRims':
+      ctx.moveTo(0, ground);
+      for (let x = 0; x <= width; x += 90) {
+        ctx.quadraticCurveTo(x + 20, ground - 180, x + 45, ground - 170);
+        ctx.quadraticCurveTo(x + 70, ground - 180, x + 90, ground - 120);
+      }
+      ctx.lineTo(width, ground);
+      break;
+  }
+  ctx.closePath();
+  ctx.fill();
 }

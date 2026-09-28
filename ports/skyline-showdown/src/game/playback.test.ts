@@ -23,6 +23,17 @@ describe('ShotPlayback', () => {
     expect(playback.bananas).toEqual([]);
   });
 
+  it('can join a flight part-way, handing over the events it skipped', () => {
+    const tri = simulateShot(flatSetup(), throwOf(0, 60, 60, 'tri'));
+    const split = tri.events.find((event) => event.type === 'split');
+    const playback = new ShotPlayback(tri, 28);
+    const skipped = playback.skipTo((split?.step ?? 0) + 1);
+    expect(skipped).toContainEqual(split);
+    const later: unknown[] = [];
+    while (!playback.done) later.push(...playback.advance(1 / 60));
+    expect([...skipped, ...later]).toEqual(tri.events);
+  });
+
   it('shows all three bananas after a split', () => {
     const tri = simulateShot(flatSetup(), throwOf(0, 60, 60, 'tri'));
     const split = tri.events.find((event) => event.type === 'split');

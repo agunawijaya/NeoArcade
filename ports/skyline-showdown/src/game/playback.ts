@@ -22,6 +22,16 @@ export class ShotPlayback {
     private readonly stepsPerSecond: number,
   ) {}
 
+  /**
+   * Starts the playback part-way through, as the instant replay does for a
+   * long flight. Events before that point are handed back, so their marks on
+   * the city can still be made.
+   */
+  skipTo(step: number): ShotEvent[] {
+    this.clock = Math.max(0, Math.min(this.record.steps, step));
+    return this.advance(0);
+  }
+
   /** Moves the clock forward and returns the events it passed. */
   advance(seconds: number): ShotEvent[] {
     this.clock = Math.min(this.record.steps, this.clock + seconds * this.stepsPerSecond);

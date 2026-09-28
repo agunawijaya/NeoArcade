@@ -117,6 +117,7 @@ describe('CPU opponent', () => {
     planThrow(state, memory, 'normal', rng);
     memory.last = {
       aim: { angle: 45, velocity: 50, usePowerUp: false },
+      wind: state.round.wind,
       reached: 10,
       needed: 300,
       blocked: false,

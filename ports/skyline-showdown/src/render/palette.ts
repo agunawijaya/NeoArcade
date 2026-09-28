@@ -453,6 +453,23 @@ export function withAlpha(colour: string, alpha: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
+/**
+ * Leans a colour towards another hue but keeps its lightness, so a city's
+ * tint changes its character without turning night into day.
+ */
+export function tintKeepingLight(colour: string, tint: string, amount: number): string {
+  const original = parseColour(colour);
+  const mixed = parseColour(mixColours(colour, tint, amount));
+  const lightness = (rgb: number[]) =>
+    0.2126 * (rgb[0] ?? 0) + 0.7152 * (rgb[1] ?? 0) + 0.0722 * (rgb[2] ?? 0);
+  const ratio = lightness(original) / Math.max(1, lightness(mixed));
+  const hex = (value: number) =>
+    Math.round(Math.min(255, Math.max(0, value * ratio)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(mixed[0] ?? 0)}${hex(mixed[1] ?? 0)}${hex(mixed[2] ?? 0)}`;
+}
+
 /** Lighter (amount > 0) or darker (amount < 0) version of a colour. */
 export function shade(colour: string, amount: number): string {
   return mixColours(colour, amount > 0 ? '#ffffff' : '#000000', Math.abs(amount));

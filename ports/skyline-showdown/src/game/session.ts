@@ -15,32 +15,40 @@ import {
   createMatch,
   startNextRound,
   takeTurn,
+  type BetweenThrows,
   type MatchState,
   type TurnResult,
 } from '../engine/match';
 import { POWER_UPS, type Balloon } from '../engine/powerups';
 import { CITY_HUM, SOUNDS, VICTORY, playFanfare, type SoundName } from '../audio/sounds';
-import { timeOfDayForRound, type Theme } from '../render/palette';
+import type { Theme } from '../render/palette';
 import { Scene, type ThrowPreview } from '../render/scene';
 import type { Stage } from '../render/stage';
-import { cleanName, isCpu, matchOptionsFrom, type Settings } from '../settings';
+import type { Rival } from '../tour/rivals';
 import type { Hud } from '../ui/hud';
 import { formatAim, type Aim } from './aim';
 import { AimGuide } from './aim-guide';
 import type { Controls } from './controls';
 import { HumanAim } from './human-aim';
+import type { ThrowReport } from './pass-reporter';
 import { ShotPlayback } from './playback';
-import { reactTo, reactToNearMisses } from './reactions';
+import { reactTo, reactToNearMisses, type ReactionContext } from './reactions';
+import type { MatchSetup } from './setup';
+import { commentFor, describeMiss, judgeMiss, type Miss } from './so-close';
 
 export interface MatchSummary {
   names: [string, string];
+  accents: [string, string];
   scores: [number, number];
   winner: PlayerIndex | null;
+  /** Each player's throws over the whole match. */
+  throws: [number, number];
+  /** Aim assist or the hidden guide helped at some point. */
+  assisted: boolean;
 }
 
 export interface SessionOptions {
-  settings: Settings;
-  seed: number;
+  setup: MatchSetup;
   stage: Stage;
   hud: Hud;
   audio: AudioEngine;
@@ -51,6 +59,12 @@ export interface SessionOptions {
   theme: () => Theme;
   onMatchOver: (summary: MatchSummary) => void;
   onPause: () => void;
+  /** Every throw as it is made, for the Arcade Pass. */
+  onThrow?: (report: ThrowReport) => void;
+  /** A turn begins: the playfield needs the player's attention. */
+  onTurnStart?: () => void;
+  /** A point was scored: a good moment for news. */
+  onPoint?: () => void;
 }
 
 /** The city as it was before a throw, so the replay can rewind to it. */
@@ -73,7 +87,7 @@ type Phase =
   | { kind: 'aim'; time: number; cpu: CpuTurn | null }
   | { kind: 'throw'; time: number; aim: Aim; released: boolean }
   | { kind: 'flight'; playback: ShotPlayback; result: TurnResult; before: Snapshot }
-  | { kind: 'settle'; time: number; duration: number }
+  | { kind: 'settle'; time: number; duration: number; between: BetweenThrows }
   | { kind: 'impact'; time: number; result: TurnResult; before: Snapshot }
   | { kind: 'replay'; playback: ShotPlayback; result: TurnResult }
   | { kind: 'celebrate'; time: number; result: TurnResult }
@@ -85,14 +99,26 @@ const THROW_RELEASE = 0.13;
 const WINDUP_SECONDS = 0.9;
 const IMPACT_SECONDS = 1.5;
 const REPLAY_SPEED = 0.35;
+/** The replay shows at most this many seconds of flight before the hit: long lunar arcs join late. */
+const REPLAY_WINDOW = 2.5;
 const CELEBRATE_SECONDS = 3;
-/** A miss further than this from the target earns a face-palm and a taunt. */
-const BAD_MISS = 120;
+/** A miss further than this earns a face-palm and a taunt. */
+const BAD_MISS_METRES = 8;
+/** A miss this close gets a rival talking. */
+const NEAR_MISS_METRES = 5;
+/** Long enough to read "So close!" before the next turn; the CPU's lighter version is quicker. */
+const SETTLE_SECONDS = { person: 1.6, cpu: 1.1 };
+/** When lightning strikes and a gust arrives, into the pause between throws. */
+const STRIKE_AT = 0.45;
+const GUST_AT = 0.75;
+/** A rival's bubble floats this far above their head. */
+const SPEECH_LIFT = 16;
 
 /**
  * One match from first throw to victory dance: runs the engine turn by turn,
  * lets people aim and the CPU think and wind up, plays every shot back
- * through the scene, and replays the decisive hit in slow motion.
+ * through the scene, shows how close each miss came, lets the World Tour's
+ * twists act between throws, and replays the decisive hit in slow motion.
  */
 export class Session {
   readonly state: MatchState;
@@ -100,28 +126,42 @@ export class Session {
   paused = false;
   private phase: Phase = { kind: 'intro', time: 0 };
   private readonly names: [string, string];
+  private readonly accents: [string, string];
   private readonly cpuMemories: [CpuMemory, CpuMemory] = [createCpuMemory(), createCpuMemory()];
   private readonly cpuRng: Rng;
+  /** Picks comments and rival lines; kept apart from the CPU's generator so its throws never change. */
+  private readonly chatter: Rng;
   private readonly human = new HumanAim();
   private readonly guide = new AimGuide();
   private readonly aims: [Aim, Aim] = [{ ...DEFAULT_AIM }, { ...DEFAULT_AIM }];
   private readonly lastPaths: [Point[] | null, Point[] | null] = [null, null];
+  private readonly throwsBy: [number, number] = [0, 0];
+  private firstThrow: [boolean, boolean] = [true, true];
   private armed = false;
+  private assisted: boolean;
   private worldSpeed = 1;
   private throwsThisRound = 0;
+  /** The wind the gauge shows: the throw's own until a gust has been seen to arrive. */
+  private shownWind = 0;
+  private lastComment: string | null = null;
+  private lastLine: string | null = null;
+  private speaker: PlayerIndex | null = null;
+  /** A rival's jab at a near miss, kept until the pin has faded so the two never overlap. */
+  private pendingTaunt = false;
+  private missAt: Point | null = null;
 
   constructor(private readonly options: SessionOptions) {
-    const { settings, seed, hud } = options;
-    this.state = createMatch(matchOptionsFrom(settings, seed));
-    this.cpuRng = createRng(seed ^ 0x5eed);
-    this.names = ([0, 1] as const).map((player) =>
-      isCpu(settings, player) && settings.names[player] === `Player ${player + 1}`
-        ? 'CPU'
-        : cleanName(settings.names[player], player),
-    ) as [string, string];
-    hud.setPlayers(this.names, [isCpu(settings, 0), isCpu(settings, 1)]);
-    hud.setScores(this.state.scores, settings.points, settings.format);
+    const { setup, hud } = options;
+    this.state = createMatch(setup.match);
+    this.cpuRng = createRng(setup.match.seed ^ 0x5eed);
+    this.chatter = createRng(setup.match.seed ^ 0xc4a7);
+    this.names = [setup.players[0].name, setup.players[1].name];
+    this.accents = [setup.players[0].look.accent, setup.players[1].look.accent];
+    this.assisted = setup.aimAssist;
+    hud.setPlayers(this.names, [this.isCpu(0), this.isCpu(1)], this.accents);
+    hud.setScores(this.state.scores, setup.match.points, setup.match.format);
     hud.setMuted(options.audio.mix.muted);
+    hud.setTwist(setup.tourStage?.twist.name ?? null);
     hud.show(true);
     window.addEventListener('keydown', this.onTypedKey);
     this.beginRound();
@@ -135,6 +175,10 @@ export class Session {
     hud.showTyped(null, 'angle', '', null, false);
     hud.hint(null);
     hud.showReplay(false);
+    hud.hush();
+    hud.clearMiss();
+    hud.setTwist(null);
+    hud.setThrows(null, null);
   }
 
   update(delta: number) {
@@ -176,13 +220,23 @@ export class Session {
     if (this.phase.kind === 'replay') this.finishReplay(this.phase.result);
   }
 
+  private isCpu(player: PlayerIndex): boolean {
+    return this.options.setup.players[player].cpu !== null;
+  }
+
+  private isCpuTurn(): boolean {
+    return this.isCpu(this.state.turn);
+  }
+
   private beginRound() {
-    const { settings, stage, hud, audio } = this.options;
+    const { setup, stage, hud, audio } = this.options;
     const { round } = this.state;
     this.scene = new Scene(round, {
-      timeOfDay: timeOfDayForRound(round.number, settings.weather),
+      timeOfDay: setup.scenery.timeOfDay(round.number),
       theme: this.options.theme(),
-      weather: settings.weather,
+      weather: setup.scenery.weather,
+      kit: setup.scenery.kit,
+      looks: [setup.players[0].look, setup.players[1].look],
       onThunder: () => this.sound('thunder'),
     });
     stage.setScene(this.scene);
@@ -191,12 +245,32 @@ export class Session {
     this.lastPaths[0] = null;
     this.lastPaths[1] = null;
     this.throwsThisRound = 0;
-    hud.setRound(round.number, round.world.name);
-    hud.showBanner(`Round ${round.number}`, `${round.world.name} · ${describeWind(round.wind)}`);
+    this.firstThrow = [true, true];
+    this.shownWind = round.wind;
+    this.missAt = null;
+    hud.resetWind();
+    hud.clearMiss();
+    const place = setup.tourStage?.city ?? round.world.name;
+    hud.setRound(round.number, place);
+    hud.showBanner(`Round ${round.number}`, `${place} · ${this.describeWind()}`);
+    this.showThrowCount();
     audio.playMusic(CITY_HUM);
     playFanfare(audio, ['C4', 'Eb4', 'G4', 'C5']);
+    if (round.number === 1) this.rivalSays((rival) => rival.lines.intro);
     this.phase = { kind: 'intro', time: 0 };
     document.body.dataset.round = String(round.number);
+  }
+
+  private describeWind(): string {
+    const { round } = this.state;
+    if (round.twists.includes('hiddenWind')) return 'wind hidden';
+    if (round.wind === 0) return 'no wind';
+    return `wind ${Math.abs(round.wind)} ${round.wind > 0 ? '→' : '←'}`;
+  }
+
+  private showThrowCount() {
+    const stage = this.options.setup.tourStage;
+    this.options.hud.setThrows(stage ? this.throwsBy[0] : null, stage?.throwBudget ?? null);
   }
 
   private advancePhase(delta: number, worldDelta: number) {
@@ -219,8 +293,7 @@ export class Session {
         this.fly(phase, worldDelta);
         break;
       case 'settle':
-        phase.time += delta;
-        if (phase.time >= phase.duration) this.beginTurn();
+        this.settle(phase, delta);
         break;
       case 'impact':
         // Slow motion for the first moments of the blast, easing back to full speed.
@@ -248,6 +321,13 @@ export class Session {
   private beginTurn() {
     const player = this.state.turn;
     const { scene } = this;
+    this.options.onTurnStart?.();
+    this.options.hud.showMiss(null);
+    this.missAt = null;
+    if (this.pendingTaunt) {
+      this.pendingTaunt = false;
+      this.rivalSays((rival) => this.freshLine(rival.lines.taunt));
+    }
     this.armed = false;
     this.human.reset();
     scene.activePlayer = player;
@@ -266,12 +346,18 @@ export class Session {
     this.options.stage.camera.rest();
 
     let cpu: CpuTurn | null = null;
-    if (this.isCpuTurn()) {
-      const level = this.options.settings.cpuLevel;
-      const plan = planThrow(this.state, this.cpuMemories[player], level, this.cpuRng);
+    const brain = this.options.setup.players[player].cpu;
+    if (brain) {
+      const plan = planThrow(
+        this.state,
+        this.cpuMemories[player],
+        brain.level,
+        this.cpuRng,
+        brain.style,
+      );
       cpu = {
         plan,
-        thinking: thinkingSeconds(level, this.cpuRng),
+        thinking: thinkingSeconds(brain.level, this.cpuRng),
         windup: 0,
         from: { ...this.aims[player] },
       };
@@ -284,7 +370,7 @@ export class Session {
 
   private aimHint(): string | null {
     if (this.throwsThisRound > 1 && this.state.round.number > 1) return null;
-    if (this.options.settings.aiming === 'typed') {
+    if (this.options.setup.aiming === 'typed') {
       return 'Type the angle, Enter, then the velocity, Enter';
     }
     return this.options.touch()
@@ -292,16 +378,12 @@ export class Session {
       : 'Drag back from your gorilla, or use ← → ↑ ↓ and Space';
   }
 
-  private isCpuTurn(): boolean {
-    return isCpu(this.options.settings, this.state.turn);
-  }
-
   private humanAim(delta: number) {
     const player = this.state.turn;
     const { input } = this.options.controls;
     if (input.wasPressed('powerUp')) this.togglePowerUp(player);
     if (input.wasPressed('guide')) this.toggleGuide();
-    if (this.options.settings.aiming === 'typed') {
+    if (this.options.setup.aiming === 'typed') {
       this.showGuide(this.typedAim(player));
       return;
     }
@@ -324,8 +406,9 @@ export class Session {
   }
 
   private toggleGuide() {
-    if (!isCpu(this.options.settings, otherPlayer(this.state.turn))) return;
+    if (!this.isCpu(otherPlayer(this.state.turn))) return;
     const enabled = this.guide.toggle();
+    if (enabled) this.assisted = true;
     this.options.hud.toast(enabled ? 'Aim guide on' : 'Aim guide off');
     this.sound('tick');
   }
@@ -333,7 +416,7 @@ export class Session {
   /** Aim assist shows the opening of the throw; the hidden guide (C) shows all of it. */
   private showGuide(aim: Aim) {
     const whole = this.guide.enabled;
-    if (!whole && !this.options.settings.aimAssist) {
+    if (!whole && !this.options.setup.aimAssist) {
       this.drawGuide(null);
       return;
     }
@@ -368,7 +451,7 @@ export class Session {
   }
 
   private readonly onTypedKey = (event: KeyboardEvent) => {
-    if (this.options.settings.aiming !== 'typed' || this.paused) return;
+    if (this.options.setup.aiming !== 'typed' || this.paused) return;
     if (!/^([0-9.,]|Backspace|Enter)$/.test(event.key)) return;
     if (event.target instanceof HTMLElement && event.target.closest('input, textarea')) return;
     this.typeKey(event.key);
@@ -424,28 +507,38 @@ export class Session {
       windows: this.scene.city.snapshot(),
       balloon: round.balloon,
     };
+    const lightningTarget = round.lightningTarget;
     const aim = { angle: phase.aim.angle, velocity: phase.aim.power, usePowerUp: this.armed };
     const result = takeTurn(this.state, aim);
     if (cpuTurn) observeThrow(this.cpuMemories[player], aim, result.shot, this.state);
+    this.options.onThrow?.({ result, round, firstThrow: this.firstThrow[player] });
+    this.firstThrow[player] = false;
+    this.throwsBy[player]++;
     this.throwsThisRound++;
     this.armed = false;
+    this.showThrowCount();
 
-    const actor = this.scene.actors[player];
+    const { scene } = this;
+    const actor = scene.actors[player];
     actor.holdingBanana = false;
     if (result.usedPowerUp) {
       this.options.hud.toast(
         `${this.names[player]} uses ${POWER_UPS[result.usedPowerUp].name}!`,
-        player,
+        this.accents[player],
       );
       if (result.usedPowerUp === 'shield') actor.shielded = true;
     }
-    this.scene.wind = result.shot.wind;
+    scene.wind = result.shot.wind;
+    scene.thrower = player;
+    // The hazards as they were for this throw; the lightning mark stays until it strikes.
+    scene.hazards.show(result.hazards, lightningTarget);
+    scene.hazards.droneStep = 0;
     const hand = throwingHand(round.gorillas[player], player);
-    this.scene.effects.whoosh(hand.x, hand.y);
+    scene.effects.whoosh(hand.x, hand.y);
     this.sound('throw');
     this.lastPaths[player] = result.shot.tracks[0]?.points ?? null;
-    this.scene.ghost = null;
-    this.scene.clearTrails();
+    scene.ghost = null;
+    scene.clearTrails();
     this.phase = {
       kind: 'flight',
       playback: new ShotPlayback(result.shot, STEPS_PER_SECOND),
@@ -462,18 +555,10 @@ export class Session {
     const events = phase.playback.advance(worldDelta * (replaying ? REPLAY_SPEED : 1));
     const bananas = phase.playback.bananas;
     this.scene.bananas = bananas;
+    this.scene.hazards.droneStep = phase.playback.clock;
 
     for (const event of events) {
-      reactTo(event, {
-        scene: this.scene,
-        camera,
-        gorillas,
-        names: this.names,
-        thrower: result.shot.input.thrower,
-        replaying,
-        sound: (name, velocity) => this.sound(name, velocity),
-        toast: (text, player) => this.options.hud.toast(text, player),
-      });
+      reactTo(event, this.reactionContext(result, replaying));
       if (event.type === 'gorilla' && phase.kind === 'flight') {
         this.phase = { kind: 'impact', time: 0, result, before: phase.before };
         return;
@@ -508,20 +593,81 @@ export class Session {
     else this.settleMiss(result);
   }
 
+  private reactionContext(result: TurnResult, replaying: boolean): ReactionContext {
+    return {
+      scene: this.scene,
+      camera: this.options.stage.camera,
+      gorillas: this.state.round.gorillas,
+      names: this.names,
+      thrower: result.shot.input.thrower,
+      replaying,
+      sound: (name, velocity) => this.sound(name, velocity),
+      toast: (text, player) =>
+        this.options.hud.toast(text, player === null ? null : this.accents[player]),
+    };
+  }
+
+  /** After a miss: how close it came, a reaction from both gorillas, and the world moving on. */
   private settleMiss(result: TurnResult) {
     const thrower = result.shot.input.thrower;
-    const target = gorillaCentre(this.state.round.gorillas[otherPlayer(thrower)]);
-    const miss = Math.min(
-      ...result.shot.tracks.map((track) => {
-        const end = track.points.at(-1) ?? target;
-        return Math.hypot(end.x - target.x, end.y - target.y);
-      }),
-    );
-    const bad = miss > BAD_MISS;
+    const { gorillas, world } = this.state.round;
+    const miss = judgeMiss(result.shot, gorillas, world.gravity);
+    const person = !this.isCpu(thrower);
+    this.showSoClose(miss, thrower, person);
+
+    const bad = miss.metres > BAD_MISS_METRES;
     this.scene.actors[thrower].setMood(bad ? 'facepalm' : 'idle');
     this.scene.actors[otherPlayer(thrower)].setMood(bad ? 'taunt' : 'idle');
     this.scene.activePlayer = null;
-    this.phase = { kind: 'settle', time: 0, duration: bad ? 1.5 : 0.9 };
+    this.pendingTaunt = person && miss.metres <= NEAR_MISS_METRES;
+
+    // The drone flies on and the dust devil wanders; lightning and gusts wait a moment.
+    this.scene.hazards.show(this.state.round.hazards, this.scene.hazards.lightningTarget);
+    const { between } = result;
+    const events = Math.max(between.strike ? STRIKE_AT : 0, between.wind !== null ? GUST_AT : 0);
+    const base = person ? SETTLE_SECONDS.person : SETTLE_SECONDS.cpu;
+    const duration = Math.max(base + (bad ? 0.3 : 0), events > 0 ? events + 0.8 : 0);
+    this.phase = { kind: 'settle', time: 0, duration, between };
+  }
+
+  private showSoClose(miss: Miss, thrower: PlayerIndex, person: boolean) {
+    const comment = person ? commentFor(miss, this.lastComment, this.chatter) : null;
+    if (comment) this.lastComment = comment;
+    this.missAt = miss.landing;
+    this.options.hud.showMiss({
+      label: describeMiss(miss),
+      comment,
+      accent: this.accents[thrower],
+    });
+    document.body.dataset.miss = miss.verdict;
+  }
+
+  private settle(phase: Extract<Phase, { kind: 'settle' }>, delta: number) {
+    const before = phase.time;
+    phase.time += delta;
+    const reached = (moment: number) => before < moment && phase.time >= moment;
+    const { strike, wind } = phase.between;
+    if (strike && reached(STRIKE_AT)) this.playStrike(strike.building, strike.crater);
+    if (wind !== null && reached(GUST_AT)) {
+      this.shownWind = wind;
+      this.scene.wind = wind;
+      this.options.hud.toast('A gust! The wind has changed');
+      this.sound('tick');
+    }
+    if (phase.time >= phase.duration) this.beginTurn();
+  }
+
+  /** Lightning hits the marked roof, then the next one is marked. */
+  private playStrike(building: number, crater: Circle) {
+    const { scene } = this;
+    scene.hazards.strike(building, crater);
+    scene.city.carve(crater);
+    scene.city.darkenAround(crater.x, crater.y, crater.radius * 2.5);
+    scene.effects.explode(crater.x, crater.y, 9, scene.city.facadeAt(building), true);
+    this.options.stage.camera.shake(0.45, 6);
+    this.sound('thunder');
+    this.sound('bigBoom', 0.7);
+    scene.hazards.lightningTarget = this.state.round.lightningTarget;
   }
 
   private beginReplay(result: TurnResult, before: Snapshot) {
@@ -539,11 +685,15 @@ export class Session {
     if (victim !== null) scene.actors[victim].setMood('panic');
     scene.skyBody.calm();
     this.options.hud.showReplay(true);
-    this.phase = {
-      kind: 'replay',
-      playback: new ShotPlayback(result.shot, STEPS_PER_SECOND),
-      result,
-    };
+    const playback = new ShotPlayback(result.shot, STEPS_PER_SECOND);
+    const hit = result.shot.events.find((event) => event.type === 'gorilla');
+    const start = (hit?.step ?? 0) - REPLAY_WINDOW * STEPS_PER_SECOND;
+    if (start > 0) {
+      for (const event of playback.skipTo(start)) {
+        reactTo(event, this.reactionContext(result, true));
+      }
+    }
+    this.phase = { kind: 'replay', playback, result };
   }
 
   private finishReplay(result: TurnResult) {
@@ -559,28 +709,35 @@ export class Session {
 
   private celebrate(result: TurnResult) {
     const scorer = result.scorer ?? 0;
-    const { hud, settings, stage, audio } = this.options;
+    const { hud, setup, stage, audio } = this.options;
     this.scene.actors[scorer].setMood('dance');
     this.scene.activePlayer = null;
     stage.camera.pushIn(gorillaCentre(this.state.round.gorillas[scorer]), 1.12);
-    hud.setScores(this.state.scores, settings.points, settings.format);
+    hud.setScores(this.state.scores, setup.match.points, setup.match.format);
     const selfHit = result.shot.victim === result.shot.input.thrower;
-    hud.toast(
-      selfHit ? `Self-hit! Point to ${this.names[scorer]}` : `${this.names[scorer]} scores!`,
-      scorer,
+    hud.toast(scoreLine(this.names[scorer], selfHit), this.accents[scorer]);
+    // A rival who is hit says so; one who scores rubs it in.
+    const rivalSide = setup.players[scorer].rival ? scorer : otherPlayer(scorer);
+    this.rivalSays((rival) =>
+      this.freshLine(rivalSide === scorer ? rival.lines.taunt : rival.lines.hit),
     );
     playFanfare(audio, ['G4', 'C5', 'E5', 'G5', 'C6'], 0.08);
+    this.options.onPoint?.();
     this.phase = { kind: 'celebrate', time: 0, result };
   }
 
   private afterCelebration() {
     if (this.state.status === 'matchOver') {
       this.phase = { kind: 'over' };
+      this.options.hud.hush();
       this.options.audio.playMusic(VICTORY);
       this.options.onMatchOver({
         names: this.names,
+        accents: this.accents,
         scores: [...this.state.scores],
         winner: this.state.winner,
+        throws: [...this.throwsBy],
+        assisted: this.assisted,
       });
       return;
     }
@@ -588,15 +745,37 @@ export class Session {
     this.beginRound();
   }
 
+  /** Lets whichever side is a rival say something. */
+  private rivalSays(line: (rival: Rival) => string) {
+    const side = ([1, 0] as const).find((player) => this.options.setup.players[player].rival);
+    if (side === undefined) return;
+    const rival = this.options.setup.players[side].rival;
+    if (!rival) return;
+    this.speaker = side;
+    this.options.hud.say(line(rival), this.accents[side], side);
+  }
+
+  /** A line from a set, never the one said last. */
+  private freshLine(lines: readonly string[]): string {
+    const fresh = lines.filter((line) => line !== this.lastLine);
+    const line = this.chatter.pick(fresh.length > 0 ? fresh : lines);
+    this.lastLine = line;
+    return line;
+  }
+
   private syncHud() {
-    const { hud, stage, settings } = this.options;
+    const { hud, stage, setup } = this.options;
     const player = this.state.turn;
     const aiming = this.phase.kind === 'aim';
     const cpuTurn = this.isCpuTurn();
     const cpuThinking =
       this.phase.kind === 'aim' && this.phase.cpu !== null && this.phase.cpu.thinking > 0;
     hud.setTurn(aiming || this.phase.kind === 'throw' ? player : null);
-    hud.setWind(this.state.round.wind, aiming && this.armed && this.state.held[player] === 'calm');
+    hud.setWind(
+      this.shownWind,
+      aiming && this.armed && this.state.held[player] === 'calm',
+      this.state.round.twists.includes('hiddenWind'),
+    );
     for (const index of [0, 1] as const) {
       const theirs = index === player;
       hud.setHeld(
@@ -607,7 +786,7 @@ export class Session {
       );
     }
 
-    const typing = settings.aiming === 'typed' && aiming && !cpuTurn;
+    const typing = setup.aiming === 'typed' && aiming && !cpuTurn;
     const { typed } = this.human;
     hud.showTyped(
       typing ? player : null,
@@ -617,10 +796,18 @@ export class Session {
       this.options.touch(),
     );
 
+    const { camera } = stage;
     const hand = throwingHand(this.state.round.gorillas[player], player);
-    const label = stage.camera.toScreen({ x: hand.x + (player === 0 ? -6 : 6), y: hand.y - 10 });
+    const label = camera.toScreen({ x: hand.x + (player === 0 ? -6 : 6), y: hand.y - 10 });
     const showReadout = aiming && !typing && !cpuThinking;
     hud.showAim(showReadout ? label : null, formatAim(this.aims[player]), player);
+
+    const bounds = { width: stage.surface.clientWidth, height: stage.surface.clientHeight };
+    if (this.speaker !== null) {
+      const gorilla = this.state.round.gorillas[this.speaker];
+      hud.placeSpeech(camera.toScreen({ x: gorilla.x + 15, y: gorilla.y - SPEECH_LIFT }), bounds);
+    }
+    hud.placeMiss(this.missAt ? camera.toScreen(this.missAt) : null, bounds);
   }
 
   private sound(name: SoundName, velocity = 1) {
@@ -628,7 +815,9 @@ export class Session {
   }
 }
 
-function describeWind(wind: number): string {
-  if (wind === 0) return 'no wind';
-  return `wind ${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`;
+/** "Ada scores!", or on the tour, where you are "You", "You score!". */
+function scoreLine(name: string, selfHit: boolean): string {
+  const you = name === 'You';
+  if (selfHit) return you ? 'Self-hit! Your point' : `Self-hit! Point to ${name}`;
+  return you ? 'You score!' : `${name} scores!`;
 }

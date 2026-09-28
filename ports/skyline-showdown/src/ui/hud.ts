@@ -3,7 +3,6 @@ import type { PlayerIndex } from '../engine/gorillas';
 import type { MatchFormat } from '../engine/match';
 import { POWER_UPS, type PowerUpKind } from '../engine/powerups';
 import type { TypedField } from '../game/typed-entry';
-import { GORILLA_LOOKS } from '../render/gorilla';
 import { h, icon } from './dom';
 import { ICONS, POWER_UP_ICONS } from './icons';
 
@@ -24,15 +23,28 @@ interface Plate {
   power: HTMLButtonElement;
 }
 
+/** How a miss is shown: the distance and verdict, and for people a line of encouragement. */
+export interface MissCallout {
+  label: string;
+  comment: string | null;
+  accent: string;
+}
+
 const KEYPAD = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'Backspace'];
+const SPEECH_SECONDS = 3.2;
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The heads-up display drawn over the city: plain DOM, so text stays crisp and readable. */
 export class Hud {
   readonly element: HTMLElement;
   private readonly plates: [Plate, Plate];
+  private accents: [string, string] = ['#ff7a3d', '#3fe0ff'];
   private readonly wind: HTMLElement;
   private readonly windArrow: HTMLElement;
   private readonly windValue: HTMLElement;
+  private readonly twist: HTMLElement;
+  private readonly throwCount: HTMLElement;
   private readonly roundLabel: HTMLElement;
   private readonly muteButton: HTMLButtonElement;
   private readonly aim: HTMLElement;
@@ -42,8 +54,12 @@ export class Hud {
   private readonly toastBox: HTMLElement;
   private readonly hintBox: HTMLElement;
   private readonly replay: HTMLButtonElement;
+  private readonly speech: HTMLElement;
+  private readonly miss: HTMLElement;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private bannerTimer: ReturnType<typeof setTimeout> | undefined;
+  private speechTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastWind: number | null = null;
 
   constructor(private readonly handlers: HudHandlers) {
     this.plates = [this.makePlate(0), this.makePlate(1)];
@@ -56,6 +72,8 @@ export class Hud {
       this.windArrow,
       this.windValue,
     );
+    this.twist = h('div', { class: 'hud__twist', hidden: true });
+    this.throwCount = h('div', { class: 'hud__throws', hidden: true });
     this.roundLabel = h('div', { class: 'hud__round' });
 
     const pauseButton = h(
@@ -105,14 +123,18 @@ export class Hud {
       h('span', { class: 'hud__replay-skip' }, 'tap or press Space to skip'),
     );
     this.replay.addEventListener('click', () => handlers.skip());
+    this.speech = h('div', { class: 'hud__speech', role: 'status', hidden: true });
+    this.miss = h('div', { class: 'hud__miss', role: 'status', hidden: true });
 
     this.element = h(
       'div',
       { class: 'hud', hidden: true },
       this.plates[0].root,
       this.plates[1].root,
-      h('div', { class: 'hud__bottom' }, this.wind, this.roundLabel),
+      h('div', { class: 'hud__bottom' }, this.twist, this.wind, this.throwCount, this.roundLabel),
       h('div', { class: 'hud__buttons' }, pauseButton, this.muteButton),
+      this.miss,
+      this.speech,
       this.aim,
       this.typedPanel,
       this.keypad,
@@ -127,10 +149,12 @@ export class Hud {
     this.element.hidden = !visible;
   }
 
-  setPlayers(names: [string, string], cpu: [boolean, boolean]) {
+  setPlayers(names: [string, string], cpu: [boolean, boolean], accents: [string, string]) {
+    this.accents = accents;
     this.plates.forEach((plate, player) => {
       plate.name.textContent = names[player] ?? '';
       plate.badge.hidden = !cpu[player];
+      plate.root.style.setProperty('--accent', accents[player] ?? '#ffffff');
     });
   }
 
@@ -154,7 +178,22 @@ export class Hud {
     );
   }
 
-  setWind(wind: number, calmed: boolean) {
+  /** The wind gauge; `hidden` is the heat haze, which hides it altogether. */
+  setWind(wind: number, calmed: boolean, hidden = false) {
+    if (hidden) {
+      this.wind.dataset.direction = 'hidden';
+      this.windValue.textContent = '?';
+      this.wind.setAttribute('aria-label', 'Wind hidden: read the flags and smoke');
+      return;
+    }
+    // A change of wind between throws pulses the gauge, so a gust never goes unnoticed.
+    if (this.lastWind !== null && wind !== this.lastWind && !reducedMotion()) {
+      this.wind.animate(
+        [{ transform: 'scale(1.18)', borderColor: '#ffd23f' }, { transform: 'scale(1)' }],
+        { duration: 700, easing: 'ease-out' },
+      );
+    }
+    this.lastWind = wind;
     const strength = Math.abs(wind);
     this.windArrow.style.setProperty('--length', `${Math.min(64, 10 + strength * 4)}px`);
     this.wind.dataset.direction = calmed || wind === 0 ? 'calm' : wind > 0 ? 'right' : 'left';
@@ -163,6 +202,26 @@ export class Hud {
       'aria-label',
       calmed || wind === 0 ? 'No wind' : `Wind ${strength} to the ${wind > 0 ? 'right' : 'left'}`,
     );
+  }
+
+  /** Forgets the last wind, so a new round's wind does not pulse as a gust. */
+  resetWind() {
+    this.lastWind = null;
+  }
+
+  /** The stage's twist, named next to the wind gauge. */
+  setTwist(text: string | null) {
+    this.twist.hidden = text === null;
+    this.twist.textContent = text ?? '';
+  }
+
+  /** Your throws against the stage's budget for its second star. */
+  setThrows(count: number | null, budget: number | null) {
+    this.throwCount.hidden = count === null;
+    if (count === null) return;
+    this.throwCount.textContent =
+      budget === null ? `Throws ${count}` : `Throws ${count} / ${budget}`;
+    this.throwCount.classList.toggle('hud__throws--over', budget !== null && count > budget);
   }
 
   setRound(round: number, world: string) {
@@ -192,6 +251,7 @@ export class Hud {
     if (!at) return;
     this.aim.textContent = text;
     this.aim.dataset.player = String(player);
+    this.aim.style.setProperty('--accent', this.accents[player]);
     this.aim.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px)`;
   }
 
@@ -230,13 +290,10 @@ export class Hud {
     }, seconds * 1000);
   }
 
-  toast(text: string, player: PlayerIndex | null = null) {
+  toast(text: string, accent: string | null = null) {
     clearTimeout(this.toastTimer);
     this.toastBox.textContent = text;
-    this.toastBox.style.setProperty(
-      '--accent',
-      player === null ? '#ffffff' : GORILLA_LOOKS[player].accent,
-    );
+    this.toastBox.style.setProperty('--accent', accent ?? '#ffffff');
     this.toastBox.classList.add('hud__toast--visible');
     this.toastTimer = setTimeout(() => this.toastBox.classList.remove('hud__toast--visible'), 2600);
   }
@@ -250,6 +307,69 @@ export class Hud {
     this.replay.hidden = !visible;
   }
 
+  /** A rival's line in a speech bubble over their head; it pops away after a few seconds. */
+  say(text: string, accent: string, player: PlayerIndex, seconds = SPEECH_SECONDS) {
+    clearTimeout(this.speechTimer);
+    this.speech.textContent = text;
+    this.speech.dataset.side = player === 0 ? 'left' : 'right';
+    this.speech.style.setProperty('--accent', accent);
+    this.speech.hidden = false;
+    this.speech.classList.remove('hud__speech--out');
+    this.speechTimer = setTimeout(() => {
+      this.speech.classList.add('hud__speech--out');
+      this.speechTimer = setTimeout(() => (this.speech.hidden = true), 300);
+    }, seconds * 1000);
+  }
+
+  hush() {
+    clearTimeout(this.speechTimer);
+    this.speech.hidden = true;
+  }
+
+  /** Keeps the bubble over the speaker's head as the camera moves, and inside the screen. */
+  placeSpeech(at: Point | null, bounds: { width: number }) {
+    if (!at || this.speech.hidden) return;
+    const half = this.speech.offsetWidth / 2;
+    const x = Math.min(bounds.width - half - 12, Math.max(half + 12, at.x));
+    // The tail still points at the speaker when the bubble has been nudged aside.
+    this.speech.style.setProperty('--tail', `${Math.round(at.x - x)}px`);
+    this.speech.style.transform = `translate(${Math.round(x)}px, ${Math.round(at.y)}px)`;
+  }
+
+  /** "So close!": a marker where the banana came down, with the distance and a comment. */
+  showMiss(callout: MissCallout | null) {
+    if (!callout) {
+      this.miss.classList.add('hud__miss--out');
+      return;
+    }
+    this.miss.replaceChildren(
+      h('span', { class: 'hud__miss-pin', 'aria-hidden': 'true' }),
+      h(
+        'span',
+        { class: 'hud__miss-text' },
+        h('strong', {}, callout.label),
+        callout.comment ? h('span', {}, callout.comment) : null,
+      ),
+    );
+    this.miss.classList.toggle('hud__miss--light', callout.comment === null);
+    this.miss.classList.remove('hud__miss--out');
+    this.miss.style.setProperty('--accent', callout.accent);
+    this.miss.hidden = false;
+  }
+
+  /** Pins the marker to where the banana landed, kept on screen. */
+  placeMiss(at: Point | null, bounds: { width: number; height: number }) {
+    if (!at || this.miss.hidden) return;
+    const x = Math.min(bounds.width - 16, Math.max(16, at.x));
+    const y = Math.min(bounds.height - 60, Math.max(70, at.y));
+    this.miss.dataset.flip = x > bounds.width - 220 ? 'true' : 'false';
+    this.miss.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+
+  clearMiss() {
+    this.miss.hidden = true;
+  }
+
   private makePlate(player: PlayerIndex): Plate {
     const name = h('span', { class: 'hud__name' });
     const badge = h('span', { class: 'hud__badge', hidden: true }, 'CPU');
@@ -258,10 +378,7 @@ export class Hud {
     power.addEventListener('click', () => this.handlers.powerUp(player));
     const root = h(
       'div',
-      {
-        class: `hud__plate hud__plate--p${player + 1}`,
-        style: `--accent: ${GORILLA_LOOKS[player].accent}`,
-      },
+      { class: `hud__plate hud__plate--p${player + 1}` },
       h('div', { class: 'hud__who' }, name, badge),
       score,
       power,

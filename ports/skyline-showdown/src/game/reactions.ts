@@ -4,7 +4,6 @@ import { POWER_UPS } from '../engine/powerups';
 import type { ShotEvent } from '../engine/shot';
 import type { SoundName } from '../audio/sounds';
 import type { Camera } from '../render/camera';
-import { GORILLA_LOOKS } from '../render/gorilla';
 import { POWER_UP_COLOURS, type Scene } from '../render/scene';
 
 /** How close a banana must pass for a gorilla to panic. */
@@ -21,7 +20,8 @@ export interface ReactionContext {
   /** Replays are quieter and skip the toasts. */
   replaying: boolean;
   sound(name: SoundName, velocity?: number): void;
-  toast(text: string, player: PlayerIndex): void;
+  /** A short message, in a player's colour or (null) in white. */
+  toast(text: string, player: PlayerIndex | null): void;
 }
 
 /**
@@ -32,6 +32,7 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
   const { scene, camera, replaying, names, thrower } = context;
   const { effects, city } = scene;
   const volume = replaying ? 0.6 : 1;
+  const throwerLook = scene.actors[thrower].look;
   switch (event.type) {
     case 'sun':
       scene.skyBody.gasp();
@@ -56,7 +57,15 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
       const big = event.radius > 7;
       city.carve({ x: event.x, y: event.y, radius: event.radius });
       city.darkenAround(event.x, event.y, event.radius * 3);
-      effects.explode(event.x, event.y, event.radius, city.facadeAt(event.building), big);
+      effects.explode(
+        event.x,
+        event.y,
+        event.radius,
+        city.facadeAt(event.building),
+        big,
+        throwerLook.outfit.explosion,
+        throwerLook.accent,
+      );
       camera.shake(0.25, big ? 5 : 2.5);
       context.sound(big ? 'bigBoom' : 'explosion', volume);
       break;
@@ -66,8 +75,14 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
       effects.dropPiece(piece, event.cut.x, event.cut.y, event.cut.width, event.cut.height);
       break;
     }
+    case 'drone':
+      effects.dust(event.x, event.y);
+      effects.shimmer(event.x, event.y, '#ff3fa4');
+      context.sound('shield', volume);
+      if (!replaying) context.toast('The drone caught it!', null);
+      break;
     case 'shield':
-      effects.shimmer(event.x, event.y, GORILLA_LOOKS[event.player].accent);
+      effects.shimmer(event.x, event.y, scene.accentOf(event.player));
       scene.actors[event.player].shielded = false;
       context.sound('shield', volume);
       if (!replaying) context.toast(`${names[event.player]}'s shield holds!`, event.player);
@@ -75,7 +90,7 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
     case 'gorilla': {
       const gorilla = context.gorillas[event.player];
       const centre = gorillaCentre(gorilla);
-      const look = GORILLA_LOOKS[event.player];
+      const look = scene.actors[event.player].look;
       city.carve({ ...centre, radius: 16 });
       effects.gorillaBlast(
         centre.x,
@@ -83,6 +98,8 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
         look.fur,
         look.accent,
         city.facadeAt(gorilla.building),
+        throwerLook.outfit.explosion,
+        throwerLook.accent,
       );
       scene.actors[event.player].setMood('gone');
       camera.shake(replaying ? 0.4 : 0.8, replaying ? 5 : 9);

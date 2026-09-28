@@ -14,7 +14,8 @@ import { windAcceleration } from './wind';
  * never runs the simulation, so it can never solve a throw exactly.
  *
  * Difficulty changes how good the guess is, how much of the wind it reads,
- * how well it corrects and how much its hand shakes.
+ * how well it corrects and how much its hand shakes. A play style (the World
+ * Tour's rivals have one each) changes how it likes to throw on top of that.
  */
 export type CpuLevel = 'easy' | 'normal' | 'hard' | 'brutal';
 
@@ -67,6 +68,36 @@ export const CPU_LEVELS: Record<CpuLevel, Traits> = {
   },
 };
 
+/**
+ * How a particular CPU likes to play, on top of its level: its favourite
+ * launch angle, how hard it corrects (above 1 it overshoots and swings back
+ * and forth), how much each point against it rattles its hand, and how much
+ * attention it pays to the wind.
+ */
+export interface PlayStyle {
+  /** Launch angle it reaches for when nothing forces another. */
+  angle: number;
+  /** Degrees of variety around that angle. */
+  angleSpread: number;
+  /** Multiplies the level's correction: 1 is the level, 1.6 wildly overcorrects. */
+  correction: number;
+  /** Extra hand shake per point the opponent has scored, as a share of its normal shake. */
+  rattle: number;
+  /** Multiplies the level's feel for the wind. */
+  windSense: number;
+}
+
+export const DEFAULT_STYLE: PlayStyle = {
+  angle: 45,
+  angleSpread: 4,
+  correction: 1,
+  rattle: 0,
+  windSense: 1,
+};
+
+/** When the wind is hidden, a CPU reads only this share of it, from flags and smoke. */
+const HIDDEN_WIND_SENSE = 0.4;
+
 export interface CpuAim {
   angle: number;
   velocity: number;
@@ -75,6 +106,8 @@ export interface CpuAim {
 
 interface Observation {
   aim: CpuAim;
+  /** The wind it threw into; after a gust the observation is adjusted for the new one. */
+  wind: number;
   /**
    * How far along the throwing direction the banana came down at the
    * target's height (judged from its arc if it left the screen), and how far
@@ -98,10 +131,12 @@ export interface CpuMemory {
   /** The nearest short and long throws at the current angle. */
   short: Attempt | null;
   long: Attempt | null;
+  /** The wind when it planned its latest throw (a gust may have changed it since). */
+  windAtPlan: number | null;
 }
 
 export function createCpuMemory(round = 0): CpuMemory {
-  return { round, last: null, short: null, long: null };
+  return { round, last: null, short: null, long: null, windAtPlan: null };
 }
 
 /** What a player can see from their rooftop before throwing. */
@@ -113,6 +148,9 @@ interface View {
   /** y of the highest roof between the two gorillas. */
   highestRoofBetween: number;
   held: PowerUpKind | null;
+  windHidden: boolean;
+  /** Points the opponent has scored against it this match. */
+  hitsTaken: number;
 }
 
 function viewOf(state: MatchState): View {
@@ -129,23 +167,60 @@ function viewOf(state: MatchState): View {
     wind: round.wind,
     highestRoofBetween: Math.min(...between.map((building) => building.top), Infinity),
     held: state.held[thrower],
+    windHidden: round.twists.includes('hiddenWind'),
+    hitsTaken: state.scores[otherPlayer(thrower)],
   };
 }
 
-export function planThrow(state: MatchState, memory: CpuMemory, level: CpuLevel, rng: Rng): CpuAim {
-  if (memory.round !== state.round.number)
+export function planThrow(
+  state: MatchState,
+  memory: CpuMemory,
+  level: CpuLevel,
+  rng: Rng,
+  style: PlayStyle = DEFAULT_STYLE,
+): CpuAim {
+  if (memory.round !== state.round.number) {
     Object.assign(memory, createCpuMemory(state.round.number));
+  }
   const traits = CPU_LEVELS[level];
   const view = viewOf(state);
-  const last = memory.last;
-  const planned = last ? correct(memory, last, view, traits, rng) : guess(view, traits, rng);
+  memory.windAtPlan = view.wind;
+  const last = memory.last ? allowForGust(memory, memory.last, view, traits, style) : null;
+  const planned = last
+    ? correct(memory, last, view, traits, style, rng)
+    : guess(view, traits, style, rng);
+  const nerves = 1 + style.rattle * view.hitsTaken;
   return {
-    angle: clamp(planned.angle + gaussian(rng) * traits.shakeAngle, 5, 85),
+    angle: clamp(planned.angle + gaussian(rng) * traits.shakeAngle * nerves, 5, 85),
     velocity: Math.round(
-      clamp(planned.velocity * (1 + gaussian(rng) * traits.shakeVelocity), 3, 250),
+      clamp(planned.velocity * (1 + gaussian(rng) * traits.shakeVelocity * nerves), 3, 250),
     ),
     usePowerUp: wantsPowerUp(view, last),
   };
+}
+
+/**
+ * After a gust a player still learns from the last throw, but allows for
+ * how the wind has changed: a stronger tailwind would have carried it
+ * further, a stronger headwind less far. How well it allows for it is its
+ * feel for the wind. The short and long throws it was bracketing between
+ * were made in another wind, so they are forgotten.
+ */
+function allowForGust(
+  memory: CpuMemory,
+  last: Observation,
+  view: View,
+  traits: Traits,
+  style: PlayStyle,
+): Observation {
+  if (last.wind === view.wind) return last;
+  memory.short = null;
+  memory.long = null;
+  const towardTarget = Math.sign(view.target.x - view.hand.x);
+  const flightTime = last.needed / (last.aim.velocity * Math.cos(toRadians(last.aim.angle)));
+  const push = windAcceleration(view.wind - last.wind) * towardTarget;
+  const shift = 0.5 * push * flightTime * flightTime * windSenseOf(view, traits, style);
+  return { ...last, wind: view.wind, reached: last.reached + shift };
 }
 
 /** Looks at where the banana came down; call after every CPU throw. */
@@ -188,7 +263,7 @@ export function observeThrow(
   if (reached >= needed && (!memory.long || reached < memory.long.reached)) {
     memory.long = attempt;
   }
-  memory.last = { aim, reached, needed, blocked };
+  memory.last = { aim, wind: memory.windAtPlan ?? state.round.wind, reached, needed, blocked };
 }
 
 export function thinkingSeconds(level: CpuLevel, rng: Rng): number {
@@ -201,7 +276,7 @@ export function thinkingSeconds(level: CpuLevel, rng: Rng): number {
  * it: read off the path if it got there, otherwise continued from the last
  * thing it was seen doing.
  */
-function landingX(points: readonly Point[], height: number, gravity: number): number {
+export function landingX(points: readonly Point[], height: number, gravity: number): number {
   for (let index = 1; index < points.length; index++) {
     const before = points[index - 1] as Point;
     const after = points[index] as Point;
@@ -219,25 +294,35 @@ function landingX(points: readonly Point[], height: number, gravity: number): nu
   return end.x + speedX * time;
 }
 
-function guess(view: View, traits: Traits, rng: Rng): { angle: number; velocity: number } {
+function windSenseOf(view: View, traits: Traits, style: PlayStyle): number {
+  return traits.windSense * style.windSense * (view.windHidden ? HIDDEN_WIND_SENSE : 1);
+}
+
+function guess(
+  view: View,
+  traits: Traits,
+  style: PlayStyle,
+  rng: Rng,
+): { angle: number; velocity: number } {
   const { hand, target, gravity, wind } = view;
   const distance = Math.abs(target.x - hand.x);
   const rise = hand.y - target.y;
   const towardTarget = Math.sign(target.x - hand.x);
+  const windSense = windSenseOf(view, traits, style);
 
-  // A tall building in the way calls for a higher lob.
+  // A tall building in the way calls for a higher lob than it would usually throw.
   const clearance = hand.y - view.highestRoofBetween;
-  let angle = clearance > 0 ? 55 + Math.min(20, clearance / 5) : 45;
-  angle += rng.float(-4, 4);
+  let angle = style.angle + (clearance > 0 ? 10 + Math.min(20, clearance / 5) : 0);
+  angle += rng.float(-style.angleSpread, style.angleSpread);
   // A strong wind in the face blows a lob straight back; throw flatter.
-  const headwind = -windAcceleration(wind) * towardTarget * traits.windSense;
+  const headwind = -windAcceleration(wind) * towardTarget * windSense;
   if (headwind > 0) angle = Math.min(angle, 0.75 * toDegrees(Math.atan(gravity / headwind)));
   angle = Math.max(angle, 15);
 
   const calm = velocityFor(distance, rise, angle, gravity);
   const flightTime = distance / (calm * Math.cos(toRadians(angle)));
   const tailwind = windAcceleration(wind) * towardTarget;
-  const windShift = 0.5 * tailwind * flightTime * flightTime * traits.windSense;
+  const windShift = 0.5 * tailwind * flightTime * flightTime * windSense;
   const velocity = velocityFor(Math.max(30, distance - windShift), rise, angle, gravity);
 
   return { angle, velocity: velocity * (1 + gaussian(rng) * traits.guessError) };
@@ -248,6 +333,7 @@ function correct(
   last: Observation,
   view: View,
   traits: Traits,
+  style: PlayStyle,
   rng: Rng,
 ): { angle: number; velocity: number } {
   const distance = Math.abs(view.target.x - view.hand.x);
@@ -285,7 +371,8 @@ function correct(
     const ideal = Math.sqrt(last.needed / Math.max(15, last.reached));
     target = last.aim.velocity * clamp(ideal, 0.7, 1.4);
   }
-  const velocity = last.aim.velocity + traits.correction * (target - last.aim.velocity);
+  const step = traits.correction * style.correction;
+  const velocity = last.aim.velocity + step * (target - last.aim.velocity);
   return inWholeNumbers(last.aim.angle, velocity);
 }
 
