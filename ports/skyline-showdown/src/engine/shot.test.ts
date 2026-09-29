@@ -46,6 +46,11 @@ describe('simulateShot trajectory', () => {
     expect(shot.input.angle).toBe(360);
   });
 
+  it('keeps the angle to a hundredth of a degree, as a challenge link does', () => {
+    expect(simulateShot(flatSetup(), throwOf(0, 45.12345, 50)).input.angle).toBe(45.12);
+    expect(simulateShot(flatSetup(), throwOf(0, 45.3, 50)).input.angle).toBe(45.3);
+  });
+
   it('lets the wind push bananas downwind', () => {
     const calm = simulateShot(flatSetup(), throwOf(0, 70, 40)).tracks[0]?.points[15];
     const windy = simulateShot(flatSetup(undefined, { wind: 10 }), throwOf(0, 70, 40)).tracks[0]
@@ -219,5 +224,31 @@ describe('power-ups', () => {
     expect(shielded.victim).toBeNull();
     expect(shielded.shields).toEqual([false, false]);
     expect(eventTypes(shielded)).toContain('shield');
+  });
+});
+
+describe('Trick Shot targets', () => {
+  const crateInTheWay = (setup = flatSetup()) => {
+    const path = simulateShot(setup, throwOf(0, 45, 60)).tracks[0]?.points ?? [];
+    return path[Math.floor(path.length / 2)] ?? { x: 0, y: 0 };
+  };
+
+  it('stops a banana at a crate, once', () => {
+    const at = crateInTheWay();
+    const setup = flatSetup(undefined, { targets: [{ kind: 'crate', ...at }] });
+    const shot = simulateShot(setup, throwOf(0, 45, 60));
+    expect(eventTypes(shot)).toEqual(['target']);
+    expect(shot.events[0]).toMatchObject({ target: 0 });
+  });
+
+  it('lets a banana fly on through a hoop', () => {
+    const at = crateInTheWay();
+    const plain = simulateShot(flatSetup(), throwOf(0, 45, 60));
+    const threaded = simulateShot(
+      flatSetup(undefined, { targets: [{ kind: 'hoop', ...at }] }),
+      throwOf(0, 45, 60),
+    );
+    expect(eventTypes(threaded)).toEqual(['target', ...eventTypes(plain)]);
+    expect(threaded.tracks).toEqual(plain.tracks);
   });
 });

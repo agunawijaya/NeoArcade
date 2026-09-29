@@ -4,6 +4,7 @@ import { otherPlayer, placeGorillas, type Gorilla, type PlayerIndex } from './go
 import { maybeSpawnBalloon, type Balloon, type PowerUpKind } from './powerups';
 import { simulateShot, type ShotRecord, type ThrowInput } from './shot';
 import { makeSkyline, pickSlopePattern, type SlopePattern } from './skyline';
+import type { Target } from './targets';
 import { createTerrain, type Terrain } from './terrain';
 import {
   gust,
@@ -26,6 +27,10 @@ import { chooseWorld, windOn, type World, type WorldChoice } from './worlds';
  * points") and, through a bug, gave the point to the thrower even when a
  * gorilla hit itself. Here both formats exist, and a self-hit scores for the
  * opponent, as the original's own HITSELF constant intended.
+ *
+ * The same rules serve the solo modes: in the Daily Skyline and Trick Shot
+ * one gorilla keeps the turn and the other stands still as the target, with
+ * a limit on the throws.
  */
 export type MatchFormat = 'firstTo' | 'total';
 
@@ -38,13 +43,16 @@ export interface MatchOptions {
   powerUps: readonly PowerUpKind[];
   /** World Tour twists; a Quick Match has none. */
   twists?: readonly TwistKind[];
+  /** The gorilla whose turn it is keeps it: the other never throws. */
+  solo?: boolean;
+  /** A round with no point after this many throws ends the match undecided. */
+  throwLimit?: number;
 }
 
 export interface Round {
   number: number;
   seed: number;
   world: World;
-  pattern: SlopePattern;
   terrain: Terrain;
   gorillas: [Gorilla, Gorilla];
   wind: number;
@@ -54,6 +62,10 @@ export interface Round {
   hazards: Hazards;
   /** The rooftop lightning will strike after the next throw, if the stage has lightning. */
   lightningTarget: number | null;
+  /** Trick Shot's crates, bells and hoops; a match has none. */
+  targets: readonly Target[];
+  /** Throws made so far this round. */
+  throws: number;
   /** Randomness within the round, such as balloons arriving between throws. */
   rng: Rng;
 }
@@ -66,7 +78,7 @@ export interface MatchState {
   scores: [number, number];
   /** Whose throw it is. */
   turn: PlayerIndex;
-  held: [PowerUpKind | null, PowerUpKind | null];
+  held: Held;
   status: MatchStatus;
   /** Set when the match is over; null means a draw. */
   winner: PlayerIndex | null;
@@ -92,11 +104,34 @@ export interface BetweenThrows {
   strike: { building: number; crater: Circle } | null;
 }
 
+export type Held = [PowerUpKind | null, PowerUpKind | null];
+
+/** How a round began: all a challenge link needs to set it up again (with its throws). */
+export interface RoundStart {
+  seed: number;
+  number: number;
+  turn: PlayerIndex;
+  held: Held;
+  wind: number;
+}
+
+/** The start of the round being played, read before its first throw. */
+export function roundStart(state: MatchState): RoundStart {
+  const { round } = state;
+  return {
+    seed: round.seed,
+    number: round.number,
+    turn: state.turn,
+    held: [...state.held],
+    wind: round.wind,
+  };
+}
+
 export function createMatch(options: MatchOptions): MatchState {
   const rng = createRng(options.seed);
   return {
     options,
-    round: createRound(1, rng, options),
+    round: createRound(1, nextRoundSeed(rng), options),
     scores: [0, 0],
     turn: 0,
     held: [null, null],
@@ -106,10 +141,38 @@ export function createMatch(options: MatchOptions): MatchState {
   };
 }
 
-function createRound(number: number, rng: Rng, options: MatchOptions): Round {
-  // Each round draws from its own generator, so the city, the wind and the
-  // balloons of round 3 never depend on how many throws rounds 1 and 2 took.
-  const seed = rng.int(0, 2 ** 31 - 1);
+/**
+ * A match that starts from a round built elsewhere: a Trick Shot puzzle, or
+ * a round rebuilt from a challenge link, with whoever's turn it was and the
+ * power-ups they held.
+ */
+export function matchFromRound(
+  options: MatchOptions,
+  round: Round,
+  turn: PlayerIndex,
+  held: Held,
+): MatchState {
+  return {
+    options,
+    round,
+    scores: [0, 0],
+    turn,
+    held: [...held],
+    status: 'playing',
+    winner: null,
+    rng: createRng(options.seed),
+  };
+}
+
+// Each round draws from its own generator, so the city, the wind and the
+// balloons of round 3 never depend on how many throws rounds 1 and 2 took,
+// and a round can be rebuilt from its seed alone.
+function nextRoundSeed(rng: Rng): number {
+  return rng.int(0, 0x7fffffff);
+}
+
+/** A fresh round: its city, world, wind, gorillas and twists all come from its seed. */
+export function createRound(number: number, seed: number, options: MatchOptions): Round {
   const roundRng = createRng(seed);
   const twists = options.twists ?? [];
   const world = chooseWorld(options.world, roundRng);
@@ -129,7 +192,6 @@ function createRound(number: number, rng: Rng, options: MatchOptions): Round {
     number,
     seed,
     world,
-    pattern: skyline.pattern,
     terrain: createTerrain(skyline.buildings),
     gorillas,
     wind,
@@ -138,6 +200,8 @@ function createRound(number: number, rng: Rng, options: MatchOptions): Round {
     twists,
     hazards,
     lightningTarget,
+    targets: [],
+    throws: 0,
     rng: roundRng,
   };
 }
@@ -169,8 +233,9 @@ export function takeTurn(state: MatchState, aim: TurnAim): TurnResult {
   round.terrain = shot.terrain;
   round.shields = shot.shields;
   round.balloon = shot.balloon;
+  round.throws++;
   if (shot.collected) state.held[thrower] = shot.collected;
-  state.turn = otherPlayer(thrower);
+  if (!state.options.solo) state.turn = otherPlayer(thrower);
 
   let scorer: PlayerIndex | null = null;
   let between: BetweenThrows = { wind: null, strike: null };
@@ -178,6 +243,8 @@ export function takeTurn(state: MatchState, aim: TurnAim): TurnResult {
     scorer = shot.victim === thrower ? otherPlayer(thrower) : thrower;
     state.scores[scorer]++;
     settleRound(state);
+  } else if (round.throws === state.options.throwLimit) {
+    state.status = 'matchOver';
   } else {
     between = playBetweenThrows(round, shot.steps);
     if (!round.balloon) {
@@ -245,6 +312,7 @@ function simulateTurn(state: MatchState, aim: TurnAim, powerUp: PowerUpKind | nu
       balloon: round.balloon,
       shields,
       hazards: round.hazards,
+      targets: round.targets,
     },
     input,
   );
@@ -265,6 +333,6 @@ function settleRound(state: MatchState) {
 export function startNextRound(state: MatchState): void {
   if (state.status !== 'roundOver')
     throw new Error('Only a finished round can be followed by another.');
-  state.round = createRound(state.round.number + 1, state.rng, state.options);
+  state.round = createRound(state.round.number + 1, nextRoundSeed(state.rng), state.options);
   state.status = 'playing';
 }

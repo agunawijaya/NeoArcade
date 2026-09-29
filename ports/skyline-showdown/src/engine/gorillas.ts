@@ -13,6 +13,16 @@ export interface Gorilla {
   building: number;
 }
 
+/**
+ * Where nobody stands: the second gorilla of a Trick Shot puzzle without a
+ * dummy waits here, out of reach of every banana and out of sight.
+ */
+export const OFFSTAGE: Gorilla = { x: -1000, y: -1000, building: -1 };
+
+export function isOffstage(gorilla: Gorilla): boolean {
+  return gorilla.building < 0;
+}
+
 export function otherPlayer(player: PlayerIndex): PlayerIndex {
   return player === 0 ? 1 : 0;
 }
@@ -29,7 +39,8 @@ export function placeGorillas(buildings: readonly Building[], rng: Rng): [Gorill
   return [standOn(buildings, left), standOn(buildings, right)];
 }
 
-function standOn(buildings: readonly Building[], index: number): Gorilla {
+/** A gorilla on this building: centred on its roof and the gap after it, as the original placed them. */
+export function standOn(buildings: readonly Building[], index: number): Gorilla {
   const building = buildings[index];
   const next = buildings[index + 1];
   if (!building || !next) throw new Error(`No building ${index} to stand on.`);

@@ -27,6 +27,26 @@ export const ICONS = {
   next: svg('<path d="M9 5l7 7-7 7"/>'),
   retry: svg('<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/>'),
   map: svg('<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>'),
+  share: svg(
+    '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/>',
+  ),
+  copy: svg(
+    '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  ),
+  calendar: svg(
+    '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M12 13.5l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" fill="currentColor" stroke="none"/>',
+  ),
+  target: svg(
+    '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+  ),
+  arc: svg(
+    '<path d="M3 19C6 7 14 3 21 9"/><circle cx="21" cy="9" r="1.6" fill="currentColor"/><path d="M3 19h4"/>',
+  ),
+  flame: svg(
+    '<path d="M12 21c4 0 6.5-2.6 6.5-6.2 0-3.9-3.3-6-4.2-10.3-2 1.8-3 4-3 5.9-1.2-.8-1.9-2-2.1-3.2C7.6 9.2 5.5 11.6 5.5 14.8 5.5 18.4 8 21 12 21z"/>',
+  ),
+  wind: svg('<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>'),
+  swords: svg('<path d="M4 4l9 9M20 4l-9 9M6.5 15.5l2 2M17.5 15.5l-2 2M4 20l3-3M20 20l-3-3"/>'),
 };
 
 /** Small emblems for the power-ups, shared by the HUD and the settings screen. */

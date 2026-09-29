@@ -1,11 +1,17 @@
+import type { Streak } from '@shared/daily';
 import type { GamePass } from '@shared/pass';
 import type manifest from '../../pass.manifest';
+import type { ChallengeVerdict } from '../challenge/challenge';
+import type { DailyResult } from '../daily/daily';
 import type { CpuLevel } from '../engine/ai';
 import { gorillaCentre, otherPlayer, type PlayerIndex } from '../engine/gorillas';
 import type { Round, TurnResult } from '../engine/match';
 import { MAX_STARS, totalStars, type StageRecorded } from '../tour/progress';
 import { RIVAL_IDS, RIVALS, type RivalId } from '../tour/rivals';
 import type { Stage } from '../tour/stages';
+import { PUZZLES } from '../tricks/packs';
+import { totalTrickStars, type PuzzleRecorded } from '../tricks/progress';
+import type { Puzzle } from '../tricks/puzzle';
 import { METRES_PER_UNIT } from './so-close';
 
 type Manifest = typeof manifest;
@@ -18,8 +24,10 @@ export type SkylinePass = GamePass<BadgeId, CosmeticId, StatKey>;
  * Tells the Arcade Pass what happened. The numbers (see ARCHITECTURE.md):
  * 10 XP for playing a match to the end, 30 for winning a Quick Match, 40
  * for winning a tour stage (60 for a boss), 15 for every new star and 100
- * the first time a rival goes down. The Pass's daily cap keeps farming
- * pointless; badges pay their own XP.
+ * the first time a rival goes down. A scored Daily Skyline pays 20, and
+ * 30 more for a hit; a puzzle 20 the first time it is solved and 10 for
+ * every new star; a challenge won 25, once per link. The Pass's daily cap
+ * keeps farming pointless; badges pay their own XP.
  *
  * Only player 1 owns the Pass on this browser: a friend playing player 2
  * on the same keyboard is a guest.
@@ -31,7 +39,15 @@ export const XP = {
   bossWon: 60,
   newStar: 15,
   rivalFirstDefeat: 100,
+  dailyPlayed: 20,
+  dailyHit: 30,
+  puzzleSolved: 20,
+  trickStar: 10,
+  challengeWon: 25,
 } as const;
+
+/** Days in a row that earn On a Roll. */
+const ROLL_DAYS = 7;
 
 /** A hit from this far away earns Long Distance. */
 const LONG_DISTANCE_METRES = 32;
@@ -201,4 +217,56 @@ export class PassReporter {
 /** Anything changed in the wardrobe earns Dressed to Impress. */
 export function reportWardrobeChange(pass: SkylinePass) {
   pass.unlock('dressed-up');
+}
+
+/** A scored Daily Skyline is over. Returns the XP granted. */
+export function reportDaily(
+  pass: SkylinePass,
+  number: number,
+  result: DailyResult,
+  streak: Streak,
+): number {
+  pass.stat('dailiesPlayed', { add: 1 });
+  pass.stat('bestStreak', { max: streak.best });
+  pass.unlock('early-bird');
+  if (streak.current >= ROLL_DAYS) pass.unlock('on-a-roll');
+  let granted = pass.award(XP.dailyPlayed, `Played Daily Skyline #${number}`).granted;
+  if (result.outcome !== 'hit') return granted;
+  granted += pass.award(XP.dailyHit, `Hit Daily Skyline #${number} in ${result.throws}`).granted;
+  if (result.throws === 1) pass.unlock('hole-in-one');
+  return granted;
+}
+
+/** A Trick Shot puzzle was solved. Returns the XP granted. */
+export function reportSolve(pass: SkylinePass, puzzle: Puzzle, recorded: PuzzleRecorded): number {
+  const { save } = recorded;
+  pass.stat(
+    'puzzlesSolved',
+    PUZZLES.filter((candidate) => save.puzzles[candidate.id]?.solved).length,
+  );
+  pass.stat('trickStars', totalTrickStars(save));
+  let granted = 0;
+  if (recorded.firstSolve) {
+    granted += pass.award(XP.puzzleSolved, `Solved ${puzzle.name}`).granted;
+  }
+  if (recorded.newStars > 0) {
+    const stars = recorded.newStars === 1 ? 'A new star' : `${recorded.newStars} new stars`;
+    granted += pass.award(XP.trickStar * recorded.newStars, `${stars} on ${puzzle.name}`).granted;
+  }
+  if (recorded.allSolved) pass.unlock('puzzle-master');
+  if (recorded.allThreeStars) pass.unlock('show-off');
+  return granted;
+}
+
+/** A challenge was played; `firstWin` is false for another win on the same link. */
+export function reportChallenge(
+  pass: SkylinePass,
+  verdict: ChallengeVerdict,
+  firstWin: boolean,
+): number {
+  if (verdict.copycat) pass.unlock('copycat');
+  if (verdict.outcome === 'lost' || !firstWin) return 0;
+  pass.stat('challengesWon', { add: 1 });
+  pass.unlock('matched');
+  return pass.award(XP.challengeWon, 'Won a challenge').granted;
 }

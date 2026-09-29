@@ -1,7 +1,17 @@
 import { createInput, type Input } from '@shared/input';
 
 export type Action =
-  'left' | 'right' | 'up' | 'down' | 'fine' | 'fire' | 'powerUp' | 'pause' | 'mute' | 'guide';
+  | 'left'
+  | 'right'
+  | 'up'
+  | 'down'
+  | 'fine'
+  | 'fire'
+  | 'powerUp'
+  | 'pause'
+  | 'mute'
+  | 'guide'
+  | 'retry';
 
 const BINDINGS: Record<Action, readonly string[]> = {
   left: ['key:ArrowLeft', 'key:KeyA', 'pad:left', 'pad:leftX-'],
@@ -14,6 +24,7 @@ const BINDINGS: Record<Action, readonly string[]> = {
   pause: ['key:Escape', 'key:KeyP', 'pad:start'],
   mute: ['key:KeyM'],
   guide: ['key:KeyC'],
+  retry: ['key:KeyR', 'pad:x'],
 };
 
 /**

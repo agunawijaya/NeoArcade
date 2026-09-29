@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Puzzle Lab · Skyline Showdown (dev)</title>
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./lab.css" />
+  </head>
+  <body class="lab">
+    <header class="lab__head">
+      <h1>Puzzle Lab</h1>
+      <label for="puzzle">Puzzle</label>
+      <select id="puzzle"></select>
+      <label for="grid">Grid</label>
+      <select id="grid">
+        <option value="coarse">coarse (1° × 2)</option>
+        <option value="fine">fine (0.5° × 1)</option>
+      </select>
+      <a id="play" href="../../">Open the game</a>
+    </header>
+    <main class="lab__layout">
+      <section
+        class="lab__stage"
+        id="stage"
+        aria-label="The puzzle in the game's renderer"
+      ></section>
+      <aside class="lab__panel">
+        <p id="brief"></p>
+        <ul id="problems"></ul>
+        <p id="stats"></p>
+        <canvas
+          id="map"
+          width="362"
+          height="200"
+          aria-label="Solution map: angle across, power down"
+        ></canvas>
+        <p class="lab__legend">
+          <span class="lab__key lab__key--solved"></span>solves
+          <span class="lab__key lab__key--styled"></span>with style
+          <span class="lab__key lab__key--self"></span>self-hit · ✚ reference solution · click to
+          try a throw
+        </p>
+        <p id="tried"></p>
+      </aside>
+    </main>
+    <script type="module" src="./lab.ts"></script>
+  </body>
+</html>

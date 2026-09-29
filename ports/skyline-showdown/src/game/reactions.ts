@@ -6,6 +6,8 @@ import type { SoundName } from '../audio/sounds';
 import type { Camera } from '../render/camera';
 import { POWER_UP_COLOURS, type Scene } from '../render/scene';
 
+const WOOD = '#b0773c';
+const BRASS = '#f2c14e';
 /** How close a banana must pass for a gorilla to panic. */
 const PANIC_DISTANCE = 45;
 /** Steps before the thrower starts worrying about its own banana. */
@@ -68,6 +70,22 @@ export function reactTo(event: ShotEvent, context: ReactionContext) {
       );
       camera.shake(0.25, big ? 5 : 2.5);
       context.sound(big ? 'bigBoom' : 'explosion', volume);
+      if (scene.targets?.landed(event.x, event.y)) context.sound('hoop', volume);
+      break;
+    }
+    case 'target': {
+      const mark = scene.targets?.strike(event.target);
+      if (mark?.kind === 'crate') {
+        effects.splinter(mark.x, mark.y, WOOD);
+        camera.shake(0.2, 2);
+        context.sound('crate', volume);
+      } else if (mark?.kind === 'bell') {
+        effects.shimmer(mark.x, mark.y, BRASS);
+        context.sound('bell', volume);
+      } else {
+        effects.shimmer(event.x, event.y, '#7dff8a');
+        context.sound('hoop', volume);
+      }
       break;
     }
     case 'topple': {

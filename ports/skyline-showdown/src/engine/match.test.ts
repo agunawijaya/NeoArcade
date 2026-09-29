@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerIndex } from './gorillas';
 import {
   createMatch,
+  createRound,
+  matchFromRound,
   previewTurn,
   startNextRound,
   takeTurn,
@@ -236,5 +238,46 @@ describe('previewTurn', () => {
     const kinds = (shot: ShotRecord) => shot.events.map((event) => event.type);
     expect(kinds(previewTurn(state, aim))).not.toContain('split');
     expect(kinds(previewTurn(state, { ...aim, usePowerUp: true }))).toContain('split');
+  });
+});
+
+describe('solo rounds and rebuilt rounds', () => {
+  it('keeps the turn with the thrower when the other gorilla is a still target', () => {
+    const state = createMatch(options({ solo: true }));
+    takeTurn(state, miss);
+    takeTurn(state, miss);
+    expect(state.turn).toBe(0);
+    expect(state.round.throws).toBe(2);
+  });
+
+  it('ends the match undecided when the throws run out', () => {
+    const state = createMatch(options({ solo: true, throwLimit: 3, points: 1 }));
+    takeTurn(state, miss);
+    takeTurn(state, miss);
+    expect(state.status).toBe('playing');
+    takeTurn(state, miss);
+    expect(state.status).toBe('matchOver');
+    expect(state.winner).toBeNull();
+  });
+
+  it('rebuilds a round from its seed alone', () => {
+    const state = createMatch(options({ twists: ['drone', 'gusts'] }));
+    takeTurn(state, selfHit);
+    startNextRound(state);
+    const rebuilt = createRound(2, state.round.seed, state.options);
+    expect(rebuilt.terrain).toEqual(state.round.terrain);
+    expect(rebuilt.wind).toBe(state.round.wind);
+    expect(rebuilt.gorillas).toEqual(state.round.gorillas);
+    expect(rebuilt.hazards).toEqual(state.round.hazards);
+  });
+
+  it('picks a match up from a round, a turn and the power-ups held', () => {
+    const first = createMatch(options());
+    const round = createRound(1, first.round.seed, first.options);
+    const resumed = matchFromRound(first.options, round, 1, [null, 'golden']);
+    expect(resumed.turn).toBe(1);
+    expect(resumed.held).toEqual([null, 'golden']);
+    const aim = { ...throwHitting(resumed, 0), usePowerUp: true };
+    expect(takeTurn(resumed, aim).usedPowerUp).toBe('golden');
   });
 });

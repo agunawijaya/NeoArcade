@@ -8,7 +8,10 @@ for the wind and gravity, and clear the skyline in between. Hit the other
 gorilla to score. Hit yourself and the point goes to your opponent.
 
 Play the **World Tour** on your own, from Jakarta to the eye of Jupiter's
-storm, or a **Quick Match** against a friend or the CPU.
+storm, or a **Quick Match** against a friend or the CPU. For a few minutes
+at a time there is the **Daily Skyline**, the same city for everyone on
+Earth each day, and **Trick Shot**, 24 one-throw puzzles. Any great shot
+can be sent to a friend as a **challenge link**.
 
 ![Pulling back the slingshot: the angle and power read out beside the arm](../media/aiming.jpg "Drag back from your gorilla, let go to throw")
 
@@ -23,7 +26,8 @@ storm, or a **Quick Match** against a friend or the CPU.
 | Throw | <kbd>Space</kbd> or <kbd>Enter</kbd> | Let go of the drag | A |
 | Use your power-up (Quick Match) | <kbd>U</kbd> | Tap it on your name plate | Y |
 | Type a throw (Classic aiming) | Digits, <kbd>.</kbd>, <kbd>Backspace</kbd>, <kbd>Enter</kbd> | On-screen number pad | — |
-| Skip the instant replay | <kbd>Space</kbd> | Tap the replay banner or the screen | A |
+| Skip the instant replay (or a challenger's shot) | <kbd>Space</kbd> | Tap the replay banner or the screen | A |
+| Retry (Trick Shot, challenges) | <kbd>R</kbd>, any time after the first throw | Tap the screen once the banana has landed | X |
 | Pause | <kbd>Esc</kbd> or <kbd>P</kbd> | Pause button, bottom right | Start |
 | Mute | <kbd>M</kbd> | Speaker button, bottom right | — |
 | Menus, the map, the wardrobe | <kbd>Tab</kbd>, <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd>, <kbd>Esc</kbd> | Tap | D-pad, A, B |
@@ -58,6 +62,8 @@ whichever way your gorilla faces.
 | | |
 |---|---|
 | **World Tour** | The campaign. The button shows your stars so far. |
+| **Daily Skyline** | Today's city, the same for everyone. A little dot means today's is still waiting for you. |
+| **Trick Shot** | Four packs of one-throw puzzles. The button shows your stars. |
 | **Quick Match** | One match, your rules: a friend on the same device, the CPU, or a rival you've beaten. |
 | **Wardrobe** | Dress player 1's and player 2's gorillas. |
 | **Badges** | This game's shelf of your Arcade Pass. |
@@ -152,6 +158,117 @@ start, a jab when you miss by a whisker, a yelp when you hit them, and a
 last word at the end. Beat a rival once and you can pick them as your
 opponent in **Quick Match**.
 
+## Trick Shot
+
+Hand-made puzzles with **one throw per attempt**. The city, the wind and
+the world are fixed; you have a target and sometimes a rule. Miss, and the
+city is put back at once: press <kbd>R</kbd> (or tap, or the pad's X) and
+throw again. Attempts are unlimited.
+
+![The Trick Shot pack map](../media/trick-map.jpg "Four packs, one idea each")
+
+**Targets.** A **dummy** gorilla (hit it, it never throws back), a wooden
+**crate** on a roof, a brass **bell** under a little gallows, a **landing
+pad** painted across a roof (bring the banana down within 2 m of its
+flag), or a neon **hoop** to fly through. Some puzzles have several
+targets: reach them all with the one throw. A crate or bell stops the
+banana that hits it; a hoop does not.
+
+**Rules.** Some puzzles add one: *through the sun first*, *two bounces
+first* (you get a Bouncer and springy roofs), or *all three bananas on
+target* (you get a Tri-Banana; a throw that never rises never splits, so
+it cannot sneak one banana in).
+
+**Stars.** Every puzzle offers three, and your best is kept:
+
+1. ★ **Solve it.**
+2. ★ **Solve it within its par**, the number of attempts on the card, in
+   one visit (leaving the puzzle starts the count again).
+3. ★ **With style:** the puzzle's own goal. *Land within 1 m of the
+   middle*, *pass through the sun on the way*, *get there in under 2 s*,
+   *fly out above the top of the screen*, *leave the city without a
+   scratch*, or *bonk the dummy on the head*.
+
+The panel in the corner ticks the stars off as you go. After four misses
+it offers a **hint**: a nudge, never the answer.
+
+**Packs.** Warm-up is open from the start. Solve four puzzles in a pack and
+the next one opens, so one stubborn puzzle never blocks you.
+
+| Pack | The idea | Puzzles |
+|---|---|---|
+| **Warm-up** | Angle and power, no wind | First Toss · Over the Top · Special Delivery · Down the Chimney · Ring the Bell · Long Bomb |
+| **Wind Readers** | Reading the air | Headwind · Tailwind · Heavy Weather (Jupiter) · Jet Stream · Dust Devil (Mars) · Boomerang |
+| **Trick Arcs** | Throws that do more than fly: hoops, the sun, bounces, splits, golden blasts | Hoop Dreams · Here Comes the Sun · Bank Shot · Three for Three · Double Bounce · Golden Touch |
+| **Impossible?** | All of it, with very little room | Moonshot · Needle's Eye · Eye of the Storm · Sunburst · Drone Dodger · Impossible? |
+
+Every puzzle has been solved, with style, by a throw you could aim by hand.
+Aim assist is off in Trick Shot: finding the throw is the puzzle.
+
+![A Trick Shot in flight toward the landing pad](../media/puzzle.jpg "Tailwind: land on the pad, not past it")
+
+## The Daily Skyline
+
+One city a day, **the same for everyone in the world**. It changes at
+midnight UTC; the page tells you when that is where you are. Each day has
+its own world, wind and one light twist (gusts, a drone, a supertall tower,
+a jet stream, a hillside, springy roofs or a dust devil).
+
+- **You against a still target.** The gorilla on the right never throws
+  back. Hit it in as few bananas as you can, **ten at most**.
+- **One scored attempt a day.** Your throws are saved as you make them, so
+  closing the page doesn't give you another go: come back and press
+  **Continue**. The pause menu has no restart during a scored attempt.
+  Hitting yourself ends the attempt.
+- **Practice** as much as you like once your attempt is done. Practice
+  doesn't count, and a practice hit can be sent as a challenge.
+- **Results** show how many bananas it took and every throw of your
+  attempt drawn over the city, plus a line to share with no spoilers:
+
+  ```
+  Skyline Showdown · Daily #16 · Moon 🌬️ calm
+  🍌🍌💥  3/10
+  ```
+
+  A banana for every miss, 💥 for the hit (🙈 if you hit yourself), and X
+  when there was no hit. **Copy** puts it on your clipboard; **Share…**
+  opens your device's share sheet where there is one.
+- **Streaks.** Play on consecutive days to build one; missing a day starts
+  again. Your current and best streak are at the top of the page.
+- **The calendar** shows every day you've played: the number of bananas it
+  took, or ✗.
+
+Aim assist is off in the daily for everyone, so every result means the same
+thing. Daily #1 was 29 September 2026.
+
+![The Daily Skyline: today's city, its twist, and the calendar](../media/daily.jpg "Daily Skyline")
+
+![Results: every throw of the attempt over the city, and the share line](../media/daily-results.jpg "Hit in 3")
+
+## Challenge links
+
+Landed something good? Send it.
+
+1. **Make one.** While a hit of yours replays in a Quick Match, on the
+   tour or in a daily practice run, press **Challenge a friend** (it's also
+   on the victory and results screens, and on Trick Shot's solve card).
+   Add a nickname if you want your friend to know it's you; otherwise the
+   link carries no name at all. Copy it or share it.
+2. **Take one.** Opening a link shows who (if they signed it) and where.
+   **Watch their shot** from exactly where they stood, in exactly their
+   wind, city and moment, then it's **your turn: match it or beat it**.
+3. **The verdict.** If they hit, you must hit too: *Matched!* If they
+   missed, hit, or land closer to the target than they did: *Beaten!*
+   Otherwise, *Not this time*. Land right where their banana came down and
+   you're a *Copycat*. Try again as often as you like, then **Send a
+   reply** with your own shot.
+
+A link made on an older version of the game still plays if bananas fly
+the same way in this one. If they fly differently, or the link was cut
+short on the way, the page says so and nothing is played wrongly.
+
+![A challenge arrives](../media/challenge.jpg "Ada challenges you!")
+
 ## "So close!"
 
 After every miss, a pin marks where the banana came down, with how close it
@@ -198,10 +315,11 @@ choices are remembered.
 ## Settings
 
 **Settings** on the title screen holds the choices that follow you into
-the World Tour as well as Quick Match: aiming (slingshot or typed), aim
-assist, both players' names, the theme, the CRT filter, weather in Quick
-Match, and sound. They apply straight away. The tour uses player 1's name,
-or calls you "You" until you choose one.
+every mode: aiming (slingshot or typed), aim assist, both players' names,
+the theme, the CRT filter, weather in Quick Match, and sound. They apply
+straight away. The tour and the daily use player 1's name, or call you
+"You" until you choose one. Aim assist works in Quick Match and on the
+tour; the daily, Trick Shot and challenges are played without it.
 
 ## Worlds
 
@@ -294,17 +412,24 @@ across NeoArcade (it lives in this browser). You earn XP for:
 | Winning a tour stage (a boss: 60) | 40 |
 | Every new star | 15 |
 | Beating a rival for the first time | 100 |
+| Playing your Daily Skyline (and 30 more for a hit) | 20 |
+| Solving a Trick Shot puzzle for the first time | 20 |
+| Every new Trick Shot star | 10 |
+| Winning a challenge (once per link) | 25 |
 | Badges | 25 to 250 each |
 
 The Pass has a daily allowance, so playing all day doesn't pay more than
-playing well. There are 28 badges: bronze, silver and gold ones with a hint
-to earn them, counted ones that fill up (Sunburn: hit the sun 10 times;
-Demolition: carve 100 craters), and four secrets. Open **Badges** to see
+playing well. There are 35 badges: bronze, silver and gold ones with a hint
+to earn them (among them Early Bird for your first daily, On a Roll for a
+seven-day streak, Hole in One for a daily in one banana, Puzzle Master and
+Show-off for Trick Shot, and Matched! for winning a challenge), counted ones
+that fill up (Sunburn: hit the sun 10 times; Demolition: carve 100
+craters), and five secrets. Open **Badges** to see
 this game's shelf; badges pop up at the top of the screen between rounds
 and on the results, never in the middle of your aim. Only player 1 earns
 Pass progress: a friend on player 2 is a guest.
 
-![The badges shelf](../media/badges.jpg "Twenty-eight to collect")
+![The badges shelf](../media/badges.jpg "The badges shelf")
 
 ## Tips and tricks
 
@@ -327,6 +452,16 @@ Pass progress: a friend on player 2 is a guest.
   you.
 - **Learning? Turn on Aim assist**, then switch it off when you're ready to
   chase all three stars.
+- **Trick Shot: solve first, style later.** The style star doesn't need the
+  par star; come back for it once you know the throw.
+- **Retry fast.** Press R the moment you see a throw going wrong: no need
+  to watch it land.
+- **The daily rewards patience.** Your first banana is a free look at the
+  wind and the city; read the pin before the second.
+- **On the Moon, steer with the angle.** One step of power goes a long way
+  there; tenths of a degree (Shift) are gentler.
+- **Challenged by a hit?** Watch where their banana went, then try their
+  angle first and adjust the power.
 
 ## FAQ
 
@@ -371,6 +506,29 @@ Jupiter it howls.
 
 **Can I skip the replay?**
 Yes. Press Space, or tap.
+
+**I closed the page in the middle of my daily. Did I lose it?**
+No, and you didn't get a fresh one either: press **Continue** on the Daily
+page and carry on from your last throw.
+
+**When does the next daily arrive?**
+At midnight UTC, the same moment for everyone. The Daily page shows when
+that is in your time.
+
+**Why doesn't practice count?**
+Everyone gets one scored attempt, so the share line means the same for
+everyone. Practice is for you (and for making challenge links).
+
+**What does a challenge link know about me?**
+Only what you type into the nickname box. Otherwise it holds the round,
+the throws and a checksum, nothing else, and it never goes to a server.
+
+**A challenge says it was made on an older version.**
+The way bananas fly has changed since your friend made it, so it can't be
+replayed fairly. Ask for a fresh link.
+
+**Can I see a puzzle's answer?**
+No, but after four misses the puzzle offers a hint.
 
 **My phone shows "Turn your phone sideways".**
 The city is wide, so landscape works best. You can choose **Play anyway**.

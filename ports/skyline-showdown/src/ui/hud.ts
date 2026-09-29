@@ -13,6 +13,8 @@ export interface HudHandlers {
   /** A key pressed on the on-screen number pad. */
   keypad(key: string): void;
   skip(): void;
+  /** Send the hit that just landed to a friend. */
+  challenge(): void;
 }
 
 interface Plate {
@@ -54,6 +56,8 @@ export class Hud {
   private readonly toastBox: HTMLElement;
   private readonly hintBox: HTMLElement;
   private readonly replay: HTMLButtonElement;
+  private readonly replayLabel: HTMLElement;
+  private readonly challengeButton: HTMLButtonElement;
   private readonly speech: HTMLElement;
   private readonly miss: HTMLElement;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -115,14 +119,22 @@ export class Hud {
     this.banner = h('div', { class: 'hud__banner', hidden: true });
     this.toastBox = h('div', { class: 'hud__toast', role: 'status' });
     this.hintBox = h('div', { class: 'hud__hint' });
+    this.replayLabel = h('span', {}, 'Instant replay');
     this.replay = h(
       'button',
       { class: 'hud__replay', type: 'button', hidden: true },
       h('span', { class: 'hud__replay-dot' }),
-      'Instant replay',
+      this.replayLabel,
       h('span', { class: 'hud__replay-skip' }, 'tap or press Space to skip'),
     );
     this.replay.addEventListener('click', () => handlers.skip());
+    this.challengeButton = h(
+      'button',
+      { class: 'button hud__challenge', type: 'button', hidden: true },
+      icon(ICONS.swords),
+      'Challenge a friend',
+    );
+    this.challengeButton.addEventListener('click', () => handlers.challenge());
     this.speech = h('div', { class: 'hud__speech', role: 'status', hidden: true });
     this.miss = h('div', { class: 'hud__miss', role: 'status', hidden: true });
 
@@ -142,6 +154,7 @@ export class Hud {
       this.toastBox,
       this.hintBox,
       this.replay,
+      this.challengeButton,
     );
   }
 
@@ -158,8 +171,13 @@ export class Hud {
     });
   }
 
-  setScores(scores: [number, number], points: number, format: MatchFormat) {
+  setScores(scores: [number, number] | null, points = 0, format: MatchFormat = 'firstTo') {
     this.plates.forEach((plate, player) => {
+      if (!scores) {
+        plate.score.replaceChildren();
+        plate.score.removeAttribute('aria-label');
+        return;
+      }
       const score = scores[player] ?? 0;
       plate.score.replaceChildren(
         h('strong', {}, String(score)),
@@ -225,7 +243,24 @@ export class Hud {
   }
 
   setRound(round: number, world: string) {
-    this.roundLabel.textContent = `Round ${round} · ${world}`;
+    this.setLabel(`Round ${round} · ${world}`);
+  }
+
+  /** The line in the bottom corner: the round and place, a puzzle's name, a daily's number. */
+  setLabel(text: string) {
+    this.roundLabel.textContent = text;
+  }
+
+  /** A free-form count beside the wind, such as "Attempt 3". */
+  setCounter(text: string | null) {
+    this.throwCount.hidden = text === null;
+    this.throwCount.textContent = text ?? '';
+    this.throwCount.classList.remove('hud__throws--over');
+  }
+
+  /** A side with nobody to show, such as a puzzle with no dummy, loses its name plate. */
+  showPlate(player: PlayerIndex, visible: boolean) {
+    this.plates[player].root.hidden = !visible;
   }
 
   setHeld(player: PlayerIndex, kind: PowerUpKind | null, armed: boolean, usable: boolean) {
@@ -303,8 +338,14 @@ export class Hud {
     this.hintBox.classList.toggle('hud__hint--visible', Boolean(text));
   }
 
-  showReplay(visible: boolean) {
+  /** The badge over a replayed shot: the instant replay, or a challenger's shot. */
+  showReplay(visible: boolean, label = 'Instant replay') {
     this.replay.hidden = !visible;
+    this.replayLabel.textContent = label;
+  }
+
+  offerChallenge(visible: boolean) {
+    this.challengeButton.hidden = !visible;
   }
 
   /** A rival's line in a speech bubble over their head; it pops away after a few seconds. */

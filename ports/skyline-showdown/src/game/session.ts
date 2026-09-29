@@ -13,12 +13,18 @@ import type { Circle, Point, Rect } from '../engine/geometry';
 import { gorillaCentre, otherPlayer, throwingHand, type PlayerIndex } from '../engine/gorillas';
 import {
   createMatch,
+  roundStart,
   startNextRound,
   takeTurn,
   type BetweenThrows,
   type MatchState,
+  type RoundStart,
+  type TurnAim,
   type TurnResult,
 } from '../engine/match';
+import { ENGINE_VERSION } from '../engine/version';
+import type { Challenge } from '../challenge/link';
+import { DAILY_THROWS } from '../daily/daily';
 import { POWER_UPS, type Balloon } from '../engine/powerups';
 import { CITY_HUM, SOUNDS, VICTORY, playFanfare, type SoundName } from '../audio/sounds';
 import type { Theme } from '../render/palette';
@@ -65,6 +71,12 @@ export interface SessionOptions {
   onTurnStart?: () => void;
   /** A point was scored: a good moment for news. */
   onPoint?: () => void;
+}
+
+/** The last hit a person made, with everything a challenge link needs to replay it. */
+interface ChallengeableHit {
+  start: RoundStart;
+  throws: TurnAim[];
 }
 
 /** The city as it was before a throw, so the replay can rewind to it. */
@@ -149,17 +161,24 @@ export class Session {
   /** A rival's jab at a near miss, kept until the pin has faded so the two never overlap. */
   private pendingTaunt = false;
   private missAt: Point | null = null;
+  private start!: RoundStart;
+  /** Every throw of the round so far, for challenge links. */
+  private roundThrows: TurnAim[] = [];
+  private lastHit: ChallengeableHit | null = null;
 
   constructor(private readonly options: SessionOptions) {
     const { setup, hud } = options;
-    this.state = createMatch(setup.match);
+    this.state = setup.daily?.start ?? createMatch(setup.match);
     this.cpuRng = createRng(setup.match.seed ^ 0x5eed);
     this.chatter = createRng(setup.match.seed ^ 0xc4a7);
     this.names = [setup.players[0].name, setup.players[1].name];
     this.accents = [setup.players[0].look.accent, setup.players[1].look.accent];
     this.assisted = setup.aimAssist;
     hud.setPlayers(this.names, [this.isCpu(0), this.isCpu(1)], this.accents);
-    hud.setScores(this.state.scores, setup.match.points, setup.match.format);
+    hud.showPlate(0, true);
+    hud.showPlate(1, true);
+    if (setup.daily) hud.setScores(null);
+    else hud.setScores(this.state.scores, setup.match.points, setup.match.format);
     hud.setMuted(options.audio.mix.muted);
     hud.setTwist(setup.tourStage?.twist.name ?? null);
     hud.show(true);
@@ -179,6 +198,7 @@ export class Session {
     hud.clearMiss();
     hud.setTwist(null);
     hud.setThrows(null, null);
+    hud.offerChallenge(false);
   }
 
   update(delta: number) {
@@ -220,6 +240,24 @@ export class Session {
     if (this.phase.kind === 'replay') this.finishReplay(this.phase.result);
   }
 
+  /** Every throw of the round so far, as aimed. */
+  roundAims(): TurnAim[] {
+    return [...this.roundThrows];
+  }
+
+  /** The last hit a person made in this match, as a challenge to send; null if there is none. */
+  challenge(): Challenge | null {
+    const source = this.options.setup.linkSource;
+    if (!source || !this.lastHit) return null;
+    return {
+      version: ENGINE_VERSION,
+      source: source(this.lastHit.start),
+      wind: this.lastHit.start.wind,
+      throws: this.lastHit.throws,
+      nickname: null,
+    };
+  }
+
   private isCpu(player: PlayerIndex): boolean {
     return this.options.setup.players[player].cpu !== null;
   }
@@ -241,6 +279,9 @@ export class Session {
     });
     stage.setScene(this.scene);
     stage.camera.rest(true);
+    // A daily picked up part-way already has holes in it.
+    this.scene.city.restore(round.terrain.craters, round.terrain.cuts, this.scene.city.snapshot());
+    this.scene.markedTarget = setup.daily ? 1 : null;
     this.scene.actors.forEach((actor, player) => (actor.shielded = round.shields[player] === true));
     this.lastPaths[0] = null;
     this.lastPaths[1] = null;
@@ -248,11 +289,19 @@ export class Session {
     this.firstThrow = [true, true];
     this.shownWind = round.wind;
     this.missAt = null;
+    this.start = roundStart(this.state);
+    this.roundThrows = [];
     hud.resetWind();
     hud.clearMiss();
     const place = setup.tourStage?.city ?? round.world.name;
-    hud.setRound(round.number, place);
-    hud.showBanner(`Round ${round.number}`, `${place} · ${this.describeWind()}`);
+    if (setup.daily) {
+      const title = `Daily #${setup.daily.skyline.day.number}`;
+      hud.setLabel(`${title} · ${place}${setup.daily.scored ? '' : ' · practice'}`);
+      hud.showBanner(title, `${place} · ${this.describeWind()}`);
+    } else {
+      hud.setRound(round.number, place);
+      hud.showBanner(`Round ${round.number}`, `${place} · ${this.describeWind()}`);
+    }
     this.showThrowCount();
     audio.playMusic(CITY_HUM);
     playFanfare(audio, ['C4', 'Eb4', 'G4', 'C5']);
@@ -269,8 +318,13 @@ export class Session {
   }
 
   private showThrowCount() {
-    const stage = this.options.setup.tourStage;
-    this.options.hud.setThrows(stage ? this.throwsBy[0] : null, stage?.throwBudget ?? null);
+    const { tourStage, daily } = this.options.setup;
+    if (daily) this.options.hud.setThrows(this.state.round.throws, DAILY_THROWS);
+    else
+      this.options.hud.setThrows(
+        tourStage ? this.throwsBy[0] : null,
+        tourStage?.throwBudget ?? null,
+      );
   }
 
   private advancePhase(delta: number, worldDelta: number) {
@@ -510,6 +564,10 @@ export class Session {
     const lightningTarget = round.lightningTarget;
     const aim = { angle: phase.aim.angle, velocity: phase.aim.power, usePowerUp: this.armed };
     const result = takeTurn(this.state, aim);
+    this.roundThrows.push(aim);
+    if (result.scorer === player && !cpuTurn) {
+      this.lastHit = { start: this.start, throws: [...this.roundThrows] };
+    }
     if (cpuTurn) observeThrow(this.cpuMemories[player], aim, result.shot, this.state);
     this.options.onThrow?.({ result, round, firstThrow: this.firstThrow[player] });
     this.firstThrow[player] = false;
@@ -654,7 +712,10 @@ export class Session {
       this.options.hud.toast('A gust! The wind has changed');
       this.sound('tick');
     }
-    if (phase.time >= phase.duration) this.beginTurn();
+    if (phase.time < phase.duration) return;
+    // A daily's last banana can miss: that ends it too.
+    if (this.state.status === 'matchOver') this.finishMatch();
+    else this.beginTurn();
   }
 
   /** Lightning hits the marked roof, then the next one is marked. */
@@ -672,6 +733,9 @@ export class Session {
 
   private beginReplay(result: TurnResult, before: Snapshot) {
     this.worldSpeed = 1;
+    // A person's hit can be sent to a friend while it replays and while the winner dances.
+    const justHit = this.lastHit !== null && this.lastHit.throws.length === this.roundThrows.length;
+    this.options.hud.offerChallenge(justHit && this.options.setup.linkSource !== null);
     if (this.options.reducedMotion()) {
       this.celebrate(result);
       return;
@@ -713,7 +777,7 @@ export class Session {
     this.scene.actors[scorer].setMood('dance');
     this.scene.activePlayer = null;
     stage.camera.pushIn(gorillaCentre(this.state.round.gorillas[scorer]), 1.12);
-    hud.setScores(this.state.scores, setup.match.points, setup.match.format);
+    if (!setup.daily) hud.setScores(this.state.scores, setup.match.points, setup.match.format);
     const selfHit = result.shot.victim === result.shot.input.thrower;
     hud.toast(scoreLine(this.names[scorer], selfHit), this.accents[scorer]);
     // A rival who is hit says so; one who scores rubs it in.
@@ -728,21 +792,27 @@ export class Session {
 
   private afterCelebration() {
     if (this.state.status === 'matchOver') {
-      this.phase = { kind: 'over' };
-      this.options.hud.hush();
-      this.options.audio.playMusic(VICTORY);
-      this.options.onMatchOver({
-        names: this.names,
-        accents: this.accents,
-        scores: [...this.state.scores],
-        winner: this.state.winner,
-        throws: [...this.throwsBy],
-        assisted: this.assisted,
-      });
+      this.finishMatch();
       return;
     }
+    this.options.hud.offerChallenge(false);
     startNextRound(this.state);
     this.beginRound();
+  }
+
+  private finishMatch() {
+    this.phase = { kind: 'over' };
+    this.options.hud.hush();
+    this.options.hud.offerChallenge(false);
+    this.options.audio.playMusic(VICTORY);
+    this.options.onMatchOver({
+      names: this.names,
+      accents: this.accents,
+      scores: [...this.state.scores],
+      winner: this.state.winner,
+      throws: [...this.throwsBy],
+      assisted: this.assisted,
+    });
   }
 
   /** Lets whichever side is a rival say something. */

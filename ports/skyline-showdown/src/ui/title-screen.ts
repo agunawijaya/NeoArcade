@@ -4,6 +4,8 @@ import { ICONS } from './icons';
 
 export interface TitleHandlers {
   tour(): void;
+  daily(): void;
+  tricks(): void;
   quickMatch(): void;
   wardrobe(): void;
   badges(): void;
@@ -17,6 +19,9 @@ export interface TitleScreen {
   showTheme(theme: Theme): void;
   /** Stars collected on the World Tour, shown on its button. */
   showProgress(stars: number, maxStars: number): void;
+  /** Today's daily on its button; `open` adds the gentle reminder that it is still to play. */
+  showDaily(text: string, open: boolean): void;
+  showTrickStars(stars: number, maxStars: number): void;
 }
 
 export const CREDIT = 'Inspired by QBasic Gorillas, © Microsoft Corporation 1990.';
@@ -41,6 +46,22 @@ export function buildTitleScreen(
     tourStars,
   );
   tour.addEventListener('click', handlers.tour);
+  const dailyNote = h('span', { class: 'title__note' });
+  const daily = h(
+    'button',
+    { class: 'button title__mode', type: 'button' },
+    icon(ICONS.calendar),
+    h('span', { class: 'title__mode-text' }, h('span', {}, 'Daily Skyline'), dailyNote),
+  );
+  daily.addEventListener('click', handlers.daily);
+  const trickStars = h('span', { class: 'title__note' });
+  const tricks = h(
+    'button',
+    { class: 'button title__mode', type: 'button' },
+    icon(ICONS.arc),
+    h('span', { class: 'title__mode-text' }, h('span', {}, 'Trick Shot'), trickStars),
+  );
+  tricks.addEventListener('click', handlers.tricks);
   const quickMatch = h(
     'button',
     { class: 'button', type: 'button' },
@@ -69,6 +90,8 @@ export function buildTitleScreen(
         'nav',
         { class: 'title__menu', 'aria-label': 'Main menu' },
         tour,
+        daily,
+        tricks,
         quickMatch,
         button('Wardrobe', handlers.wardrobe),
         button('Badges', handlers.badges),
@@ -92,6 +115,14 @@ export function buildTitleScreen(
     showProgress(stars, maxStars) {
       tourStars.textContent = `★ ${stars}/${maxStars}`;
       tourStars.setAttribute('aria-label', `${stars} of ${maxStars} stars`);
+    },
+    showDaily(text, open) {
+      dailyNote.textContent = text;
+      daily.classList.toggle('title__mode--waiting', open);
+    },
+    showTrickStars(stars, maxStars) {
+      trickStars.textContent = `★ ${stars}/${maxStars}`;
+      trickStars.setAttribute('aria-label', `${stars} of ${maxStars} stars`);
     },
   };
 }

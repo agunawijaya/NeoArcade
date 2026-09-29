@@ -170,6 +170,55 @@ export const SOUNDS = {
     gain: 0.12,
     duration: 0.12,
   },
+  crate: [
+    {
+      wave: 'noise',
+      frequency: 500,
+      filter: { type: 'bandpass', frequency: 900, q: 1.4, sweepTo: 0.4 },
+      envelope: { attack: 0.002, decay: 0.12, sustain: 0.1, release: 0.12 },
+      gain: 0.6,
+      duration: 0.12,
+    },
+    {
+      wave: 'triangle',
+      frequency: 180,
+      glideTo: 0.6,
+      envelope: { attack: 0.002, decay: 0.1, sustain: 0, release: 0.06 },
+      gain: 0.5,
+      duration: 0.08,
+    },
+  ],
+  bell: [
+    {
+      wave: 'sine',
+      frequency: 1175,
+      envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.9 },
+      gain: 0.32,
+      duration: 1,
+    },
+    {
+      wave: 'sine',
+      frequency: 2804,
+      envelope: { attack: 0.002, decay: 0.6, sustain: 0, release: 0.4 },
+      gain: 0.12,
+      duration: 0.5,
+    },
+    {
+      wave: 'triangle',
+      frequency: 587,
+      envelope: { attack: 0.002, decay: 1.1, sustain: 0, release: 0.7 },
+      gain: 0.16,
+      duration: 0.9,
+    },
+  ],
+  hoop: {
+    wave: 'sine',
+    frequency: 660,
+    glideTo: 2,
+    envelope: { attack: 0.01, decay: 0.25, sustain: 0.2, release: 0.2 },
+    gain: 0.25,
+    duration: 0.22,
+  },
 } satisfies Record<string, Sound>;
 
 export type SoundName = keyof typeof SOUNDS;

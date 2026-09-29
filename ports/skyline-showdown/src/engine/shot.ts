@@ -9,6 +9,7 @@ import {
   SUN,
   WORLD_WIDTH,
 } from './constants';
+import { sinCosDegrees, squareRoot } from './exact-math';
 import { discTouchesCircle, discTouchesRect, type Point, type Rect } from './geometry';
 import {
   footprint,
@@ -25,6 +26,7 @@ import {
   type Balloon,
   type PowerUpKind,
 } from './powerups';
+import { stopsBanana, touchesTarget, type Target } from './targets';
 import { buildingRect, copyTerrain, discHitsTerrain, type Terrain } from './terrain';
 import { airAt, droneAt, NO_HAZARDS, type Hazards } from './twists';
 
@@ -37,6 +39,8 @@ export interface ShotSetup {
   shields: readonly [boolean, boolean];
   /** The World Tour's drones, jet streams, dust devils and springy ground. */
   hazards?: Hazards;
+  /** Trick Shot's crates, bells and hoops. */
+  targets?: readonly Target[];
 }
 
 export interface ThrowInput {
@@ -63,6 +67,8 @@ export type ShotEvent =
   | (EventBase & { type: 'bounce' })
   /** A banana stopped by the patrolling drone. */
   | (EventBase & { type: 'drone' })
+  /** A Trick Shot target reached: `target` is its index in the setup's list. */
+  | (EventBase & { type: 'target'; target: number })
   | (EventBase & { type: 'explosion'; radius: number; building: number })
   | (EventBase & { type: 'topple'; cut: Rect; building: number })
   | (EventBase & { type: 'shield'; player: PlayerIndex })
@@ -98,6 +104,8 @@ const GOLDEN_RADIUS = EXPLOSION_RADIUS * 2;
 /** A gorilla hit leaves a big scorched bowl, as the original's gorilla explosion did. */
 const GORILLA_BLAST_RADIUS = 16;
 const SPLIT_SPREAD_DEGREES = 12;
+/** A Tri-Banana's outer bananas turn this far either way from the middle one. */
+const SPLIT_TURN = sinCosDegrees(SPLIT_SPREAD_DEGREES);
 const BOUNCE_KEEPS = 0.75;
 /** Collisions are checked at most this far apart, so fast bananas cannot tunnel. */
 const COLLISION_SPACING = 2;
@@ -127,11 +135,19 @@ export function worldAngle(thrower: PlayerIndex, angle: number): number {
   return thrower === 0 ? angle : 180 - angle;
 }
 
-/** Inputs as the original accepted them: 0–360, velocity rounded to a whole number. */
+/**
+ * Inputs as the original accepted them, 0–360, with the velocity a whole
+ * number and the angle kept to a hundredth of a degree: exactly what a
+ * challenge link carries, so a shot rebuilt from a link is the shot thrown.
+ */
 export function normaliseThrow(input: ThrowInput): ThrowInput {
   const clamp = (value: number) =>
     Math.min(MAX_INPUT, Math.max(0, Number.isFinite(value) ? value : 0));
-  return { ...input, angle: clamp(input.angle), velocity: Math.round(clamp(input.velocity)) };
+  return {
+    ...input,
+    angle: Math.round(clamp(input.angle) * 100) / 100,
+    velocity: Math.round(clamp(input.velocity)),
+  };
 }
 
 export function simulateShot(setup: ShotSetup, rawInput: ThrowInput): ShotRecord {
@@ -146,6 +162,9 @@ class ShotSimulation {
   private readonly wind: number;
   private readonly hazards: Hazards;
   private readonly golden: boolean;
+  private readonly targets: readonly Target[];
+  /** Targets already reached: a crate or a bell is spent, a hoop counts once. */
+  private readonly spent: boolean[];
   private balloon: Balloon | null;
   private collected: PowerUpKind | null = null;
   private victim: PlayerIndex | null = null;
@@ -164,6 +183,8 @@ class ShotSimulation {
     const hazards = setup.hazards ?? NO_HAZARDS;
     this.hazards = calm ? { ...hazards, jetStream: null, dustDevil: null } : hazards;
     this.golden = input.powerUp === 'golden';
+    this.targets = setup.targets ?? [];
+    this.spent = this.targets.map(() => false);
     this.balloon = setup.balloon;
   }
 
@@ -174,8 +195,8 @@ class ShotSimulation {
     if (velocity < FUMBLE_VELOCITY) {
       this.fumble(hand);
     } else {
-      const radians = (worldAngle(thrower, angle) * Math.PI) / 180;
-      this.launch(hand, { x: Math.cos(radians) * velocity, y: -Math.sin(radians) * velocity }, 0);
+      const direction = sinCosDegrees(worldAngle(thrower, angle));
+      this.launch(hand, { x: direction.cos * velocity, y: -direction.sin * velocity }, 0);
       this.fly();
     }
 
@@ -305,9 +326,11 @@ class ShotSimulation {
   /** Walks from the last point to this one in small hops; returns true if the flight ended. */
   private collide(flight: Flight, target: Point, step: number): boolean {
     const from = flight.previous;
+    const dx = target.x - from.x;
+    const dy = target.y - from.y;
     const hops = Math.min(
       16,
-      Math.max(1, Math.ceil(Math.hypot(target.x - from.x, target.y - from.y) / COLLISION_SPACING)),
+      Math.max(1, Math.ceil(squareRoot(dx * dx + dy * dy) / COLLISION_SPACING)),
     );
     let clear = from;
     for (let hop = 1; hop <= hops; hop++) {
@@ -346,6 +369,16 @@ class ShotSimulation {
       this.finish(flight, point, step);
       this.record({ type: 'drone', ...this.at(flight, point, step) });
       return true;
+    }
+
+    for (const [index, target] of this.targets.entries()) {
+      if (this.spent[index] || !touchesTarget(target, x, y, BANANA_RADIUS)) continue;
+      this.spent[index] = true;
+      this.record({ type: 'target', target: index, ...this.at(flight, point, step) });
+      if (stopsBanana(target)) {
+        this.finish(flight, point, step);
+        return true;
+      }
     }
 
     for (const player of [0, 1] as const) {
@@ -431,15 +464,12 @@ class ShotSimulation {
           discTouchesRect(point.x, point.y, radius, box),
         );
         const centre = gorillaCentre(gorilla);
-        return {
-          player,
-          toppled,
-          blasted,
-          distance: Math.hypot(centre.x - point.x, centre.y - point.y),
-        };
+        const dx = centre.x - point.x;
+        const dy = centre.y - point.y;
+        return { player, toppled, blasted, distanceSquared: dx * dx + dy * dy };
       })
       .filter((casualty) => casualty.toppled || casualty.blasted)
-      .sort((a, b) => a.distance - b.distance);
+      .sort((a, b) => a.distanceSquared - b.distanceSquared);
 
     const shieldedOnCut = casualties.some(
       (casualty) => casualty.toppled && this.shields[casualty.player],
@@ -483,11 +513,12 @@ class ShotSimulation {
   private split(flight: Flight, position: Point, step: number) {
     this.finish(flight, position, step);
     const heading = this.velocityAt(flight, step);
-    const children = [-SPLIT_SPREAD_DEGREES, 0, SPLIT_SPREAD_DEGREES].map((degrees) => {
-      const turn = (degrees * Math.PI) / 180;
+    const children = [-1, 0, 1].map((side) => {
+      const sin = side * SPLIT_TURN.sin;
+      const cos = side === 0 ? 1 : SPLIT_TURN.cos;
       const velocity = {
-        x: heading.x * Math.cos(turn) - heading.y * Math.sin(turn),
-        y: heading.x * Math.sin(turn) + heading.y * Math.cos(turn),
+        x: heading.x * cos - heading.y * sin,
+        y: heading.x * sin + heading.y * cos,
       };
       const child = this.launch(position, velocity, step, false);
       child.bounces = this.hazards.bouncy ? 1 : 0;

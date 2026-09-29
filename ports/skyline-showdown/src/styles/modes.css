@@ -1,0 +1,847 @@
+/*
+ * Trick Shot, the Daily Skyline and challenge links. Built on the tokens and
+ * pieces of styles.css (panels, cards, results, the tour's header), so both
+ * themes and reduced motion carry over.
+ */
+
+/* Title: the modes -------------------------------------------------------------- */
+
+.title__mode {
+  position: relative;
+  min-height: 54px;
+}
+
+.title__mode-text {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.title__note {
+  font: 700 0.72rem var(--font-mono);
+  letter-spacing: 0.03em;
+  opacity: 0.75;
+}
+
+/* Today's daily still to play: a warm edge and a pulsing dot, never a nag. */
+.title__mode--waiting {
+  border-color: rgb(255 210 63 / 0.55);
+}
+
+.title__mode--waiting::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
+  animation: glow-dot 2.4s ease-in-out infinite;
+}
+
+@keyframes glow-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Trick Shot: pack map ------------------------------------------------------------ */
+
+.screen--tricks,
+.screen--daily {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: var(--scrim-strong);
+  backdrop-filter: blur(6px);
+}
+
+.tricks__packs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: center;
+  align-items: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tricks__info {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.pack {
+  --pack: var(--gold);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--pack) 40%, transparent);
+  border-top: 4px solid var(--pack);
+  border-radius: 18px;
+  background: var(--glass-strong);
+  box-shadow: 0 18px 50px -30px var(--pack);
+}
+
+.pack--locked {
+  border-top-color: var(--line-strong);
+  box-shadow: none;
+}
+
+.pack__head {
+  display: grid;
+  gap: 2px;
+}
+
+.pack__idea {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: color-mix(in srgb, var(--pack), var(--ink) 30%);
+  font: 700 0.7rem/1.4 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pack--locked .pack__idea {
+  color: var(--ink-faint);
+}
+
+.pack__name {
+  margin: 0;
+  color: var(--headline);
+  font: 400 clamp(1.3rem, 2.4vw, 1.7rem) / 1.1 var(--font-display);
+}
+
+.pack__blurb,
+.pack__count {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.pack__count {
+  color: var(--ink-faint);
+  font: 600 0.75rem var(--font-mono);
+}
+
+.pack__puzzles {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.puzzle-tile {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--wash);
+  color: var(--ink);
+  font: 500 0.9rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.puzzle-tile:hover,
+.puzzle-tile:focus-visible {
+  border-color: var(--pack);
+  background: color-mix(in srgb, var(--pack) 14%, transparent);
+}
+
+.puzzle-tile[aria-disabled='true'] {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.puzzle-tile__number {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--pack) 22%, transparent);
+  color: var(--headline);
+  font: 400 0.95rem var(--font-display);
+}
+
+.puzzle-tile--solved .puzzle-tile__number {
+  background: var(--pack);
+  color: #1c1930;
+}
+
+.puzzle-tile__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.puzzle-tile__stars {
+  color: var(--gold);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+}
+
+.pack--locked .puzzle-tile__stars {
+  visibility: hidden;
+}
+
+/* Trick Shot: the puzzle card ------------------------------------------------------ */
+
+.puzzle-card {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.puzzle-card__side {
+  display: grid;
+  align-items: center;
+}
+
+.puzzle-card__picture,
+.daily__picture,
+.daily-results__picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 640 / 350;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--well);
+}
+
+.puzzle-card__brief {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.puzzle-card__rule,
+.puzzle-card__kit {
+  margin: 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--rival);
+  border-radius: 6px;
+  background: var(--wash);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+/* Trick Shot: in play -------------------------------------------------------------- */
+
+.trick-panel {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 64px);
+  right: max(12px, env(safe-area-inset-right));
+  display: grid;
+  gap: 4px;
+  max-width: min(320px, 44vw);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.trick-panel__name {
+  color: var(--headline);
+  font: 400 1.05rem var(--font-display);
+}
+
+.trick-panel__goals {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trick-panel__goal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.trick-panel__goal .icon {
+  width: 0.95em;
+  height: 0.95em;
+  color: var(--line-strong);
+}
+
+.trick-panel__goal--earned {
+  color: var(--ink);
+}
+
+.trick-panel__goal--earned .icon {
+  color: var(--gold);
+  filter: drop-shadow(0 0 4px rgb(255 210 63 / 0.7));
+}
+
+.trick-panel__goal--gone {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.trick-panel__hint {
+  margin: 4px 0 0;
+  color: var(--panel-title);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.overlay--solve {
+  align-items: end;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, var(--scrim-strong), transparent 70%);
+  backdrop-filter: none;
+}
+
+.solve {
+  width: min(720px, 100%);
+}
+
+.solve__goals {
+  justify-self: center;
+}
+
+/* The HUD's challenge button, under the replay badge. */
+.hud__challenge {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 52px);
+  left: 50%;
+  min-height: 40px;
+  padding: 0.5em 1.1em;
+  border-color: rgb(181 140 255 / 0.7);
+  background: var(--glass-strong);
+  transform: translateX(-50%);
+}
+
+/* Daily Skyline --------------------------------------------------------------------- */
+
+.daily__streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+  color: #ff9a4a;
+  font: 400 1.1rem var(--font-display);
+}
+
+.daily__streak small {
+  color: var(--ink-faint);
+  font: 600 0.8rem var(--font-body);
+}
+
+.daily {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-content: center;
+  align-items: start;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.daily__today,
+.calendar {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  width: 100%;
+  padding: 18px;
+}
+
+.daily__about {
+  display: grid;
+  gap: 10px;
+}
+
+.daily__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily__facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.daily__twist,
+.daily__status,
+.daily__next {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.daily__status {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.daily__next {
+  font-size: 0.85rem;
+}
+
+.daily__actions {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendar__month {
+  margin: 0;
+  color: var(--headline);
+  font: 400 1.2rem var(--font-display);
+}
+
+.calendar__turn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--wash);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.calendar__turn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.calendar__grid {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar__row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.calendar__weekday {
+  color: var(--ink-faint);
+  font: 700 0.7rem var(--font-mono);
+  text-align: center;
+}
+
+.calendar__day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background: var(--wash);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.calendar__day--blank {
+  background: none;
+}
+
+.calendar__day--off {
+  opacity: 0.35;
+}
+
+.calendar__date {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  font-size: 0.65rem;
+}
+
+.calendar__mark {
+  color: var(--headline);
+  font: 400 1.1rem var(--font-display);
+}
+
+.calendar__day--hit {
+  background: color-mix(in srgb, var(--gold) 28%, transparent);
+}
+
+.calendar__day--miss {
+  background: color-mix(in srgb, #8e87aa 22%, transparent);
+}
+
+.calendar__day--today {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.calendar__legend {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* Daily results ---------------------------------------------------------------------- */
+
+.overlay--daily-results {
+  overflow-y: auto;
+}
+
+.daily-results {
+  width: min(960px, 100%);
+}
+
+/* The day's picture on one side, what to do with it on the other. */
+@media (min-width: 760px) {
+  .daily-results {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: center;
+    column-gap: 22px;
+  }
+}
+
+.daily-results__main,
+.daily-results__side {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.daily-results__bananas {
+  margin: 0;
+  font: 400 1.6rem/1.2 var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+.daily-results__picture {
+  max-width: 520px;
+}
+
+.daily-results__streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: #ff9a4a;
+  font-weight: 700;
+}
+
+/* Sharing ------------------------------------------------------------------------------ */
+
+.share-box {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.share-box__text {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: var(--well);
+  color: var(--ink);
+  font: 500 0.9rem/1.5 var(--font-mono);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.share-box__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.share-box__status {
+  min-height: 1.3em;
+  margin: 0;
+  color: var(--classic-ink);
+  font-size: 0.85rem;
+}
+
+/* Challenges ------------------------------------------------------------------------------ */
+
+.challenge {
+  display: grid;
+  gap: 12px;
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: 24px;
+  overflow-y: auto;
+  border-color: rgb(181 140 255 / 0.45);
+  box-shadow:
+    0 30px 80px -30px var(--text-shadow),
+    0 0 60px -30px #b58cff;
+}
+
+.challenge .panel__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.challenge--intro {
+  justify-items: center;
+  text-align: center;
+}
+
+.challenge__emblem {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(181 140 255 / 0.35), transparent 70%);
+  color: #cdb6ff;
+}
+
+.challenge__emblem .icon {
+  width: 40px;
+  height: 40px;
+}
+
+.challenge__sign {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.challenge__sign small {
+  color: var(--ink-faint);
+}
+
+.challenge__nickname {
+  width: 100%;
+}
+
+.challenge__lines {
+  justify-self: center;
+}
+
+.challenge .menu {
+  margin-top: 0;
+}
+
+.overlay--solve[data-outcome='lost'] .results__title {
+  text-shadow:
+    0 0 2px var(--headline),
+    0 0 16px #8e87aa;
+}
+
+/* Light theme ------------------------------------------------------------------------------ */
+
+:root[data-theme='light'] .pack__name,
+:root[data-theme='light'] .calendar__month {
+  color: #3a2a6a;
+}
+
+:root[data-theme='light'] .daily__streak,
+:root[data-theme='light'] .daily-results__streak {
+  color: #c2410c;
+}
+
+:root[data-theme='light'] .puzzle-tile--solved .puzzle-tile__number {
+  color: #1c1930;
+}
+
+:root[data-theme='light'] .challenge__emblem {
+  color: #6b3fd6;
+}
+
+:root[data-theme='light'] .puzzle-tile__stars,
+:root[data-theme='light'] .title__mode--waiting::after {
+  color: #b7791f;
+}
+
+/* Narrow and short screens ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .tricks__packs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 480px) {
+  .tricks__packs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pack {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .pack__blurb {
+    display: none;
+  }
+
+  .pack__name {
+    font-size: 1.05rem;
+  }
+
+  .puzzle-tile {
+    grid-template-columns: 20px minmax(0, 1fr);
+    min-height: 30px;
+    padding: 3px 6px;
+    font-size: 0.75rem;
+  }
+
+  .puzzle-tile__number {
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+  }
+
+  .puzzle-tile__stars {
+    display: none;
+  }
+
+  .puzzle-card {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .puzzle-card__brief {
+    font-size: 0.9rem;
+  }
+
+  .daily {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    align-content: start;
+    gap: 8px;
+  }
+
+  .daily__today,
+  .calendar {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  /* The picture beside the words, so the play button stays on screen. */
+  .daily__today {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+  }
+
+  .daily__about {
+    gap: 6px;
+  }
+
+  .daily__twist,
+  .daily__next {
+    font-size: 0.75rem;
+  }
+
+  .daily__status {
+    font-size: 0.8rem;
+  }
+
+  .daily__facts li {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+  }
+
+  .daily__actions .button {
+    min-height: 38px;
+    padding: 0.5em 1em;
+  }
+
+  .calendar__day {
+    aspect-ratio: auto;
+    min-height: 26px;
+  }
+
+  .daily-results__picture {
+    max-height: 32vh;
+    width: auto;
+  }
+
+  .daily-results__bananas {
+    font-size: 1.1rem;
+  }
+
+  .share-box__text {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .trick-panel {
+    top: calc(max(8px, env(safe-area-inset-top)) + 50px);
+    padding: 6px 10px;
+  }
+
+  .trick-panel__goal {
+    font-size: 0.7rem;
+  }
+
+  .challenge {
+    gap: 8px;
+    padding: 14px;
+  }
+
+  .challenge .panel__title {
+    font-size: 1.4rem;
+  }
+
+  .challenge__emblem {
+    display: none;
+  }
+
+  .daily-results {
+    padding: 14px;
+  }
+
+  .daily-results .results__title {
+    font-size: 1.5rem;
+  }
+}

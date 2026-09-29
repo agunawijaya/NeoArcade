@@ -92,6 +92,42 @@ more.
 
 ![A stage card: the rival, the twist in a sentence and a little diagram, the stars on offer](../media/stage-card.jpg "Know what you're walking into")
 
+### A daily city, puzzles, and shots to send
+
+Every day there is a new **Daily Skyline**: one city, one world, one wind
+and one twist, the same for everyone on the planet. You get ten bananas
+and one scored go at a target that never throws back. Then you share a
+little line of bananas and a 💥 that says how you did, and nothing about
+how:
+
+```
+Skyline Showdown · Daily #16 · Moon 🌬️ calm
+🍌🍌💥  3/10
+```
+
+Keep a streak going, fill a calendar, and practise all you like once the
+day's attempt is in.
+
+![Every throw of a daily attempt drawn over its city](../media/daily-results.jpg "Three bananas, one bonk")
+
+**Trick Shot** is twenty-four hand-made puzzles, one throw at a time: drop
+a banana down a chimney between two towers, ring a bell across the city,
+thread a hoop, bank off a tall wall, split a Tri-Banana so all three land
+on the pad, or throw backwards into a hurricane and let it bring the
+banana home. Each pack teaches one idea, from *angle and power* to the
+final pack, called *Impossible?* (every one of them has been solved). A
+miss costs nothing: one key and you're throwing again.
+
+![The Trick Shot pack map](../media/trick-map.jpg "Warm-up, Wind Readers, Trick Arcs, Impossible?")
+
+And when you land something wonderful, in any mode, send it. A
+**challenge link** carries your shot to a friend, who watches it fly from
+exactly where you stood, in exactly your wind, and then gets one throw to
+match it or beat it. It all happens in the browser, no accounts, no
+server; the link holds no name unless you sign it.
+
+![A challenge link, opened](../media/challenge.jpg "Ada challenges you!")
+
 ### "So close!"
 
 Every miss tells you how close it came: a pin where the banana landed, the
@@ -109,10 +145,10 @@ thump. Player 1 and player 2 each dress their own gorilla. Stars, badges
 and your Arcade Pass level unlock the rest. None of it changes a thing
 about how a banana flies. A hat is a hat.
 
-Twenty-eight badges wait on your **Arcade Pass**, the profile you carry
+Thirty-five badges wait on your **Arcade Pass**, the profile you carry
 across every NeoArcade game: Sunburn, Moonshot, Demolition, Rival
-Collector, Three-Star General, and a few secret ones we won't spoil (one
-involves a drone and a very generous player).
+Collector, Three-Star General, Hole in One, Puzzle Master, and a few secret
+ones we won't spoil (one involves a drone and a very generous player).
 
 ![The wardrobe, with a gorilla showing off](../media/wardrobe.jpg "Sixty ways to look good while throwing fruit")
 
@@ -145,6 +181,8 @@ Because it is still one of the best "one more throw" games ever written,
 and now it has somewhere to go. Take the tour on your own an evening at a
 time, dress your gorilla in what you've earned, then drag a friend to the
 sofa for a Quick Match against each other, or against the rival who gave
-you the most trouble.
+you the most trouble. Or give it two minutes a day: the daily city, a
+puzzle or two, and a link to the friend who thinks they throw better than
+you.
 
 ![Earth watching over a lunar duel](../media/moon.jpg "On the Moon there is no wind; just you, gravity and a very curious planet")

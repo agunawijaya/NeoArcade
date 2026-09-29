@@ -27,6 +27,18 @@ const drone: EmblemDrawer = (pen) => {
   pen.path('M32 40v8', { stroke: 'ink', width: 3 });
 };
 
+const crate: EmblemDrawer = (pen) => {
+  pen.rect(14, 18, 36, 32, { radius: 2 });
+  pen.path('M14 34h36M18 22l28 24', { stroke: 'face', width: 3 });
+  pen.path('M24 30c4 6 14 6 18-2', { stroke: 'accent', width: 3 });
+};
+
+const challenge: EmblemDrawer = (pen) => {
+  pen.path('M14 14l36 36M50 14L14 50', { stroke: 'ink', width: 6 });
+  pen.path('M18 42l4 4M46 42l-4 4', { stroke: 'accent', width: 6 });
+  pen.circle(32, 32, 5, { fill: 'accent' });
+};
+
 export default definePassManifest({
   game: 'skyline-showdown',
   badges: [
@@ -93,6 +105,22 @@ export default definePassManifest({
       hint: 'Win a Quick Match against a rival you have beaten on the World Tour.',
       tier: 'bronze',
       emblem: glyphs.heart,
+    },
+    {
+      id: 'early-bird',
+      name: 'Early Bird',
+      description: 'Played your first Daily Skyline. Same city, whole planet, one shot at it.',
+      hint: 'Play a Daily Skyline to the end.',
+      tier: 'bronze',
+      emblem: glyphs.calendar,
+    },
+    {
+      id: 'matched',
+      name: 'Matched!',
+      description: 'Took a friend’s challenge and matched it, or beat it. Send one back.',
+      hint: 'Win a challenge from a challenge link.',
+      tier: 'bronze',
+      emblem: challenge,
     },
     {
       id: 'sunburn',
@@ -185,6 +213,38 @@ export default definePassManifest({
       emblem: glyphs.rocket,
     },
     {
+      id: 'on-a-roll',
+      name: 'On a Roll',
+      description: 'Seven dailies in seven days. The skyline knows your name.',
+      hint: 'Play the Daily Skyline seven days in a row.',
+      tier: 'silver',
+      emblem: glyphs.flame,
+    },
+    {
+      id: 'hole-in-one',
+      name: 'Hole in One',
+      description: 'Hit the daily target with your very first banana. Screenshot it.',
+      hint: 'Hit a Daily Skyline target with your first throw.',
+      tier: 'gold',
+      emblem: glyphs.target,
+    },
+    {
+      id: 'puzzle-master',
+      name: 'Puzzle Master',
+      description: 'Solved all twenty-four Trick Shot puzzles, the impossible ones too.',
+      hint: 'Solve every Trick Shot puzzle.',
+      tier: 'gold',
+      emblem: crate,
+    },
+    {
+      id: 'show-off',
+      name: 'Show-off',
+      description: 'Every Trick Shot puzzle, every star: all seventy-two. With style.',
+      hint: 'Earn all three stars on every Trick Shot puzzle.',
+      tier: 'gold',
+      emblem: glyphs.sparkle,
+    },
+    {
       id: 'rival-collector',
       name: 'Rival Collector',
       description: 'Beat every rival on the World Tour. They have formed a support group.',
@@ -253,6 +313,13 @@ export default definePassManifest({
       tier: 'secret',
       emblem: drone,
     },
+    {
+      id: 'copycat',
+      name: 'Copycat',
+      description: 'Landed a challenge right where your friend’s banana came down. Spooky.',
+      tier: 'secret',
+      emblem: glyphs.eye,
+    },
   ],
   cosmetics: [
     { id: 'dance-jump', name: 'Jump for joy', kind: 'Victory dance', unlock: { level: 2 } },
@@ -300,5 +367,10 @@ export default definePassManifest({
     { key: 'craters', label: 'Craters carved' },
     { key: 'stars', label: 'Tour stars' },
     { key: 'rivalsBeaten', label: 'Rivals beaten' },
+    { key: 'dailiesPlayed', label: 'Dailies played' },
+    { key: 'bestStreak', label: 'Best daily streak' },
+    { key: 'puzzlesSolved', label: 'Puzzles solved' },
+    { key: 'trickStars', label: 'Trick Shot stars' },
+    { key: 'challengesWon', label: 'Challenges won' },
   ],
 });

@@ -9,9 +9,9 @@ export interface PauseHandlers {
   leave(): void;
 }
 
-/** What the pause menu offers depends on where the match came from. */
+/** What the pause menu offers depends on where the match came from; a scored daily cannot restart. */
 export interface PauseLabels {
-  restart: string;
+  restart: string | null;
   leave: string;
 }
 
@@ -57,7 +57,8 @@ export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, h
   return {
     element,
     open(labels: PauseLabels, message: string | null = null) {
-      restart.textContent = labels.restart;
+      restart.textContent = labels.restart ?? '';
+      restart.hidden = labels.restart === null;
       leave.textContent = labels.leave;
       note.textContent = message ?? '';
       note.hidden = !message;
@@ -73,6 +74,7 @@ export function buildPauseMenu(handlers: PauseHandlers, howToPlayHref: string, h
 export interface VictoryHandlers {
   rematch(): void;
   settings(): void;
+  challenge(): void;
 }
 
 /** A rival's parting words under the result. */
@@ -94,6 +96,13 @@ export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) 
   rematch.addEventListener('click', handlers.rematch);
   const settings = h('button', { class: 'button', type: 'button' }, 'Match settings');
   settings.addEventListener('click', handlers.settings);
+  const challenge = h(
+    'button',
+    { class: 'button', type: 'button' },
+    icon(ICONS.swords),
+    'Challenge a friend',
+  );
+  challenge.addEventListener('click', handlers.challenge);
 
   const element = h(
     'section',
@@ -113,6 +122,7 @@ export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) 
         'div',
         { class: 'menu menu--row' },
         rematch,
+        challenge,
         settings,
         h('a', { class: 'button button--quiet', href: hallHref }, 'Back to the Hall'),
       ),
@@ -120,7 +130,9 @@ export function buildVictoryScreen(handlers: VictoryHandlers, hallHref: string) 
   );
   return {
     element,
-    show(summary: MatchSummary, line: PartingLine | null = null) {
+    /** `challengeable`: a person's hit this match can be sent to a friend. */
+    show(summary: MatchSummary, line: PartingLine | null, challengeable: boolean) {
+      challenge.hidden = !challengeable;
       const { names, scores, winner, accents } = summary;
       title.textContent = winner === null ? 'A draw!' : `${names[winner]} wins!`;
       element.style.setProperty('--accent', winner === null ? '#ffffff' : accents[winner]);

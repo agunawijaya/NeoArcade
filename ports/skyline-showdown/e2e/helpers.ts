@@ -36,16 +36,18 @@ export function testSettings(overrides: Partial<Settings> = {}): Settings {
 
 /**
  * Opens the game on its title screen with these settings (and anything else
- * put in storage first, such as a World Tour save), its cities seeded.
+ * put in storage first, such as a World Tour save), its cities seeded, on a
+ * paused clock set to `time`.
  */
 export async function openGame(
   page: Page,
   settings: Settings,
   seed: number,
   storage: Record<string, unknown> = {},
+  time: Date = CLOCK_START,
 ) {
-  await page.clock.install({ time: CLOCK_START });
-  await page.clock.pauseAt(new Date(CLOCK_START.getTime() + 1000));
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 1000));
   const entries = { 'neoarcade:skyline-showdown:settings': settings, ...storage };
   await page.addInitScript((stored) => {
     // Only on the first load: a test that reloads keeps what the game saved.

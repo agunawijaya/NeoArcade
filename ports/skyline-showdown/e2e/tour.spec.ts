@@ -115,7 +115,7 @@ test('the badges screen shows this game’s shelf of the Pass', async ({ page })
   await openGame(page, settings, 1);
   await page.getByRole('button', { name: 'Badges' }).click({ force: true });
   await expect(page.getByRole('heading', { name: 'Skyline Showdown' })).toBeVisible();
-  await expect(page.locator('.neo-shelf__count')).toContainText('0 / 28 badges');
+  await expect(page.locator('.neo-shelf__count')).toContainText('0 / 35 badges');
 });
 
 test('a rival beaten on the tour can be picked in Quick Match', async ({ page }) => {
@@ -133,6 +133,8 @@ test('the main menu offers every mode, and nothing that does not work yet', asyn
   const menu = page.getByRole('navigation', { name: 'Main menu' });
   await expect(menu.locator('button, a')).toHaveText([
     /World Tour/,
+    /Daily Skyline/,
+    /Trick Shot/,
     'Quick Match',
     'Wardrobe',
     'Badges',

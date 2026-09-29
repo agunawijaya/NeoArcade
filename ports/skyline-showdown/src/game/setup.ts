@@ -1,6 +1,8 @@
+import type { ChallengeSource } from '../challenge/link';
+import type { DailySkyline } from '../daily/daily';
 import { DEFAULT_STYLE, type CpuLevel, type PlayStyle } from '../engine/ai';
 import type { PlayerIndex } from '../engine/gorillas';
-import type { MatchOptions } from '../engine/match';
+import type { MatchOptions, MatchState, RoundStart } from '../engine/match';
 import type { Weather } from '../render/atmosphere';
 import { lookFor, PLAYER_ACCENTS, type GorillaLook } from '../render/gorilla';
 import { classicKit, KITS, type CityKit } from '../render/kits';
@@ -14,7 +16,7 @@ import {
   type Settings,
 } from '../settings';
 import { RIVALS, type Rival, type RivalId } from '../tour/rivals';
-import type { Stage } from '../tour/stages';
+import { STAGES, type Stage } from '../tour/stages';
 import type { Outfit } from '../wardrobe/items';
 
 /**
@@ -47,6 +49,10 @@ export interface MatchSetup {
   scenery: Scenery;
   /** The World Tour stage being played; null in a Quick Match. */
   tourStage: Stage | null;
+  /** The Daily Skyline being played, the match it starts from, and whether this attempt counts. */
+  daily: { skyline: DailySkyline; start: MatchState; scored: boolean } | null;
+  /** How a round of this match goes into a challenge link; null where none are offered. */
+  linkSource: ((start: RoundStart) => ChallengeSource) | null;
 }
 
 /** A person's name on the tour: "You" unless they have chosen one. */
@@ -75,6 +81,7 @@ export function quickMatchSetup(
   outfits: readonly [Outfit, Outfit],
   rivalsBeaten: readonly RivalId[],
 ): MatchSetup {
+  const match = matchOptionsFrom(settings, seed);
   const players = ([0, 1] as const).map((player) =>
     plainContender(settings, player, outfits[player]),
   ) as [Contender, Contender];
@@ -83,7 +90,7 @@ export function quickMatchSetup(
     players[1] = rivalContender(RIVALS[rivalId]);
   }
   return {
-    match: matchOptionsFrom(settings, seed),
+    match,
     players,
     aiming: settings.aiming,
     aimAssist: settings.aimAssist,
@@ -93,6 +100,16 @@ export function quickMatchSetup(
       timeOfDay: (round) => timeOfDayForRound(round, settings.weather),
     },
     tourStage: null,
+    daily: null,
+    linkSource: (start) => ({
+      kind: 'quick',
+      roundSeed: start.seed,
+      round: start.number,
+      world: match.world,
+      powerUps: [...match.powerUps],
+      firstTurn: start.turn,
+      held: start.held,
+    }),
   };
 }
 
@@ -142,5 +159,53 @@ export function tourSetup(
       timeOfDay: () => stage.timeOfDay,
     },
     tourStage: stage,
+    daily: null,
+    linkSource: (start) => ({
+      kind: 'tour',
+      stage: STAGES.indexOf(stage),
+      roundSeed: start.seed,
+      round: start.number,
+      firstTurn: start.turn,
+    }),
+  };
+}
+
+/** The gorilla a Daily Skyline is thrown at. It never throws back. */
+export const TARGET_ACCENT = '#ff5d5d';
+
+/**
+ * A Daily Skyline: you on the left, the still target on the right, in the
+ * day's world. Aim assist is off for everyone, so every result on the
+ * share line means the same thing; only practice runs make challenge links,
+ * so the scored attempt is never given away.
+ */
+export function dailySetup(
+  skyline: DailySkyline,
+  start: MatchState,
+  scored: boolean,
+  settings: Settings,
+  outfits: readonly [Outfit, Outfit],
+): MatchSetup {
+  return {
+    match: skyline.options,
+    players: [
+      {
+        name: tourName(settings),
+        cpu: null,
+        look: lookFor(outfits[0], PLAYER_ACCENTS[0]),
+        rival: null,
+      },
+      { name: 'Target', cpu: null, look: lookFor(outfits[1], TARGET_ACCENT), rival: null },
+    ],
+    aiming: settings.aiming,
+    aimAssist: false,
+    scenery: {
+      kit: classicKit(skyline.world),
+      weather: settings.weather,
+      timeOfDay: () => (skyline.day.number % 3) * 0.9,
+    },
+    tourStage: null,
+    daily: { skyline, start, scored },
+    linkSource: scored ? null : () => ({ kind: 'daily', day: skyline.day.number }),
   };
 }

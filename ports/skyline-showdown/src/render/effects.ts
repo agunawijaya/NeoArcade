@@ -239,6 +239,30 @@ export class Effects {
     }
   }
 
+  /** A crate bursting into planks and splinters. */
+  splinter(x: number, y: number, colour: string) {
+    this.flashes.push({ x, y, radius: 14, life: 0, maxLife: 0.18, colour: '#fff4d8' });
+    for (let i = 0; i < 16; i++) {
+      const angle = -Math.PI * Math.random();
+      const speed = 50 + Math.random() * 70;
+      this.particles.push(
+        this.make({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          maxLife: 0.9 + Math.random() * 0.6,
+          size: 1.2 + Math.random() * 1.8,
+          colour: i % 3 ? colour : '#ffe16a',
+          gravity: 180,
+          drag: 0.96,
+          shape: 'chunk',
+          spin: (Math.random() - 0.5) * 24,
+        }),
+      );
+    }
+  }
+
   /** A small puff where a banana leaves a gorilla's hand. */
   whoosh(x: number, y: number) {
     for (let i = 0; i < 5; i++) {

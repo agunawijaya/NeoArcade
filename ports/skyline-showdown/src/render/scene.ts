@@ -1,6 +1,6 @@
 import { createRng } from '@shared/rng';
 import type { Point } from '../engine/geometry';
-import { gorillaCentre, type PlayerIndex } from '../engine/gorillas';
+import { gorillaCentre, isOffstage, type PlayerIndex } from '../engine/gorillas';
 import type { Round } from '../engine/match';
 import type { Balloon, PowerUpKind } from '../engine/powerups';
 import type { ShotRecord } from '../engine/shot';
@@ -22,6 +22,7 @@ import {
   type TimeOfDay,
 } from './palette';
 import { SkyBody } from './sky-body';
+import type { TargetView } from './targets';
 
 export const POWER_UP_COLOURS: Record<PowerUpKind, string> = {
   golden: '#ffd23f',
@@ -92,6 +93,10 @@ export class Scene {
   /** Aim assist, or the hidden whole-path guide, for the throw being aimed. */
   guide: ThrowPreview | null = null;
   activePlayer: PlayerIndex | null = null;
+  /** Trick Shot's crates, bells, hoops and pads. */
+  targets: TargetView | null = null;
+  /** A gorilla to aim at (a daily's target, a puzzle's dummy), marked with a reticle. */
+  markedTarget: PlayerIndex | null = null;
   /** Whose bananas are in the air, for their skin and trail. */
   thrower: PlayerIndex = 0;
   wind: number;
@@ -150,6 +155,7 @@ export class Scene {
     this.atmosphere.update(delta, this.wind, this.city.rooftops, reducedMotion);
     this.effects.update(delta, this.wind);
     this.skyBody.update(delta);
+    this.targets?.update(delta);
     for (const actor of this.actors) actor.update(delta);
 
     const live = new Set(this.bananas.map((banana) => banana.id));
@@ -195,14 +201,16 @@ export class Scene {
     this.atmosphere.drawRooftops(ctx, this.city.rooftops, this.wind, time);
     this.backdrop.drawStreet(ctx, area, this.weather.rain, time);
     this.hazards.drawFront(ctx, area, this.reducedMotion);
+    this.targets?.draw(ctx, time, this.reducedMotion);
 
     this.drawGhost(ctx);
     this.drawBalloon(ctx);
     this.actors.forEach((actor, index) => {
       const gorilla = this.round.gorillas[index as PlayerIndex];
-      actor.draw(ctx, gorilla, this.palette.rimLight, time);
+      if (!isOffstage(gorilla)) actor.draw(ctx, gorilla, this.palette.rimLight, time);
     });
     this.drawTurnMarker(ctx);
+    this.drawTargetMarker(ctx);
     this.drawGuide(ctx);
     this.drawAimLine(ctx);
     this.drawBananas(ctx);
@@ -226,6 +234,31 @@ export class Scene {
     ctx.lineTo(x, y + 2);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
+  }
+
+  /** A reticle bobbing over the gorilla to aim at, until it is hit. */
+  private drawTargetMarker(ctx: CanvasRenderingContext2D) {
+    if (this.markedTarget === null) return;
+    const actor = this.actors[this.markedTarget];
+    if (actor.mood === 'gone') return;
+    const gorilla = this.round.gorillas[this.markedTarget];
+    const bob = this.reducedMotion ? 0 : Math.sin(this.time * 2.6) * 1.2;
+    const x = gorilla.x + 15;
+    const y = gorilla.y - 14 + bob;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = withAlpha('#ff5d5d', 0.9);
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.moveTo(x - 7, y);
+    ctx.lineTo(x - 2.5, y);
+    ctx.moveTo(x + 2.5, y);
+    ctx.lineTo(x + 7, y);
+    ctx.moveTo(x, y - 7);
+    ctx.lineTo(x, y - 2.5);
+    ctx.stroke();
     ctx.restore();
   }
 

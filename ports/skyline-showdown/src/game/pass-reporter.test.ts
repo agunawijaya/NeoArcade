@@ -6,7 +6,9 @@ import { createMatch, takeTurn, type MatchState, type TurnAim } from '../engine/
 import { recordStage } from '../tour/progress';
 import { emptyTour } from '../tour/save';
 import { stageById, type Stage } from '../tour/stages';
-import { PassReporter, XP } from './pass-reporter';
+import { PUZZLES } from '../tricks/packs';
+import { emptyTricks, recordSolve } from '../tricks/progress';
+import { PassReporter, reportChallenge, reportDaily, reportSolve, XP } from './pass-reporter';
 
 function setUp(seed = 6) {
   const arcade = createArcadePass({ backend: null, watchOtherTabs: false });
@@ -97,5 +99,55 @@ describe('PassReporter', () => {
     expect(pass.hasBadge('singing-in-the-rain')).toBe(true);
     expect(pass.statOf('stars')).toBe(3);
     expect(pass.statOf('rivalsBeaten')).toBe(1);
+  });
+});
+
+describe('the new modes on the Pass', () => {
+  it('pays for a scored daily, more for a hit, and knows a hole in one and a week in a row', () => {
+    const { pass } = setUp();
+    const granted = reportDaily(
+      pass,
+      3,
+      { outcome: 'hit', throws: 1, aims: [] },
+      { current: 1, best: 1 },
+    );
+    expect(granted).toBe(XP.dailyPlayed + XP.dailyHit);
+    expect(pass.hasBadge('early-bird')).toBe(true);
+    expect(pass.hasBadge('hole-in-one')).toBe(true);
+    expect(pass.hasBadge('on-a-roll')).toBe(false);
+    reportDaily(pass, 9, { outcome: 'outOfThrows', throws: 10, aims: [] }, { current: 7, best: 7 });
+    expect(pass.hasBadge('on-a-roll')).toBe(true);
+    expect(pass.statOf('dailiesPlayed')).toBe(2);
+    expect(pass.statOf('bestStreak')).toBe(7);
+  });
+
+  it('pays for a first solve and new stars, and crowns the puzzle master', () => {
+    const { pass } = setUp();
+    const [first] = PUZZLES;
+    if (!first) throw new Error('No puzzles.');
+    const once = recordSolve(emptyTricks(), first, { attempts: 1, styled: false });
+    expect(reportSolve(pass, first, once)).toBe(XP.puzzleSolved + 2 * XP.trickStar);
+    let save = emptyTricks();
+    let last = once;
+    for (const puzzle of PUZZLES) {
+      last = recordSolve(save, puzzle, { attempts: 1, styled: true });
+      save = last.save;
+    }
+    reportSolve(pass, PUZZLES.at(-1) ?? first, last);
+    expect(pass.hasBadge('puzzle-master')).toBe(true);
+    expect(pass.hasBadge('show-off')).toBe(true);
+    expect(pass.statOf('trickStars')).toBe(72);
+  });
+
+  it('pays for the first win on a challenge only, and spots a copycat', () => {
+    const { pass } = setUp();
+    expect(reportChallenge(pass, { outcome: 'lost', copycat: false }, false)).toBe(0);
+    expect(reportChallenge(pass, { outcome: 'matched', copycat: true }, true)).toBe(
+      XP.challengeWon,
+    );
+    expect(reportChallenge(pass, { outcome: 'beaten', copycat: false }, false)).toBe(0);
+    expect(pass.hasBadge('matched')).toBe(true);
+    expect(pass.hasBadge('copycat')).toBe(true);
+    expect(pass.statOf('challengesWon')).toBe(1);
   });
 });

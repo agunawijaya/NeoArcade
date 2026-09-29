@@ -3,12 +3,12 @@
     "slug": "skyline-showdown",
     "title": "Skyline Showdown",
     "tagline": "Two gorillas, a city at dusk and a lot of exploding bananas.",
-    "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city. Every miss blows a hole in the skyline and teaches you something; the first clean hit brings the house down. Then take the World Tour, from Jakarta to the eye of Jupiter's storm.",
+    "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city. Every miss blows a hole in the skyline and teaches you something; the first clean hit brings the house down. Then take the World Tour, from Jakarta to the eye of Jupiter's storm, play the day's city that everyone on Earth is playing, or crack twenty-four one-throw puzzles.",
     "highlights": [
       "Learn it in one throw, master it in the wind",
       "A World Tour of fifteen stops, each with a twist and a rival",
-      "Play a friend on one keyboard, or a CPU at four levels",
-      "A wardrobe of sixty things to wear, and badges on your Arcade Pass"
+      "A Daily Skyline for the whole planet, 24 Trick Shot puzzles, and shots to send as links",
+      "Play a friend on one keyboard or a CPU at four levels, in sixty things to wear"
     ],
     "screens": [
       {
@@ -20,8 +20,8 @@
         "caption": "Pull back, read the wind, let it fly."
       },
       {
-        "image": "media/tokyo.jpg",
-        "caption": "In Tokyo a billboard drone patrols the sky."
+        "image": "media/puzzle.jpg",
+        "caption": "Trick Shot: one throw, one puzzle, as many tries as you like."
       },
       {
         "image": "media/building-hit.jpg",
@@ -32,8 +32,8 @@
         "caption": "On the Moon, a banana floats for ages."
       },
       {
-        "image": "media/jupiter.jpg",
-        "caption": "On Jupiter it drops like a stone."
+        "image": "media/daily-results.jpg",
+        "caption": "The Daily Skyline: one city a day, the same for everyone."
       },
       {
         "image": "media/wardrobe.jpg",

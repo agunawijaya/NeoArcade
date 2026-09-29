@@ -241,6 +241,74 @@ as before, and old `?seed=` links replay the same cities.
 - **Instant replay** now shows at most the last 2.5 seconds of flight before
   a hit, so slow lunar arcs don't take half a minute to replay.
 
+### Trick Shot, the Daily Skyline and challenge links (prompt 004)
+
+- **The same bits in every browser** (ADR 0012). Before building the modes,
+  seeded matches were run in Chromium 153, Firefox 155 and WebKit 26.6
+  against Node: all three drifted from Node's throws, because `Math.sin`,
+  `Math.cos` and `Math.hypot` round their last bit differently per engine.
+  The simulation now takes its sines and cosines from `sinCosDegrees` and
+  its roots from `squareRoot` (`engine/exact-math.ts`, only `+ − × ÷`), and
+  compares distances squared. Every throw moved by a few units in the last
+  place; nothing a player can see changed. A test scans the simulation for
+  inexact maths, and a determinism test compares 406 checks (matches,
+  puzzle solutions, a year of dailies, links) in all three browsers.
+- **Angles to a hundredth of a degree.** The engine rounds every throw's
+  angle to 0.01°, as it already rounded velocity to a whole number, so a
+  challenge link carries exactly the throw that was made. Hand aiming was
+  already in tenths.
+- **Engine version and rules** (`engine/version.ts`): the fingerprint of
+  today's rules is pinned by a test; a link from an engine with other rules
+  is explained rather than replayed.
+- **Solo rounds and throw limits.** The engine can keep the turn with one
+  gorilla (the other a still target) and end a round after N throws
+  without a point: the daily and Trick Shot's dummies. Any round can be
+  rebuilt from its seed, and a match can start from a given round, turn and
+  held power-ups.
+- **Trick Shot.** 24 puzzles in four packs of six (Warm-up: angle and power;
+  Wind Readers: the air; Trick Arcs: hoops, the sun, bounces, splits and
+  golden blasts; Impossible?: all of it, tightly). Targets are a dummy
+  gorilla, crates, bells, hoops and painted landing pads; rules are *through
+  the sun*, *two bounces* and *all three bananas on target*. One throw per
+  attempt, instant retry (R, the pad's X, or a tap after landing). Stars
+  for solving, for par, and for a style goal. Packs open four solves at a
+  time. Every puzzle's reference solution is replayed by the tests.
+  - The brief's example "Tri-Banana: all three must land" became *all three
+    on the pad*. With crates, three bananas and three crates it was the
+    same as "hit every crate"; a pad takes all three.
+  - A banana thrown with no rise never splits, so the every-banana rule
+    also requires a split: otherwise a flat throw could land its single
+    banana and count.
+  - A bell's bullseye made no sense (a banana strikes it on its rim), so
+    bullseye goals are for pads and crates only.
+- **Puzzle Lab.** `dev/puzzles/` on the dev server: a puzzle in the real
+  renderer, the validator's complaints and a map of every aimable throw.
+- **Daily Skyline** (ADR 0013). From the UTC date: a world, one light
+  twist (never heat haze or lightning; no air twists on the Moon), and a
+  round seed. You against a still target, ten bananas, one scored attempt
+  kept throw by throw (leaving mid-attempt resumes it, never restarts it),
+  unlimited practice after. A self-hit ends the attempt. Streaks, a
+  calendar, the next daily's time in local time, a spoiler-free share line
+  with Copy and the share sheet. Daily #1 is 2026-09-29.
+- **Challenge links** (ADR 0014). A shot and its round in a few dozen bytes
+  after `#c=`: the source (a Quick Match round, a tour stage round, a
+  puzzle or a daily), every throw of the round, the wind as a check, the
+  engine version and a checksum; a nickname only if typed. The friend
+  watches the shot, then throws from the same moment: match a hit, or hit
+  or land closer after a miss. Offered from the replay of any person's hit,
+  the victory and results screens, and Trick Shot's solve card; from a
+  daily only in practice.
+- **Aim assist** is off in the daily, Trick Shot and challenges, whose
+  results are compared between people.
+- **Arcade Pass.** Seven badges (Early Bird, Matched!, On a Roll, Hole in
+  One, Puzzle Master, Show-off, and the secret Copycat), five stats, and XP
+  for dailies, solves, stars and challenges. That makes 35 badges, a few
+  more than the Pass guide's 20–30: the brief asked for these seven, and the
+  modes deserve their own shelf.
+- **Main menu.** Title → World Tour · Daily Skyline · Trick Shot · Quick
+  Match · Wardrobe · Badges · Settings · How to play · Back to Hall. The
+  Daily button carries a quiet dot while today's is still open.
+
 ## Known differences that stay on purpose
 
 - Rooftop props (water towers, antennas, chimneys, flags, billboards,

@@ -1,0 +1,85 @@
+body.lab {
+  margin: 0;
+  background: #0b0816;
+  color: #ece8ff;
+  font:
+    14px/1.4 system-ui,
+    sans-serif;
+}
+
+.lab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #2a2440;
+}
+
+.lab__head h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.lab__head a {
+  margin-left: auto;
+  color: #ffd23f;
+}
+
+.lab__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 16px;
+  padding: 16px;
+}
+
+.lab__stage {
+  position: relative;
+  aspect-ratio: 640 / 350;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.lab__panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+#map {
+  width: 362px;
+  height: 400px;
+  image-rendering: pixelated;
+  border: 1px solid #2a2440;
+  cursor: crosshair;
+}
+
+#problems {
+  margin: 0;
+  padding-left: 18px;
+  color: #ff8080;
+}
+
+.lab__legend {
+  color: #a9a2c8;
+  font-size: 12px;
+}
+
+.lab__key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 4px 0 8px;
+}
+
+.lab__key--solved {
+  background: #3fa9ff;
+}
+
+.lab__key--styled {
+  background: #ffd23f;
+}
+
+.lab__key--self {
+  background: #ff4d6d;
+}

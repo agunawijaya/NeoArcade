@@ -6,6 +6,7 @@ const PORT = 4173;
  * Browser tests for Skyline Showdown, kept with the port:
  *
  *   npx playwright test -c ports/skyline-showdown --project=smoke
+ *   npx playwright test -c ports/skyline-showdown --project='determinism-*'
  *   npx playwright test -c ports/skyline-showdown --project=screens
  *   npx playwright test -c ports/skyline-showdown --project=playtest
  *
@@ -37,6 +38,12 @@ export default defineConfig({
       testMatch: /\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } },
     },
+    // The engine itself in each browser engine, compared with Node (ADR 0012).
+    ...(['chromium', 'firefox', 'webkit'] as const).map((browserName) => ({
+      name: `determinism-${browserName}`,
+      testMatch: /\.determinism\.ts$/,
+      use: { browserName },
+    })),
     {
       name: 'screens',
       testMatch: /\.screens\.ts$/,

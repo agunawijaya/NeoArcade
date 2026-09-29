@@ -123,6 +123,29 @@ export function makeSkyline(rng: Rng, pattern: SlopePattern = pickSlopePattern(r
   return { pattern, buildings };
 }
 
+/** A block of a hand-built city: its width and its height above the street. */
+export type Block = readonly [width: number, height: number];
+
+/**
+ * A city built by hand, for Trick Shot: the blocks stand left to right from
+ * the same edge and with the same gaps as a rolled city, and get windows
+ * the same way.
+ */
+export function buildSkyline(blocks: readonly Block[], rng: Rng): Building[] {
+  const buildings: Building[] = [];
+  let x = 2;
+  for (const [width, height] of blocks) {
+    buildings.push({
+      x,
+      width,
+      top: STREET_Y - height,
+      windows: makeWindows(rng, x, width, height),
+    });
+    x += width + 2;
+  }
+  return buildings;
+}
+
 /**
  * Makes one building far taller than its neighbours, windows and all: the
  * World Tour's supertall tower.

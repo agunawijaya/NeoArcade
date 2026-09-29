@@ -11,6 +11,7 @@ export interface ResultsHandlers {
   next(stage: Stage): void;
   retry(stage: Stage): void;
   map(): void;
+  challenge(): void;
 }
 
 export interface TourResult {
@@ -25,6 +26,8 @@ export interface TourResult {
   unlocked: readonly WardrobeItem[];
   /** The stage to go on to, if there is one open. */
   next: Stage | null;
+  /** One of your hits can be sent to a friend as a challenge. */
+  challengeable: boolean;
 }
 
 export interface ResultsScreen {
@@ -149,6 +152,9 @@ export function buildResultsScreen(handlers: ResultsHandlers): ResultsScreen {
           ? [button('Next stop', ICONS.next, () => handlers.next(nextStage), true)]
           : []),
         button('Retry', ICONS.retry, () => handlers.retry(stage), !nextStage),
+        ...(result.challengeable
+          ? [button('Challenge a friend', ICONS.swords, handlers.challenge)]
+          : []),
         button('Map', ICONS.map, handlers.map),
       );
       element.hidden = false;
