@@ -23,7 +23,10 @@ export interface GameEntry {
   original: {
     title: string;
     author: string;
-    year: number;
+    /** The year it appeared; leave it out and give an `era` when it cannot be confirmed. */
+    year?: number;
+    /** "early 1980s": shown in place of a year nobody can vouch for. */
+    era?: string;
     platform?: string;
   };
   genres: string[];
@@ -136,9 +139,10 @@ function entryProblems(item: unknown): string[] {
     isRecord(original) &&
       isText(original.title) &&
       isText(original.author) &&
-      Number.isInteger(original.year) &&
+      (original.year === undefined ? isText(original.era) : Number.isInteger(original.year)) &&
+      (original.era === undefined || isText(original.era)) &&
       (original.platform === undefined || isText(original.platform)),
-    'original needs title, author, a whole-number year and optionally a platform',
+    'original needs title, author, a whole-number year (or an era) and optionally a platform',
   );
   need(
     isRecord(players) &&
@@ -157,6 +161,11 @@ function entryProblems(item: unknown): string[] {
   );
 
   return problems;
+}
+
+/** When the original appeared: its year, or its era when the year is not known. */
+export function originalDate(original: GameEntry['original']): string {
+  return original.era ?? String(original.year ?? '');
 }
 
 export function formatPlayers({ min, max }: GameEntry['players']): string {

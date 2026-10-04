@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { formatPlayers, parseCatalog, type GameEntry } from './catalog';
+import { formatPlayers, originalDate, parseCatalog, type GameEntry } from './catalog';
 
 const validGame: GameEntry = {
   slug: 'skyline-showdown',
@@ -25,6 +25,18 @@ const validGame: GameEntry = {
 describe('parseCatalog', () => {
   it('accepts a well-formed entry', () => {
     expect(parseCatalog([validGame])).toEqual({ games: [validGame], problems: [] });
+  });
+
+  it('accepts an era in place of a year nobody can confirm, but not neither', () => {
+    const undated = {
+      ...validGame,
+      original: { title: 'Trucker', author: 'Hughes Glantzberg', era: 'early 1980s' },
+    };
+    expect(parseCatalog([undated]).problems).toEqual([]);
+    expect(originalDate(undated.original)).toBe('early 1980s');
+    expect(originalDate(validGame.original)).toBe('1990');
+    const neither = { ...validGame, original: { title: 'Trucker', author: 'Hughes Glantzberg' } };
+    expect(parseCatalog([neither]).problems).toHaveLength(1);
   });
 
   it('accepts an empty catalog', () => {

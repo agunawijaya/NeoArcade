@@ -1,5 +1,5 @@
 import type { BadgeTally } from '@shared/pass';
-import { formatPlayers, type GameEntry } from './catalog';
+import { formatPlayers, originalDate, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
@@ -57,7 +57,9 @@ export function createDetailPanel(
     launchOnClick(playLink);
 
     const { original } = game;
-    const origin = [original.author, original.year, original.platform].filter(Boolean).join(' · ');
+    const origin = [original.author, originalDate(original), original.platform]
+      .filter(Boolean)
+      .join(' · ');
     const badges = badgesFor(game.slug);
 
     dialog.style.setProperty('--accent', game.accent);

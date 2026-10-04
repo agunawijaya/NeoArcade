@@ -1,6 +1,6 @@
 import type { BadgeTally } from '@shared/pass';
 import { badgeCount } from './badge-count';
-import { formatPlayers, type GameEntry } from './catalog';
+import { formatPlayers, originalDate, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { mediaUrl } from './docs-source';
 import { h, icon } from './dom';
@@ -92,7 +92,7 @@ export function buildSpotlight(game: GameEntry): Spotlight {
       h(
         'p',
         { class: 'spotlight__origin' },
-        `Inspired by ${original.title} · ${original.author} · ${original.year}`,
+        `Inspired by ${original.title} · ${original.author} · ${originalDate(original)}`,
       ),
       badgesLink,
     ),

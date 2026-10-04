@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Long Haul · NeoArcade</title>
+    <meta
+      name="description"
+      content="Run a big rig from coast to coast: cargo, tyres, route, speed, sleep and fuel, all traded against money and time. A modern remake inspired by Trucker by Hughes Glantzberg."
+    />
+    <meta name="theme-color" content="#101722" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f3eee1" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Set the theme before the first paint, so a daytime player never sees a flash of night.
+      let choice = 'auto';
+      try {
+        choice = JSON.parse(localStorage.getItem('neoarcade:long-haul:theme')) ?? 'auto';
+      } catch {
+        // Storage blocked or unreadable: follow the device.
+      }
+      const light =
+        choice === 'light' ||
+        (choice !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    </script>
+  </head>
+  <body>
+    <main id="game" class="game" tabindex="-1">
+      <noscript>Long Haul needs JavaScript to run.</noscript>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

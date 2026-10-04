@@ -122,5 +122,63 @@
       "architecture": "docs/ARCHITECTURE.md"
     },
     "added": "2026-09-28"
+  },
+  {
+    "slug": "long-haul",
+    "title": "Long Haul",
+    "tagline": "Los Angeles to New York, and every mile is money against time.",
+    "pitch": "Monday, 8 AM: oranges in the trailer, 190 gallons in the tank and Thursday's deadline 2,850 miles away. Choose the road, the speed, the stops and the sleep, an hour at a time, as in the original; then take an old rig into a Career across nineteen cities, or drive the Daily Haul everyone gets the same.",
+    "highlights": [
+      "The original rules, routes and verdicts, bugs fixed",
+      "Real time or leg by leg, from the cab or side on",
+      "Truck stops, a CB full of tips and 351 postcards",
+      "Single Haul, a Career and a Daily Haul"
+    ],
+    "screens": [
+      {
+        "image": "media/side-view.jpg",
+        "caption": "Across the red mesas, a truck stop sign ahead."
+      },
+      {
+        "image": "media/cab.jpg",
+        "caption": "From the cab: the gauges, the CB and the atlas on the dash."
+      },
+      {
+        "image": "media/truck-stop.jpg",
+        "caption": "A diner at night, neon lit, the rig at the pump."
+      },
+      {
+        "image": "media/map.jpg",
+        "caption": "The full map: the trail so far and the weather drifting east."
+      },
+      {
+        "image": "media/logbook.jpg",
+        "caption": "At the dock, the logbook, the receipts and the verdict."
+      },
+      {
+        "image": "media/text-mode.jpg",
+        "caption": "Or play it as it was: green text, an hour at a time."
+      }
+    ],
+    "original": {
+      "title": "Trucker",
+      "author": "Hughes Glantzberg",
+      "era": "early 1980s",
+      "platform": "IBM PC (GW-BASIC)"
+    },
+    "genres": ["Simulation", "Strategy"],
+    "players": {
+      "min": 1,
+      "max": 1
+    },
+    "accent": "#2fbf71",
+    "path": "long-haul/",
+    "cover": "long-haul",
+    "docs": {
+      "howToPlay": "docs/HOW-TO-PLAY.md",
+      "about": "docs/ABOUT.md",
+      "architecture": "docs/ARCHITECTURE.md"
+    },
+    "added": "2026-10-04"
   }
 ]

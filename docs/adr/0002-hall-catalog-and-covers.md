@@ -30,7 +30,8 @@ warning) and by `hall/src/catalog.test.ts` in CI (bad entries fail the build).
 | `screens` | `{ image, caption? }[]`, optional | Screenshots, relative to the port folder (normally `media/…`), each with a short caption. The Hall shows the first on cards and cycles through all of them in the spotlight and the detail panel. Without screens, the cover is shown. |
 | `original.title` | string | The classic this is based on. |
 | `original.author` | string | Author or company. |
-| `original.year` | integer | Year of the original. |
+| `original.year` | integer | Year of the original. May be left out when it cannot be confirmed, if `era` is given. |
+| `original.era` | string, optional | Shown in place of the year, e.g. `"early 1980s"`, when no year can be vouched for (added with Long Haul). |
 | `original.platform` | string, optional | e.g. `"MS-DOS (QBasic)"`. |
 | `genres` | string[], at least one | Drives the genre filter; the first two show on the card. |
 | `players` | `{ min, max }` integers, `1 <= min <= max` | Shown as "1–2 players". |
