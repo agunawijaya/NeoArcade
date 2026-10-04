@@ -974,6 +974,8 @@ once Playwright's Firefox and WebKit are installed
 - **Aim assist and the hidden aim guide.** Both come from `AimGuide`
   (`game/aim-guide.ts`), which asks `previewTurn`: the same simulation as
   `takeTurn`, without changing the match. Aim assist draws the first third
-  (`ASSIST_SHARE`); the hidden guide (C against the CPU, left out of the
-  menus and the player's guide on purpose) draws it all. Either marks the
+  (`ASSIST_SHARE`); the hidden guide (C, at any point of a match against
+  the computer: a CPU or rival in Quick Match and on the tour, or the Daily
+  Skyline's target; left out of the menus and the player's guide on purpose)
+  draws it all. Either marks the
   match as assisted, which caps a tour stage at one star.

@@ -3,9 +3,11 @@ import type { ShotRecord } from '../engine/shot';
 
 /**
  * Predicts the throw being aimed, for aim assist and for the hidden guide.
- * The hidden guide is a practice aid for games against the CPU, kept off
- * every menu and out of the player's guide: press C while aiming and the
- * throw is drawn exactly as it will fly, wind, buildings, balloons and all.
+ * The hidden guide is a practice aid for a person playing the computer (a
+ * CPU, a tour rival or the Daily Skyline's target), kept off every menu and
+ * out of the player's guide: press C at any point of the match and, on your
+ * turn, the throw is drawn exactly as it will fly, wind, buildings, balloons
+ * and all.
  */
 export class AimGuide {
   /** The hidden whole-path guide is switched on. */

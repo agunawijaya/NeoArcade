@@ -116,6 +116,26 @@ test.describe('Daily Skyline', () => {
     expect(errors).toEqual([]);
   });
 
+  test('the hidden aim guide works against the target too', async ({ page }) => {
+    test.setTimeout(180_000);
+    const hit = dailyHit();
+    const guide = () => page.evaluate(() => document.body.dataset.guide);
+    await openGame(page, testSettings(), 1);
+    await page.getByRole('button', { name: /Daily Skyline/ }).click({ force: true });
+    await page.getByRole('button', { name: 'Play today’s daily' }).click({ force: true });
+    await runUntilPhase(page, 'aim');
+    await run(page, 50);
+    expect(await guide()).toBe('off');
+
+    await page.keyboard.press('c');
+    await page.keyboard.type(String(hit.angle));
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(String(hit.velocity));
+    await run(page, 50);
+    await expect(page.locator('.hud__toast')).toHaveText('Aim guide on');
+    expect(await guide()).toBe('hit');
+  });
+
   test('an attempt left half-way is picked up, never restarted', async ({ page }) => {
     test.setTimeout(180_000);
     await openGame(page, testSettings(), 1);

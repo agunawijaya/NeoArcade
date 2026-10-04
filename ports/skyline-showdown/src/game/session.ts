@@ -210,6 +210,9 @@ export class Session {
       this.options.onPause();
       return;
     }
+    // Any moment of the match, not only while aiming: pressed during the
+    // CPU's turn, it is ready for yours.
+    if (input.wasPressed('guide')) this.toggleGuide();
 
     const worldDelta = delta * this.worldSpeed;
     this.advancePhase(delta, worldDelta);
@@ -436,7 +439,6 @@ export class Session {
     const player = this.state.turn;
     const { input } = this.options.controls;
     if (input.wasPressed('powerUp')) this.togglePowerUp(player);
-    if (input.wasPressed('guide')) this.toggleGuide();
     if (this.options.setup.aiming === 'typed') {
       this.showGuide(this.typedAim(player));
       return;
@@ -459,8 +461,18 @@ export class Session {
     if (step.throwNow) this.beginThrow(step.aim);
   }
 
+  /**
+   * The hidden guide is for a person playing the computer: a CPU or a rival
+   * in Quick Match and on the tour, or the Daily Skyline's still target. Two
+   * people at one keyboard, and two CPUs, never get it.
+   */
+  private guideAllowed(): boolean {
+    if (this.options.setup.daily) return true;
+    return this.isCpu(0) !== this.isCpu(1);
+  }
+
   private toggleGuide() {
-    if (!this.isCpu(otherPlayer(this.state.turn))) return;
+    if (!this.guideAllowed()) return;
     const enabled = this.guide.toggle();
     if (enabled) this.assisted = true;
     this.options.hud.toast(enabled ? 'Aim guide on' : 'Aim guide off');

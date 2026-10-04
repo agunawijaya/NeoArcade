@@ -165,10 +165,11 @@ flights take the same wall-clock time. The physics is unchanged.
   first third of the throw being aimed, wind included, but not where it
   lands. It answers the complaint that the CPU knows exact distances while
   a person judges by eye.
-- **Hidden aim guide** against the CPU: press C while aiming to see the
-  exact path of the throw being aimed, turning green with a crosshair when it
-  would hit. A practice aid, deliberately left out of the menus and the
-  player's guide.
+- **Hidden aim guide** against the computer (a CPU or rival in Quick Match
+  and the World Tour, or the Daily Skyline's target): press C at any point of
+  the match, even during the CPU's turn, to see the exact path of the throw
+  being aimed, turning green with a crosshair when it would hit. A practice
+  aid, deliberately left out of the menus and the player's guide.
 
 ### Presentation
 

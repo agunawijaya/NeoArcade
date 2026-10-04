@@ -108,6 +108,33 @@ test('the hidden aim guide against the CPU predicts the hit', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Ada wins!' })).toBeVisible();
 });
 
+test('C pressed during the CPU’s turn has the guide ready for yours', async ({ page }) => {
+  test.setTimeout(240_000);
+  const settings = testSettings({ players: 'humanVsCpu', points: 3, world: 'earth' });
+  await openGame(page, settings, 6);
+  await startFromTitle(page);
+  // A throw backwards, off the map, hands the turn to the CPU.
+  await typeThrow(page, 170, 200);
+  await runUntil(
+    page,
+    () => document.body.dataset.phase === 'aim' && document.body.dataset.turn === '1',
+    '',
+    60_000,
+  );
+  await page.keyboard.press('c');
+  await run(page, 50);
+  await expect(page.locator('.hud__toast')).toHaveText('Aim guide on');
+
+  await runUntil(
+    page,
+    () => document.body.dataset.phase === 'aim' && document.body.dataset.turn === '0',
+    '',
+    120_000,
+  );
+  await run(page, 50);
+  expect(await page.evaluate(() => document.body.dataset.guide)).toMatch(/^(hit|miss|self)$/);
+});
+
 test('popping a balloon hands its crate to the thrower', async ({ page }) => {
   const settings = testSettings({ powerUps: true });
   let found: { seed: number; angle: number; velocity: number } | null = null;
