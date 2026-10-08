@@ -213,6 +213,14 @@ session plays the hour out over about three seconds (real time) or 0.6 s
 (leg by leg), pausing at cards. The hook functions (`SessionHooks`) are how
 the screen hears about cards, waypoints, stop offers and the end.
 
+Each hour also lays out its landmarks (`landmarksFor`): a guide sign before
+each town, a state-line welcome, the toll plaza or scale at its moment, and
+the truck stop's pole near the end of an hour that offers one. Each carries
+the scroll position at which it is level with the cab. An hour often ends
+right at a sign, so a new hour keeps the old hour's landmarks until they are
+4,000 px of road behind (`LANDMARK_TRAIL`): the pole of a stop passed up
+slides off behind the trailer instead of vanishing.
+
 The text mode does not use the session: it calls the same engine functions
 directly, an hour per answer, as the original did.
 
@@ -293,7 +301,7 @@ There are no image files except the favicon; everything is drawn.
 
 | Thing | Code |
 |---|---|
-| The rig, its paints and liveries | `render/rig.ts` (`RIG_PAINTS`, `paintRigSide`) |
+| The rig, its paints and liveries | `render/rig.ts` (`RIG_PAINTS`, `paintRigSide`; one function per part, see below) |
 | The 32 landscapes | `render/landscapes.ts` (colours, far layers, scenery mix) |
 | Trees, cacti, barns, silos, derricks, billboards, cattle… | `render/scenery.ts` (`PAINTERS`) |
 | Mountains, mesas, skylines | `render/horizon.ts` |
@@ -310,6 +318,25 @@ There are no image files except the favicon; everything is drawn.
 | UI colours and type | `src/styles/base.css` (tokens for day and night) |
 | Icons | `src/ui/icons.ts` (inline SVG paths) |
 | Sound effects and music | `src/audio/sounds.ts` (synth patches for `@shared/audio`) |
+
+**The rig** is laid out on a grid of 100 units from the trailer's back door
+to the bumper, wheels on the road at 0, and scaled to whatever length the
+caller asks for (the side view, the diner's pump, the parked rigs at the
+back of the lot). It keeps the proportions of an early-eighties long-nose
+conventional: the cab roof well under the trailer's and a long, low hood
+over a swept steer fender. `paintRigSide` draws what sits behind
+the tyres (frame rails, fifth wheel, wheel well, mud flaps), the wheels,
+then the trailer and `paintTractor`, which paints the tractor back to front,
+one function per part: air lines, sleeper, cab and hood, the swept fender,
+the paint stripe, the door with its window and driver, the saddle tank and
+steps, the air cleaner, the stack, the mirror and CB whip, the visor lamps
+and air horns, and the nose (grille, headlamp, bumper). Three gradient
+helpers give it its finish: `paintedPanel` (a sky highlight over the paint
+and shade underneath), `chrome` and `chromePipe` (polished metal on flat and
+upright parts), plus `glass` for the windows. Every colour goes through
+`lit()`, so the rig darkens and warms with the time of day like the
+scenery. A parked rig has its headlights off, no one at the wheel, a still
+antenna and, at night, a lit bunk window.
 
 ## How settings flow
 

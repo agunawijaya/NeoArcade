@@ -4,7 +4,7 @@ import type { Season } from '../../src/engine/living-weather';
 import { DioramaView } from '../../src/render/diorama-view';
 import { CabView } from '../../src/render/cab-view';
 import { MAP_PALETTES, paintMap, wholeCountry } from '../../src/render/map-painter';
-import { RIG_PAINTS } from '../../src/render/rig';
+import { RIG_PAINTS, type RigPaintId } from '../../src/render/rig';
 import type { DriveScene } from '../../src/render/scene';
 
 const root = document.querySelector<HTMLElement>('#game');
@@ -35,7 +35,7 @@ const scene: DriveScene = {
   sunArc: Number(params.get('arc') ?? 0.4),
   fatigue: Number(params.get('fatigue') ?? 0),
   cargo: (params.get('cargo') ?? 'oranges') as DriveScene['cargo'],
-  paint: RIG_PAINTS.classic,
+  paint: RIG_PAINTS[(params.get('paint') ?? 'classic') as RigPaintId],
   landmarks: params.get('landmark')
     ? [
         {

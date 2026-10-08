@@ -103,6 +103,12 @@ const LEG_HOUR = 0.6;
 /** Pixels of road per mile in the side view, and the fastest the scenery may rush. */
 const PIXELS_PER_MILE = 30;
 const MAX_SCROLL_PER_SECOND = 1500;
+/**
+ * Pixels of road a sign is kept after the cab passes it. An hour often ends
+ * right at a sign (the truck stop's pole, a town's exit), and it has to slide
+ * off the left edge of the widest screen before it may be forgotten.
+ */
+const LANDMARK_TRAIL = 4000;
 
 export class TripSession {
   phase: SessionPhase = 'planning';
@@ -380,7 +386,7 @@ export class TripSession {
       (MAX_SCROLL_PER_SECOND * hourSeconds) / Math.max(20, result.speed),
     );
     this.hourStartScroll = this.scroll;
-    this.landmarks = this.landmarksFor(this.play);
+    this.landmarks = [...this.landmarksBehind(), ...this.landmarksFor(this.play)];
     this.t = 0;
     this.beatIndex = 0;
     this.phase = 'rolling';
@@ -393,7 +399,8 @@ export class TripSession {
       this.offer.name = diner.name;
       this.options.hooks.stopOffer(this.offer);
       this.landmarks.push({
-        id: `stop-${trip.stopCount + 1}`,
+        // Passed-up stops are offered again every hour, so the hour keeps each pole its own.
+        id: `${trip.hourCount}-truck-stop`,
         kind: 'truck-stop',
         u: this.hourStartScroll + this.pixelsPerMile * result.speed * 0.98,
         label: diner.name,
@@ -416,6 +423,11 @@ export class TripSession {
       this.options.hooks.cb(message);
     }
     this.options.hooks.hour(result, trip);
+  }
+
+  /** Signs from the hours before that may still be on screen, so they drift away behind the rig. */
+  private landmarksBehind(): Landmark[] {
+    return this.landmarks.filter((landmark) => landmark.u > this.scroll - LANDMARK_TRAIL);
   }
 
   /** Roadside things for this hour: each event's landmark at its moment, and a sign before each town. */

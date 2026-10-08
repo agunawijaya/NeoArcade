@@ -221,7 +221,12 @@ on it (ADR 0016):
 
 **Two views** of the same road, switchable at any time: the side diorama
 (32 landscapes drawn in code, from the Mojave to Manhattan) and the cab,
-with the dashboard, the CB set and a folded atlas clipped to the dash.
+with the dashboard, the CB set and a folded atlas clipped to the dash. In
+the diorama the rig is an early-eighties long-nose conventional drawn to
+true proportions (a low hood, the cab well under the trailer's roof, a swept
+steer fender, a chrome saddle tank and stack, a West Coast mirror with a CB
+whip, the driver at the wheel), and a sign that an hour ends beside, such as
+a truck stop passed up, slides away behind the trailer instead of vanishing.
 
 **Truck stops** become places: a named diner with a special and a pie of the
 day, the pump, the tyre shop, a **cup of coffee** (50 ¢, two hours fewer
