@@ -359,6 +359,9 @@ on the way back in.
 
 ## Tests
 
+How to run each suite, and what to try by hand, is in
+[TESTING.md](TESTING.md).
+
 - **Engine** (Vitest, `src/engine/*.test.ts`): the 1981 numbers
   (`original.test.ts`), stepping and collisions, duels and the commit line,
   the planner's fairness and determinism, including a source scan for

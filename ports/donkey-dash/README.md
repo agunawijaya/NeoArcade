@@ -34,13 +34,16 @@ npx playwright test -c ports/donkey-dash --project=screens
 
 The playtests have a scripted player drive the real page and check it ends
 up exactly where the engine says it should; `screens` renders every mode,
-view and route for art direction.
+view and route for art direction. [Testing](docs/TESTING.md) has the
+details, and what to try by hand.
 
 ## Read more
 
 - [About](docs/ABOUT.md): the original, and what this version adds.
 - [How to play](docs/HOW-TO-PLAY.md): controls, modes, settings, tips.
 - [Architecture](docs/ARCHITECTURE.md): how the code fits together.
+- [Testing](docs/TESTING.md): playing it by hand, and every test suite.
+- [Follow-up ideas](docs/IDEAS.md): what could come next, and where to start.
 - [Behaviour notes and change log](../../docs/games/donkey-dash.md).
 - Decisions: [daily challenges](../../docs/adr/0009-daily-challenges.md),
   [camera views and fair sight](../../docs/adr/0010-camera-views-and-fair-sight.md),
