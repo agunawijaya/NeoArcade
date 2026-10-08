@@ -14,13 +14,7 @@ if errorlevel 1 (
 
 if not exist "node_modules\" (
   echo Installing dependencies for the first run...
-  rem node_modules on this machine comes from pnpm; fall back to npm elsewhere.
-  where pnpm >nul 2>nul
-  if errorlevel 1 (
-    call npm install
-  ) else (
-    call pnpm install
-  )
+  call npm install
   if errorlevel 1 (
     echo Dependency install failed.
     pause
