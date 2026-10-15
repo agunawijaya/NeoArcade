@@ -1,10 +1,11 @@
-import { CARROT_DEPTH, DONKEY_DEPTH } from './constants';
+import { BARRIER_DEPTH, CARROT_DEPTH, DONKEY_DEPTH } from './constants';
 
 /**
- * Things on the road. Donkeys block their lane; carrots are there to be
- * collected. Positions are the near edge, the side the car reaches first.
+ * Things on the road. Donkeys block their lane; a barrier ends a closing
+ * lane; carrots are there to be collected. Positions are the near edge, the
+ * side the car reaches first.
  */
-export type HazardKind = 'donkey' | 'carrot';
+export type HazardKind = 'donkey' | 'barrier' | 'carrot';
 
 /**
  * Why a donkey is there, which is also how it looks and behaves:
@@ -34,7 +35,7 @@ export interface Hazard {
   /** Closer than this, a donkey stays in its lane. Views draw the line for the second player. */
   commitGap: number | null;
   committed: boolean;
-  /** The car was in this donkey's lane after it came into view. */
+  /** The car was in this hazard's lane after it came into view. */
   threatened: boolean;
   /** When the car (or the donkey) last left the shared lane: metres, and seconds before a hit. */
   escape: { gap: number; seconds: number; byCar: boolean } | null;
@@ -77,5 +78,15 @@ export function makeCarrot(id: number, position: number, lane: number): Hazard {
     kind: 'carrot',
     role: null,
     depth: CARROT_DEPTH,
+  };
+}
+
+/** The end of a closing lane: a striped board and a row of cones across it. */
+export function makeBarrier(id: number, position: number, lane: number): Hazard {
+  return {
+    ...makeDonkey(id, position, lane, 'single'),
+    kind: 'barrier',
+    role: null,
+    depth: BARRIER_DEPTH,
   };
 }

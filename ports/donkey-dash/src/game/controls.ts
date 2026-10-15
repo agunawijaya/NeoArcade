@@ -1,12 +1,20 @@
 import { createInput, type Input } from '@shared/input';
+import type { RivalInput } from '../engine/rival';
+import { DEFAULT_RIVAL_KEYS, type RivalKeys } from '../settings';
 
 /**
  * One button drives the car. Alone, it is every key worth pressing, a tap
  * anywhere on the road, or a gamepad's A. In Donkey vs Driver each player
  * owns half: the left or right half of the keyboard, the left or right half
  * of the screen, and their own gamepad.
+ *
+ * Rival Driver is the one mode with two buttons: left and right. Each driver
+ * has a key for each (A and D, and the arrow keys, unless rebound), a pair of
+ * touch zones on their own half of the screen and their own gamepad. Against
+ * the CPU the one player gets both key pairs and the whole screen.
  */
 export type Action = 'press' | 'pause' | 'mute' | 'horn';
+export type PlayMode = 'solo' | 'versus' | 'rival' | 'rival-cpu';
 
 const keys = (rows: string) => rows.trim().split(/\s+/);
 
@@ -63,28 +71,51 @@ const MENU_ONLY: Record<Action, readonly string[]> = {
   horn: [],
 };
 
+const PAD_LEFT = ['pad:left', 'pad:leftX-', 'pad:lb', 'pad:lt'];
+const PAD_RIGHT = ['pad:right', 'pad:leftX+', 'pad:rb', 'pad:rt'];
+
+type Steer = 'left' | 'right';
+
 export class Controls {
   readonly input: Input<Action>;
   private readonly players: [Input<'press'>, Input<'press'>];
+  private readonly drivers: [Input<Steer>, Input<Steer>];
   private readonly taps: [number, number] = [0, 0];
-  private versus = false;
+  private readonly steerTaps: [Record<Steer, number>, Record<Steer, number>] = [
+    { left: 0, right: 0 },
+    { left: 0, right: 0 },
+  ];
+  private mode: PlayMode = 'solo';
+  private rivalKeys: RivalKeys = DEFAULT_RIVAL_KEYS;
   private enabled = true;
 
   constructor(private readonly surface: HTMLElement) {
     this.input = createInput<Action>({ bindings: SOLO, pointerTarget: surface });
     this.players = [0, 1].map((pad) =>
       createInput<'press'>({
-        bindings: { press: pressBindings(pad) },
+        bindings: { press: [] },
         getGamepads: () => [readPad(pad)],
       }),
     ) as [Input<'press'>, Input<'press'>];
+    this.drivers = [0, 1].map((pad) =>
+      createInput<Steer>({
+        bindings: { left: [], right: [] },
+        getGamepads: () => [readPad(pad)],
+        deadzone: 0.5,
+      }),
+    ) as [Input<Steer>, Input<Steer>];
     surface.addEventListener('pointerdown', this.onPointerDown);
-    this.setVersus(false);
+    this.bind();
   }
 
-  /** Splits the keyboard, the screen and the pads between two players. */
-  setVersus(on: boolean) {
-    this.versus = on;
+  /** Splits the keyboard, the screen and the pads the way the mode needs. */
+  setMode(mode: PlayMode) {
+    this.mode = mode;
+    this.bind();
+  }
+
+  setRivalKeys(keys: RivalKeys) {
+    this.rivalKeys = keys;
     this.bind();
   }
 
@@ -97,21 +128,53 @@ export class Controls {
   disable() {
     this.enabled = false;
     this.bind();
-    this.taps[0] = 0;
-    this.taps[1] = 0;
+    this.taps.fill(0);
+    for (const taps of this.steerTaps) {
+      taps.left = 0;
+      taps.right = 0;
+    }
   }
 
   private bind() {
-    const table = !this.enabled ? MENU_ONLY : this.versus ? VERSUS : SOLO;
+    const playing = this.enabled;
+    const table = !playing ? MENU_ONLY : this.mode === 'solo' ? SOLO : this.rivalOrVersus();
     for (const action of Object.keys(table) as Action[]) this.input.rebind(action, table[action]);
     this.players.forEach((player, index) => {
-      player.rebind('press', this.versus && this.enabled ? pressBindings(index) : []);
+      player.rebind('press', this.mode === 'versus' && playing ? pressBindings(index) : []);
     });
+    const rival = playing && (this.mode === 'rival' || this.mode === 'rival-cpu');
+    this.drivers.forEach((driver, index) => {
+      // Against the CPU, the one player may use either pair of keys.
+      const pairs = !rival
+        ? []
+        : this.mode === 'rival-cpu'
+          ? index === 0
+            ? [...this.rivalKeys]
+            : []
+          : [this.rivalKeys[index] as readonly [string, string]];
+      const keysFor = (side: 0 | 1) => pairs.map((pair) => `key:${pair[side]}`);
+      driver.rebind('left', pairs.length > 0 ? [...keysFor(0), ...PAD_LEFT] : []);
+      driver.rebind('right', pairs.length > 0 ? [...keysFor(1), ...PAD_RIGHT] : []);
+    });
+  }
+
+  /** In the two-player modes only Escape and Start pause, and in Rival Driver P and M too, if free. */
+  private rivalOrVersus(): Record<Action, readonly string[]> {
+    if (this.mode === 'versus') return VERSUS;
+    const taken = new Set(this.rivalKeys.flat());
+    const free = (code: string) => (taken.has(code) ? [] : [`key:${code}`]);
+    return {
+      press: [],
+      pause: ['key:Escape', ...free('KeyP'), 'pad:start'],
+      mute: free('KeyM'),
+      horn: [],
+    };
   }
 
   update() {
     this.input.update();
     for (const player of this.players) player.update();
+    for (const driver of this.drivers) driver.update();
   }
 
   /** The one-button press, playing alone. */
@@ -126,16 +189,52 @@ export class Controls {
     return this.players[player].wasPressed('press') || tapped;
   }
 
+  /** A Rival driver's left and right this step: their keys, their touch zones, their pad. */
+  steering(driver: 0 | 1): RivalInput {
+    const taps = this.steerTaps[driver];
+    const input = this.drivers[driver];
+    const steer = {
+      left: input.wasPressed('left') || taps.left > 0,
+      right: input.wasPressed('right') || taps.right > 0,
+    };
+    taps.left = 0;
+    taps.right = 0;
+    return steer;
+  }
+
   private readonly onPointerDown = (event: PointerEvent) => {
-    if (!this.versus || !this.enabled) return;
+    if (!this.enabled || this.mode === 'solo') return;
     const bounds = this.surface.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width;
+    const y = (event.clientY - bounds.top) / bounds.height;
     const portrait = bounds.height > bounds.width;
-    // Upright, the phone lies between the players: the far end belongs to player 2.
-    const second = portrait
-      ? event.clientY - bounds.top < bounds.height / 2
-      : event.clientX - bounds.left > bounds.width / 2;
-    this.taps[second ? 1 : 0] += 1;
+    if (this.mode === 'versus') {
+      // Upright, the phone lies between the players: the far end belongs to player 2.
+      const second = portrait ? y < 0.5 : x > 0.5;
+      this.taps[second ? 1 : 0] += 1;
+      return;
+    }
+    const zone = rivalZone(this.mode, portrait, x, y);
+    this.steerTaps[zone.driver][zone.steer] += 1;
   };
+}
+
+/**
+ * Which driver a touch belongs to and which way it steers. Against the CPU the
+ * whole screen is one player's: left half, right half. Two players share it
+ * like Donkey vs Driver, and each half is split again into left and right.
+ */
+export function rivalZone(
+  mode: 'rival' | 'rival-cpu',
+  portrait: boolean,
+  x: number,
+  y: number,
+): { driver: 0 | 1; steer: Steer } {
+  if (mode === 'rival-cpu') return { driver: 0, steer: x < 0.5 ? 'left' : 'right' };
+  if (portrait) return { driver: y < 0.5 ? 1 : 0, steer: x < 0.5 ? 'left' : 'right' };
+  const driver = x < 0.5 ? 0 : 1;
+  const within = driver === 0 ? x * 2 : (x - 0.5) * 2;
+  return { driver, steer: within < 0.5 ? 'left' : 'right' };
 }
 
 function pressBindings(player: number): string[] {

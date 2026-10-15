@@ -26,13 +26,14 @@ const stored = (page: Page, key: string) =>
     key,
   );
 
-test('boots to the title with the logo, the five modes and the credit line', async ({ page }) => {
+test('boots to the title with the logo, the six modes and the credit line', async ({ page }) => {
   const errors = watchForErrors(page);
   await openGame(page);
   await expect(page.getByRole('heading', { name: /Donkey\s*Dash/ })).toBeVisible();
   for (const mode of ['Road Trip', 'Endless', 'Daily Road', 'Classic Duel', 'Donkey vs Driver']) {
     await expect(page.getByRole('button', { name: new RegExp(mode) })).toBeVisible();
   }
+  await expect(page.locator('[data-mode="rival"]')).toContainText('Rival Driver');
   await expect(page.getByText('Inspired by DONKEY.BAS, © IBM Corp. 1981, 1982.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Back to the Arcade Hall' })).toBeVisible();
   expect(errors).toEqual([]);
@@ -43,15 +44,16 @@ test('one button switches lanes: a key, or a tap on the road', async ({ page, is
   await openGame(page);
   await startMode(page, 'endless');
   await untilPlaying(page);
-  expect(await lane(page)).toBe('0');
+  // Lanes are positions across the band, W X Y Z: every road starts on X and Y, the car in X.
+  expect(await lane(page)).toBe('1');
   if (isMobile) await page.locator('.stage__canvas').tap({ force: true });
   else await page.keyboard.press('Space');
   await run(page, 50);
-  expect(await lane(page)).toBe('1');
+  expect(await lane(page)).toBe('2');
   if (!isMobile) {
     await page.keyboard.press('ArrowLeft');
     await run(page, 50);
-    expect(await lane(page)).toBe('0');
+    expect(await lane(page)).toBe('1');
   }
   expect(errors).toEqual([]);
 });
@@ -147,10 +149,10 @@ test('Donkey vs Driver splits the keyboard and swaps roles every point', async (
   // Player 2's keys steer the donkey, never the car.
   await page.keyboard.press('KeyL');
   await run(page, 50);
-  expect(await lane(page)).toBe('0');
+  expect(await lane(page)).toBe('1');
   await page.keyboard.press('KeyA');
   await run(page, 50);
-  expect(await lane(page)).toBe('1');
+  expect(await lane(page)).toBe('2');
   // P is one of Player 2's keys here, not pause.
   await page.keyboard.press('KeyP');
   await run(page, 50);
@@ -179,7 +181,7 @@ test('remembers settings, and the garage keeps locked parts locked', async ({ pa
   await openGame(page);
   await page.getByRole('button', { name: 'Settings' }).click({ force: true });
   await page.getByRole('radio', { name: /top-down/ }).click({ force: true });
-  await page.getByRole('button', { name: 'More points' }).click({ force: true });
+  await page.getByRole('button', { name: 'More: Points to win' }).click({ force: true });
   const settings = await stored(page, 'settings');
   expect(settings.camera).toBe('classic');
   expect(settings.points).toBe(6);
@@ -202,4 +204,62 @@ test('follows the device theme, and holds still for reduced motion', async ({ pa
   await expect(page.locator('.screen--title')).toHaveClass(/is-ready/);
   await page.getByRole('button', { name: 'Switch to the dark theme' }).click({ force: true });
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+});
+
+const lanes = async (page: Page) =>
+  (await page.evaluate(() => document.body.dataset.lanes ?? '')).split(',').map(Number);
+
+test('Rival Driver against the CPU: A and D steer, and the CPU drives itself', async ({ page }) => {
+  const errors = watchForErrors(page);
+  await openGame(page, { settings: { camera: 'classic' } });
+  await expect(page.locator('[data-mode="rival"]')).toContainText('Rival Driver');
+  await page.locator('[data-rival="cpu"]').click({ force: true });
+  await untilPlaying(page);
+  const [mine] = await lanes(page);
+  // Both cars start on the outer lanes, so the middle is free to take.
+  await page.keyboard.press('KeyD');
+  await run(page, 50);
+  expect((await lanes(page))[0]).toBe((mine as number) + 1);
+  await expect(page.locator('.hud__plate--right')).toContainText('Rusty Rowe');
+  expect(errors).toEqual([]);
+});
+
+test('Rival Driver with a friend: each driver has their own keys, and a taken lane is refused', async ({
+  page,
+}) => {
+  await openGame(page);
+  await page.locator('[data-rival="friend"]').click({ force: true });
+  await untilPlaying(page);
+  const [first, second] = await lanes(page);
+  // Player 2 takes the middle lane with the left arrow…
+  await page.keyboard.press('ArrowLeft');
+  await run(page, 50);
+  expect(await lanes(page)).toEqual([first, (second as number) - 1]);
+  // …so Player 1's move into it is refused, and the car stays put.
+  await page.keyboard.press('KeyD');
+  await run(page, 50);
+  expect((await lanes(page))[0]).toBe(first);
+});
+
+test('Rival Driver plays a whole match and shows both drivers’ tally', async ({ page }) => {
+  await longRun(page);
+  await openGame(page, {
+    settings: {
+      camera: 'classic',
+      rival: {
+        opponent: 'cpu',
+        cpu: 'easy',
+        rounds: 1,
+        keys: [
+          ['KeyA', 'KeyD'],
+          ['ArrowLeft', 'ArrowRight'],
+        ],
+      },
+    },
+  });
+  await page.locator('[data-rival="cpu"]').click({ force: true });
+  await untilResults(page);
+  await expect(page.getByRole('heading', { name: /wins|You beat/ })).toBeVisible();
+  await expect(page.locator('.results__tally')).toContainText('Traps sprung');
+  await expect(page.getByRole('button', { name: 'Rematch' })).toBeVisible();
 });

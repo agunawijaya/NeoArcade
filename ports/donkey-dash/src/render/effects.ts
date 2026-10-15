@@ -18,7 +18,8 @@ export type ParticleKind =
   | 'sparkle'
   | 'rainbow'
   | 'confetti'
-  | 'petal';
+  | 'petal'
+  | 'cone';
 
 export interface Particle {
   kind: ParticleKind;
@@ -110,8 +111,10 @@ export class Effects {
           ? 'note'
           : style === 'sparkles'
             ? 'sparkle'
-            : 'rainbow';
-    if (!this.rng.chance(style === 'rainbow' ? 0.9 : 0.35)) return;
+            : style === 'cones'
+              ? 'cone'
+              : 'rainbow';
+    if (!this.rng.chance(style === 'rainbow' ? 0.9 : style === 'cones' ? 0.12 : 0.35)) return;
     this.add({
       kind,
       along: nose - carLength - 0.2,
@@ -131,12 +134,26 @@ export class Effects {
             ? '#fff3c4'
             : style === 'sparkles'
               ? '#fff8d6'
-              : '#ffffff',
+              : style === 'cones'
+                ? '#ff7a1f'
+                : '#ffffff',
     });
   }
 
   splash(along: number, across: number) {
     this.burst(along, across, 'mud', 14, ['#6e4a2c', '#8a6040', '#4d321e'], 2.5);
+  }
+
+  /** A puff of smoke where a refused move scraped the other car's door. */
+  puff(along: number, across: number) {
+    this.burst(along, across, 'dust', 9, ['#ffffff', '#f1ece4', '#dcd6cc'], 1.6);
+  }
+
+  /** Traffic cones bowled over by a car that met a barrier, with a shower of sparks. */
+  cones(along: number, across: number) {
+    this.burst(along, across, 'cone', 9, ['#ff7a1f', '#ff8f3a'], 7);
+    this.burst(along, across, 'spark', 14, ['#fff4c2', '#ffb347', '#ffffff'], 8);
+    this.burst(along, across, 'dust', 8, ['#e8d2ae'], 2);
   }
 
   /** Hay, sparks and dust flung up by a crash. */
@@ -189,7 +206,12 @@ export class Effects {
           up: this.rng.float(force * 0.3, force),
         },
         life: this.rng.float(0.6, 1.4),
-        size: kind === 'hay' ? this.rng.float(0.15, 0.35) : this.rng.float(0.06, 0.14),
+        size:
+          kind === 'hay'
+            ? this.rng.float(0.15, 0.35)
+            : kind === 'cone'
+              ? this.rng.float(0.28, 0.4)
+              : this.rng.float(0.06, 0.14),
         colour: this.rng.pick(colours),
       });
     }
@@ -201,7 +223,7 @@ export class Effects {
   }
 }
 
-const FALLS = new Set<ParticleKind>(['hay', 'spark', 'mud', 'confetti', 'petal']);
+const FALLS = new Set<ParticleKind>(['hay', 'spark', 'mud', 'confetti', 'petal', 'cone']);
 
 /** How opaque a particle is as it ages: quick in, slow out. */
 export function particleAlpha(particle: Particle): number {
@@ -276,6 +298,20 @@ export function drawParticle(
         ctx.fillStyle = colour;
         ctx.fillRect(-size / 2, (band - 3) * size * 0.08, size, size * 0.08);
       });
+      break;
+    case 'cone':
+      ctx.rotate(particle.spin * particle.age * 0.6);
+      ctx.fillStyle = particle.colour;
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size * 0.55, size * 0.7);
+      ctx.lineTo(-size * 0.55, size * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-size * 0.3, -size * 0.1, size * 0.6, size * 0.22);
+      ctx.fillStyle = '#3a3640';
+      ctx.fillRect(-size * 0.75, size * 0.7, size * 1.5, size * 0.2);
       break;
     case 'petal':
       ctx.rotate(particle.spin * particle.age);

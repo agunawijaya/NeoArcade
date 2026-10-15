@@ -66,3 +66,25 @@ diagonal. Left alone, each view would give a different reaction window.
   weather) are shared.
 - The crash is drawn in screen space from each view's car and donkey boxes,
   so the four halves always fly to the screen's corners, as they did in 1981.
+
+## Update, 2026-10-15 (prompt 007): the shifting road and Rival Driver
+
+The sight line is unchanged: `SIGHT_DISTANCE` is still 16 m and still the
+one fairness number. What changed around it:
+
+- Lanes are now positions on a band four lanes wide (ADR 0019), and the
+  road slides across them. The layout tests check a donkey on the sight
+  line at every lane position from W to Z, and halfway between, not just
+  in the lanes of a fixed road.
+- Classic and Isometric keep their camera on the middle of the band, so
+  the road visibly snakes across the landscape. Chase follows the car part
+  of the way across and bends the road towards new lanes; the bend is a
+  drawing of the road, not a change to the distance shown.
+- A lane that is ending is marked from where it starts to close, which is
+  revealed a full sight ahead, and its barrier stands at least another
+  sight beyond: every view shows a closing lane at least one reaction
+  window before its barrier, and the barrier itself is revealed like any
+  hazard.
+- Rival Driver's Chase view uses a two-car layout that pulls the camera
+  back so both cars fit (ADR 0020); it is one more case in the layout
+  tests.

@@ -301,6 +301,9 @@ export function paletteFor(look: LookId, theme: Theme): Palette {
 }
 
 /** The looks Endless drives through, one after another. */
+/** Rival Driver: the glow under each driver's car, and their colour on the HUD. */
+export const DRIVER_COLOURS = ['#4ab8ff', '#ff5e8a'] as const;
+
 export const ENDLESS_LOOKS: readonly LookId[] = ['home', 'mountain', 'desert', 'night', 'snow'];
 
 /** Donkey coats: body, belly and muzzle, mane and ear tips. */

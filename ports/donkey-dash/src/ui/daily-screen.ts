@@ -1,5 +1,6 @@
 import { monthGrid, nextDailyAt, type DailyLog } from '@shared/daily';
-import { DAILY, shareText, type DailyResult } from '../game/daily';
+import { DAILY_RULES } from '../engine/modes';
+import { DAILY, rulesOf, shareText, type DailyResult } from '../game/daily';
 import { button, h, icon } from './dom';
 import { ICONS } from './icons';
 import { shareBox } from './overlays';
@@ -152,7 +153,9 @@ function calendar(
                 {
                   class: `calendar__day calendar__day--${state}`,
                   title: result
-                    ? `${result.metres.toLocaleString('en')} m, ${result.crashes} crashes`
+                    ? `${result.metres.toLocaleString('en')} m, ${result.crashes} crashes${
+                        rulesOf(result) < DAILY_RULES ? ', before the road shifted' : ''
+                      }`
                     : undefined,
                 },
                 h('span', {}, String(Number(key.slice(8)))),

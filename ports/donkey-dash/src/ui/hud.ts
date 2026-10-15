@@ -30,6 +30,28 @@ export interface DuelReadout {
   pointsToWin: number;
 }
 
+/** One Rival driver's plate: who they are, rounds won, and how full their race meter is. */
+export interface RivalPlate {
+  name: string;
+  rounds: number;
+  meter: number;
+  state: 'racing' | 'crashed' | 'ghost';
+}
+
+export interface RivalReadout {
+  left: RivalPlate;
+  right: RivalPlate;
+  meterTarget: number;
+  roundsToWin: number;
+  round: number;
+}
+
+/** How Rival Driver's buttons are laid out, for the zones along the bottom of the screen. */
+export interface SteerLayout {
+  /** Each driver's name and their left and right keys, or one driver against the CPU. */
+  drivers: readonly { name: string; keys: readonly [string, string] }[];
+}
+
 export type PopupTone = 'near' | 'carrot' | 'beat' | 'crash' | 'info';
 
 export class Hud {
@@ -49,6 +71,8 @@ export class Hud {
     h('span', { class: 'hud__zone hud__zone--p1' }, 'Player 1'),
     h('span', { class: 'hud__zone hud__zone--p2' }, 'Player 2'),
   );
+  /** Rival Driver: where each driver's left and right are, on screen and on the keys. */
+  private readonly steer = h('div', { class: 'hud__steer', 'aria-hidden': 'true', hidden: true });
   private readonly muteButton: HTMLButtonElement;
   private cache = new Map<string, string>();
   private captionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,6 +98,7 @@ export class Hud {
       this.bannerBox,
       this.hint,
       this.zones,
+      this.steer,
     );
   }
 
@@ -92,11 +117,38 @@ export class Hud {
     this.muteButton.setAttribute('aria-label', muted ? 'Sound on' : 'Mute');
   }
 
-  /** Switches the plates between a run's readout and a duel's. */
-  layout(kind: 'run' | 'duel', versus = false) {
+  /** Switches the plates between a run's readout, a duel's and a race's. */
+  layout(kind: 'run' | 'duel' | 'rival', twoPlayers = false) {
     this.element.dataset.kind = kind;
-    this.zones.hidden = !versus;
+    this.zones.hidden = !(twoPlayers && kind === 'duel');
+    this.steer.hidden = kind !== 'rival';
     this.cache.clear();
+    if (kind === 'rival') {
+      for (const [plate, side] of [
+        [this.left, 'left'],
+        [this.right, 'right'],
+      ] as const) {
+        plate.dataset.driver = side === 'left' ? '0' : '1';
+        plate.replaceChildren(
+          h(
+            'span',
+            { class: 'hud__who' },
+            h('span', { class: 'hud__dot' }),
+            h('span', { class: 'hud__name', 'data-field': `${side}-name` }),
+          ),
+          h('span', { class: 'hud__rounds', 'data-field': `${side}-rounds` }),
+          h('span', { class: 'hud__meter', 'data-field': `${side}-meter` }),
+        );
+      }
+      this.middle.replaceChildren(
+        h('span', { class: 'hud__label' }, 'Round'),
+        h('strong', { class: 'hud__score', 'data-field': 'round' }, '1'),
+        h('span', { class: 'hud__speed', 'data-field': 'first-to' }),
+      );
+      return;
+    }
+    delete this.left.dataset.driver;
+    delete this.right.dataset.driver;
     if (kind === 'run') {
       this.left.replaceChildren(
         h('span', { class: 'hud__label' }, 'Score'),
@@ -181,6 +233,49 @@ export class Hud {
         ?.querySelectorAll('.hud__step')
         .forEach((step, index) => step.classList.toggle('is-done', index < readout.climb - 1));
     }
+  }
+
+  rival(readout: RivalReadout) {
+    for (const side of ['left', 'right'] as const) {
+      const plate = readout[side];
+      this.text(`${side}-name`, plate.name);
+      const key = `${plate.rounds}/${readout.roundsToWin}:${plate.meter}/${readout.meterTarget}:${plate.state}`;
+      if (this.cache.get(`${side}-plate`) === key) continue;
+      this.cache.set(`${side}-plate`, key);
+      const rounds = this.field(`${side}-rounds`);
+      rounds?.setAttribute('aria-label', `${plate.rounds} of ${readout.roundsToWin} rounds`);
+      rounds?.replaceChildren(
+        ...Array.from({ length: readout.roundsToWin }, (_, index) =>
+          h('span', { class: `hud__pip${index < plate.rounds ? ' is-won' : ''}` }),
+        ),
+      );
+      const meter = this.field(`${side}-meter`);
+      meter?.setAttribute('aria-label', `Race meter ${plate.meter} of ${readout.meterTarget}`);
+      meter?.replaceChildren(
+        ...Array.from({ length: readout.meterTarget }, (_, index) =>
+          h('span', { class: `hud__notch${index < plate.meter ? ' is-full' : ''}` }),
+        ),
+      );
+      (side === 'left' ? this.left : this.right).dataset.state = plate.state;
+    }
+    this.text('round', String(readout.round));
+    this.text('first-to', `first to ${readout.roundsToWin}`);
+  }
+
+  /** Lays out the zones along the bottom: one pair of arrows for each driver, with their keys. */
+  steering(layout: SteerLayout) {
+    this.steer.dataset.drivers = String(layout.drivers.length);
+    this.steer.replaceChildren(
+      ...layout.drivers.map((driver, index) =>
+        h(
+          'div',
+          { class: 'hud__steer-driver', 'data-driver': String(index) },
+          h('span', { class: 'hud__steer-zone' }, h('b', {}, '◀'), h('kbd', {}, driver.keys[0])),
+          h('span', { class: 'hud__steer-name' }, driver.name),
+          h('span', { class: 'hud__steer-zone' }, h('kbd', {}, driver.keys[1]), h('b', {}, '▶')),
+        ),
+      ),
+    );
   }
 
   /** Lives as little cars: bright while you have them, hollow once they are gone. */

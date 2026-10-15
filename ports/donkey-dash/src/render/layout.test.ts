@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DONKEY_DEPTH, WINNING_CLIMB } from '../engine/constants';
+import { laneLateral, LANE_POSITIONS } from '../engine/road';
 import { revealGap } from '../engine/sight';
 import { chaseLayout } from './chase-view';
-import { classicLayout, LANE_METRES } from './classic-view';
+import { classicLayout } from './classic-view';
+import { LANE_METRES } from './lanes';
 import { isoLayout } from './iso-view';
 import { hudInsets } from './stage';
 import type { Box, Viewport, ViewLayout } from './view';
@@ -28,8 +30,12 @@ const viewports: Viewport[] = SCREENS.map(([width, height]) => ({
 }));
 
 const CLIMBS = Array.from({ length: WINNING_CLIMB }, (_, climb) => climb);
-/** Lanes across the widest road: three lanes, from the left edge to the right. */
-const LATERALS = [-1, -0.5, 0, 0.5, 1];
+/** Every lane position the road may open, W to Z, and the points between them. */
+const OUTERMOST = laneLateral(LANE_POSITIONS - 1);
+const LATERALS = Array.from(
+  { length: 2 * LANE_POSITIONS - 1 },
+  (_, index) => -OUTERMOST + index / 2,
+);
 
 function expectInside(box: Box, viewport: Viewport, what: string) {
   expect(box.x, `${what}: left edge`).toBeGreaterThanOrEqual(0);
@@ -41,6 +47,7 @@ function expectInside(box: Box, viewport: Viewport, what: string) {
 const VIEWS: [string, (viewport: Viewport, climb: number) => ViewLayout][] = [
   ['classic', classicLayout],
   ['chase', chaseLayout],
+  ['chase, two cars', (viewport, climb) => chaseLayout(viewport, climb, true)],
   ['iso', isoLayout],
 ];
 
@@ -91,38 +98,43 @@ describe('each view marks the sight line itself', () => {
     }
   });
 
-  it('Chase: the crest of the hill, for every lane, bend and camera sway', () => {
-    for (const viewport of viewports) {
-      for (const climb of CLIMBS) {
-        const layout = chaseLayout(viewport, climb);
-        expect(layout.depthOf(layout.sightAhead)).toBeCloseTo(layout.crestDepth, 6);
-        // The camera follows the car 60 % of the way; the road bends by at most this much.
-        const sway = LANE_METRES * 0.6;
-        for (const curve of [-0.0033, 0, 0.0033]) {
-          for (const across of [-LANE_METRES - sway, LANE_METRES + sway]) {
-            const foot = layout.project(
-              layout.depthOf(layout.sightAhead + DONKEY_DEPTH / 2),
-              across,
-              0,
-              curve,
-            );
-            expect(foot.x - foot.scale).toBeGreaterThanOrEqual(0);
-            expect(foot.x + foot.scale).toBeLessThanOrEqual(viewport.width);
-            expect(foot.y - foot.scale * 1.95).toBeGreaterThanOrEqual(viewport.insetTop);
+  it.each([false, true])(
+    'Chase: the crest of the hill, for every lane, bend and camera sway (two cars: %s)',
+    (twoCars) => {
+      for (const viewport of viewports) {
+        for (const climb of CLIMBS) {
+          const layout = chaseLayout(viewport, climb, twoCars);
+          expect(layout.depthOf(layout.sightAhead)).toBeCloseTo(layout.crestDepth, 6);
+          // The camera follows the cars 60 % of the way across the band, and the road bends at most this much.
+          const sway = OUTERMOST * LANE_METRES * 0.6;
+          const reach = OUTERMOST * LANE_METRES;
+          for (const curve of [-0.0033, 0, 0.0033]) {
+            for (const across of [-reach - sway, reach + sway]) {
+              const foot = layout.project(
+                layout.depthOf(layout.sightAhead + DONKEY_DEPTH / 2),
+                across,
+                0,
+                curve,
+              );
+              expect(foot.x - foot.scale).toBeGreaterThanOrEqual(0);
+              expect(foot.x + foot.scale).toBeLessThanOrEqual(viewport.width);
+              expect(foot.y - foot.scale * 1.95).toBeGreaterThanOrEqual(viewport.insetTop);
+            }
           }
         }
       }
-    }
-  });
+    },
+  );
 
   it('Isometric: where the road runs off the edge of the screen', () => {
     for (const viewport of viewports) {
       const layout = isoLayout(viewport, 0);
-      const box = layout.donkeyBox(layout.sightAhead, 0);
-      const toRight = viewport.width - (box.x + box.width);
-      const toTop = box.y - viewport.insetTop;
-      // Close to one edge or the other: the diorama shows no road beyond it.
-      expect(Math.min(toRight, toTop)).toBeLessThan(layout.projection.unit * 4);
+      // The outermost lane on one side or the other just fits: the diorama shows no road beyond it.
+      const gaps = [-OUTERMOST, OUTERMOST].map((lateral) => {
+        const box = layout.donkeyBox(layout.sightAhead, lateral);
+        return Math.min(viewport.width - (box.x + box.width), box.y - viewport.insetTop);
+      });
+      expect(Math.min(...gaps)).toBeLessThan(layout.projection.unit * 4);
     }
   });
 });

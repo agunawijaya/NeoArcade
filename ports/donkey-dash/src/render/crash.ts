@@ -7,11 +7,14 @@ import type { Box, Viewport } from './view';
  * steps, each covering 1/64, 1/32 … 1/1 of what was left; here the same
  * accelerating curve runs smoothly, after a slow-motion beat, with a spin,
  * a comic BOOM! and hay in the air. Nobody is hurt: it is a cartoon.
+ *
+ * A barrier does not split: the car does, as ever, while the barrier rocks
+ * on its legs, its cones go flying and the word is BONK!
  */
 export interface CrashActor {
   box: Box;
-  /** Draws the actor exactly where it stood, in screen coordinates. */
-  draw(ctx: CanvasRenderingContext2D): void;
+  /** Draws the actor exactly where it stood, in screen coordinates; `wobble` rocks a barrier. */
+  draw(ctx: CanvasRenderingContext2D, wobble?: number): void;
 }
 
 /** A still, slow-motion moment before the halves fly. */
@@ -30,31 +33,49 @@ export function drawCrash(
   age: number,
   viewport: Viewport,
   car: CrashActor,
-  donkey: CrashActor,
+  other: CrashActor,
   reducedMotion: boolean,
+  obstacle: 'donkey' | 'barrier' = 'donkey',
 ) {
   const progress = flightProgress(age);
   const { width, height } = viewport;
   const halves: [CrashActor, 'left' | 'right', number, number][] = [
-    [donkey, 'left', 0, 0],
-    [donkey, 'right', width, 0],
     [car, 'left', 0, height],
     [car, 'right', width, height],
   ];
+  if (obstacle === 'donkey') {
+    halves.unshift([other, 'left', 0, 0], [other, 'right', width, 0]);
+  } else {
+    other.draw(ctx, reducedMotion ? 0 : barrierWobble(age));
+  }
   for (const [actor, side, cornerX, cornerY] of halves) {
     drawHalf(ctx, actor, side, cornerX, cornerY, progress, age, reducedMotion);
   }
   const impact = {
-    x: (car.box.x + car.box.width / 2 + donkey.box.x + donkey.box.width / 2) / 2,
-    y: Math.min(car.box.y, donkey.box.y + donkey.box.height),
+    x: (car.box.x + car.box.width / 2 + other.box.x + other.box.width / 2) / 2,
+    y: Math.min(car.box.y, other.box.y + other.box.height),
   };
   if (age >= 0 && age < 0.2)
     drawFlash(ctx, impact.x, impact.y, 1 - age / 0.2, Math.max(width, height) * 0.25);
   // The BOOM! floats above the pile-up: the torn donkey is the joke, so it stays in sight.
   const size = Math.max(36, Math.min(width, height) * 0.11);
-  const above = Math.min(car.box.y, donkey.box.y) - size * 1.2;
+  const above = Math.min(car.box.y, other.box.y) - size * 1.2;
   const boomY = Math.max(viewport.insetTop + size * 1.2, above);
-  drawBoom(ctx, impact.x, boomY, size, age, reducedMotion);
+  drawBoom(
+    ctx,
+    impact.x,
+    boomY,
+    size,
+    age,
+    reducedMotion,
+    obstacle === 'donkey' ? 'BOOM!' : 'BONK!',
+  );
+}
+
+/** A barrier knocked on its legs rocks back and forth, less and less. */
+function barrierWobble(age: number): number {
+  if (age < 0) return 0;
+  return Math.sin(age * 22) * 0.22 * Math.exp(-age * 2.6);
 }
 
 function drawHalf(
@@ -129,6 +150,7 @@ function drawBoom(
   baseSize: number,
   age: number,
   reducedMotion: boolean,
+  word: string,
 ) {
   const fade = age < 1.9 ? 1 : Math.max(0, 1 - (age - 1.9) / 0.4);
   if (fade <= 0) return;
@@ -162,8 +184,8 @@ function drawBoom(
   ctx.lineJoin = 'round';
   ctx.lineWidth = Math.max(4, size * 0.16);
   ctx.strokeStyle = '#2a1400';
-  ctx.strokeText('BOOM!', 0, size * 0.04);
+  ctx.strokeText(word, 0, size * 0.04);
   ctx.fillStyle = '#ff4d2e';
-  ctx.fillText('BOOM!', 0, size * 0.04);
+  ctx.fillText(word, 0, size * 0.04);
   ctx.restore();
 }

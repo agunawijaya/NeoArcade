@@ -4,9 +4,10 @@
 
 There is a donkey in the road. There is always a donkey in the road. You
 have one button, two lanes and about two-thirds of a second, and the donkey
-has no intention of moving.
+has no intention of moving. Neither, it turns out, does the road stay put:
+it has started wandering off sideways.
 
-![Golden hour on the title screen, with the demo driving behind the menu](../media/title.jpg "The title: a quiet country road, until the first donkey")
+![Dusk on the title screen, with the demo driving behind the menu](../media/title.jpg "The title: a quiet country road, until the first donkey")
 
 ## The original
 
@@ -57,21 +58,40 @@ Donkey Dash keeps all of that and builds a road trip around it.
 
 **What stays the same**
 
-- One button, two lanes, instant switches. Every press is a lane change.
-- **Classic Duel** plays the original's rules to the letter: the same
-  donkey speed, the same random start, the same eleven dodges to the top
-  and the same shrinking reaction window, 0.67 s down to 0.30 s. The score
-  is still Donkey against Driver; now the first to five (or any number up
-  to eleven) wins the match.
+- One button, instant switches. Every press is a lane change.
+- **Classic Duel** plays the original's rules and score: the same donkey
+  speed, the same random start, the same eleven dodges to the top and the
+  same shrinking reaction window, 0.67 s down to 0.30 s. Now the first to
+  five (or any number up to eleven) wins the match, and every so often the
+  road shifts a lane under you, gently.
 - The crash is still the star, played on the original's own accelerating
   curve: a slow-motion beat, a comic BOOM!, and four halves spinning off to
   the four corners.
 - The green double-line box opens the game, types DONKEY, and unfolds into
   the new logo.
 
-![Four halves, one BOOM!, and a donkey who saw it coming](../media/crash.jpg "The crash, as in 1981, only rounder")
-
 **What is new**
+
+- **A road that will not sit still.** The lanes slide sideways as you
+  drive: a fresh lane widens in on one side, and a moment later the lane on
+  the other side runs out at a barrier. Cones, chevrons, a "lane ends" sign
+  and a big white arrow tell you in good time, and in the chase view the
+  whole road swings round into the bend. Stay put and you get the 1981
+  split-car crash with a new punchline: BONK!, a barrier rocking on its
+  legs, and cones everywhere.
+
+![BONK! The car splits in two at a barrier, cones flying](../media/barrier.jpg "Staying in a lane that ends: the one crash you can see coming from far away")
+
+- **Rival Driver.** Two cars side by side on a three-lane road, the same
+  speed, the same row, and no room to spare. Nobody can move into the
+  other car's lane, so the cleverest move is to park in the lane your
+  rival needs just as a donkey turns up in theirs. Race a friend on one
+  keyboard, one screen or two gamepads, or take on four CPU drivers, from
+  Dotty Dawdle, who waves at every donkey, to The Baron, who sets traps,
+  slips yours, and only now and then sneezes. Two buttons each, for once:
+  left and right.
+
+![Rival Driver: an orange car and Vera Vroom's red roadster side by side, a donkey ahead](../media/rival.jpg "Rival Driver: who moves over first?")
 
 - **Three ways to watch.** *Chase* puts you behind the car, OutRun style,
   with donkeys trotting over the crest of a hill. *Classic* is top-down
@@ -95,16 +115,19 @@ Donkey Dash keeps all of that and builds a road trip around it.
 - **New hazards, one at a time.** Donkey pairs, hesitant donkeys that
   wobble before they commit, herds with one gap, mud that slows your
   switch, stretches where the road widens to three lanes, and carrots worth
-  grabbing. A road sign always warns you first.
+  grabbing. A road sign always warns you first, and every road is checked
+  to be drivable with human reflexes, shifting lanes and all.
 - **A garage** of bodies, paints, horns, trails and hats for the
-  two-player donkey, earned through play and the Arcade Pass.
+  two-player donkey, earned through play and the Arcade Pass: beat the CPU
+  on Hard for Racing green, or zip out of ten lanes at the last moment for
+  a trail of traffic cones.
 - **A CGA filter**, for anyone who misses cyan and magenta.
-
-![Morning Chores on Farm Lanes, from behind the car](../media/chase.jpg "Farm Lanes: carrots on the road, a donkey over the hill")
 
 ## Why play it today
 
 Because it is the purest one-button game there is, and it still works.
 Donkey Dash is a two-minute game on a phone and a two-hour argument on a
-sofa. Classic Duel is 1981 exactly, if you want to know what it felt like.
-Everything else is the same idea, given a little more road.
+sofa, and Rival Driver makes that argument personal. Classic Duel is 1981
+with the road gently on the move, if you want to know what it felt like.
+Everything else is the same idea, given a little more road, and a road
+that keeps changing its mind.

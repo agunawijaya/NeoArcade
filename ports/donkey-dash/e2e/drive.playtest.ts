@@ -4,6 +4,14 @@ import { createAutopilot } from '../src/engine/autopilot';
 import type { Drive } from '../src/engine/drive';
 import { DIFFICULTIES, dailyRun, endlessRun } from '../src/engine/modes';
 import { legRun, legSeed, ROUTE_IDS, ROUTES } from '../src/engine/routes';
+import { createRival, rivalMatch, stepRival, type RivalInput } from '../src/engine/rival';
+import {
+  createRivalDriver,
+  CPU_LEVELS,
+  CPU_STYLES,
+  type CpuLevel,
+  type DriverStyle,
+} from '../src/engine/rival-cpu';
 import {
   createRun,
   legStars,
@@ -12,7 +20,7 @@ import {
   stepRun,
   type RunConfig,
 } from '../src/engine/run';
-import { FRAME_MS, openGame, runUntil, startMode } from './helpers';
+import { driveTo, FRAME_MS, openGame, runUntil, startMode } from './helpers';
 
 /**
  * Playtests with a scripted player who has a phone player's limits: about
@@ -176,4 +184,141 @@ test('a keyboard player drives an Endless run, and the page agrees with Node', a
   }
   const metres = await page.locator('[data-field="metres"]').textContent();
   expect(metres).toBe(`${metresDriven(plan.run).toLocaleString('en')} m`);
+});
+
+/** A phone player in Rival Driver: a little slow, now and then hesitant, and up for a block when one is right there. */
+const PHONE_RIVAL: DriverStyle = {
+  reactionSeconds: PHONE_REACTION,
+  pressGap: 0.2,
+  trapping: 'near',
+  trapChance: 0.3,
+  wary: false,
+  hesitation: 0.25,
+  blunder: 0.02,
+};
+
+/** A quick player on keys who has worked out that the middle lane is the place to be. */
+const SAVVY_RIVAL: DriverStyle = {
+  reactionSeconds: 0.34,
+  pressGap: 0.15,
+  trapping: 'anywhere',
+  trapChance: 0.5,
+  wary: true,
+  hesitation: 0.15,
+  blunder: 0.015,
+};
+
+/** One Rival match in Node; side 0 is `left`. Returns the winner and how long it took. */
+function race(left: DriverStyle, right: DriverStyle, seed: number) {
+  const state = createRival(rivalMatch(seed, 3));
+  const drivers = [createRivalDriver(left, 0, seed * 3 + 1), createRivalDriver(right, 1, seed + 1)];
+  let steps = 0;
+  for (; steps < 60 * 60 * 15 && state.phase.kind !== 'over'; steps++) {
+    stepRival(state, [drivers[0]!.decide(state), drivers[1]!.decide(state)]);
+  }
+  return { winner: state.winner, minutes: steps / 3600, state };
+}
+
+/** How often `style` beats `against` over `matches` seeded matches, playing both sides of the road. */
+function winRate(style: DriverStyle, against: DriverStyle, matches: number, offset = 0) {
+  let wins = 0;
+  let minutes = 0;
+  for (let match = 0; match < matches; match++) {
+    const seed = 7000 + offset + match * 13;
+    const mine = match % 2 === 0;
+    const result = mine ? race(style, against, seed) : race(against, style, seed);
+    if (result.winner === (mine ? 0 : 1)) wins++;
+    minutes += result.minutes;
+  }
+  return { rate: wins / matches, minutes: minutes / matches };
+}
+
+test('Rival Driver: every CPU level against every other', () => {
+  const lines: string[] = [];
+  for (const [index, level] of CPU_LEVELS.entries()) {
+    const row = CPU_LEVELS.map((other) => {
+      const { rate } = winRate(CPU_STYLES[level], CPU_STYLES[other], 16, index * 100);
+      return `${other} ${Math.round(rate * 100)}%`;
+    });
+    lines.push(`${level} beats ${row.join(', ')}`);
+    // Two levels up is clearly stronger.
+    for (const [lower, other] of CPU_LEVELS.slice(0, Math.max(0, index - 1)).entries()) {
+      expect(winRate(CPU_STYLES[level], CPU_STYLES[other], 16, lower * 7).rate).toBeGreaterThan(
+        0.6,
+      );
+    }
+  }
+  test.info().annotations.push({ type: 'rival, CPU against CPU', description: lines.join('; ') });
+});
+
+test('Rival Driver: Normal is a fair fight, and Brutal is sharp but beatable', () => {
+  const rates = Object.fromEntries(
+    CPU_LEVELS.map((level) => [level, winRate(PHONE_RIVAL, CPU_STYLES[level], 40)]),
+  ) as Record<CpuLevel, { rate: number; minutes: number }>;
+  const savvy = winRate(SAVVY_RIVAL, CPU_STYLES.brutal, 40);
+  test.info().annotations.push({
+    type: 'rival, phone player wins',
+    description: CPU_LEVELS.map(
+      (level) =>
+        `${level} ${Math.round(rates[level].rate * 100)}% (${rates[level].minutes.toFixed(1)} min a match)`,
+    ).join(', '),
+  });
+  test.info().annotations.push({
+    type: 'rival, quick player who holds the middle, against Brutal',
+    description: `${Math.round(savvy.rate * 100)}%`,
+  });
+  expect(rates.easy.rate).toBeGreaterThan(0.6);
+  expect(rates.normal.rate).toBeGreaterThan(0.3);
+  expect(rates.normal.rate).toBeLessThan(0.65);
+  expect(rates.hard.rate).toBeLessThan(rates.normal.rate);
+  expect(rates.brutal.rate).toBeLessThan(rates.hard.rate + 0.05);
+  // Sharp, not cheating: a good player still takes matches off it.
+  expect(rates.brutal.rate).toBeGreaterThan(0);
+  expect(savvy.rate).toBeGreaterThan(0.2);
+});
+
+test('a scripted player races the CPU in the page, and the page agrees with Node', async ({
+  page,
+}) => {
+  test.setTimeout(900_000);
+  const seed = 31;
+  // Node first: the player's presses through the first round, and where both cars end up.
+  const state = createRival(rivalMatch(seed, 3));
+  const player = createRivalDriver(PHONE_RIVAL, 0, 5);
+  const cpu = createRivalDriver(CPU_STYLES.normal, 1, seed + 1);
+  const presses = new Map<number, 'KeyA' | 'KeyD'>();
+  while (state.round === 1 && state.phase.kind === 'race' && state.drive.steps < 60 * 50) {
+    const mine: RivalInput = player.decide(state);
+    if (mine.left || mine.right) presses.set(state.drive.steps, mine.left ? 'KeyA' : 'KeyD');
+    stepRival(state, [mine, cpu.decide(state)]);
+  }
+  const stopAt = state.drive.steps;
+
+  await openGame(page, {
+    seed,
+    settings: {
+      camera: 'classic',
+      rival: {
+        opponent: 'cpu',
+        cpu: 'normal',
+        rounds: 3,
+        keys: [
+          ['KeyA', 'KeyD'],
+          ['ArrowLeft', 'ArrowRight'],
+        ],
+      },
+    },
+  });
+  await page.locator('[data-rival="cpu"]').click({ force: true });
+  await driveTo(page, [...presses.keys()], stopAt, (step) =>
+    page.keyboard.press(presses.get(step) ?? 'KeyD'),
+  );
+  const shown = await page.evaluate(() => [
+    document.body.dataset.lanes,
+    document.body.dataset.meters,
+  ]);
+  expect(shown).toEqual([
+    state.cars.map((car) => car.lane).join(','),
+    state.cars.map((car) => car.meter).join(','),
+  ]);
 });

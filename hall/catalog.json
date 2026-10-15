@@ -69,29 +69,33 @@
     "slug": "donkey-dash",
     "title": "Donkey Dash",
     "tagline": "One button, two lanes and a great many donkeys.",
-    "pitch": "There is a donkey in the road, and it is not moving. Press once to switch lanes, just as in 1981, then take the long way round: a Road Trip across five routes, an Endless road that keeps getting faster, a Daily Road everyone drives the same, and a mode where a friend gets to be the donkey.",
+    "pitch": "There is a donkey in the road, and it is not moving. The road is, though: lanes open on one side and end at a barrier on the other. Press once to switch lanes, just as in 1981, then take the long way round: a Road Trip across five routes, an Endless road that keeps getting faster, a Daily Road everyone drives the same, Rival Driver, where two cars try to box each other in, and a mode where a friend gets to be the donkey.",
     "highlights": [
-      "One button: the whole game fits under a thumb",
+      "One button, and a road that will not keep still",
       "Chase, top-down or isometric: three views, all equally fair",
       "Road Trip, Endless, a Daily Road and the 1981 duel",
-      "Two players on one screen: a friend picks the donkey's lane"
+      "Rival Driver: box a friend or a CPU into a donkey"
     ],
     "screens": [
       {
-        "image": "media/chase.jpg",
-        "caption": "A donkey over the hill, and carrots in the lane."
+        "image": "media/shift.jpg",
+        "caption": "The road bends round to a new lane."
+      },
+      {
+        "image": "media/rival.jpg",
+        "caption": "Rival Driver: two cars, three lanes, no room to spare."
       },
       {
         "image": "media/crash.jpg",
         "caption": "BOOM! The 1981 crash, four halves and all."
       },
       {
-        "image": "media/iso.jpg",
-        "caption": "Or watch the road as a tiny model world."
+        "image": "media/lane-end.jpg",
+        "caption": "A lane ends: chevrons, cones, then the barrier."
       },
       {
-        "image": "media/classic.jpg",
-        "caption": "Top-down like 1981, with headlights at night."
+        "image": "media/iso.jpg",
+        "caption": "Or watch the road as a tiny model world."
       },
       {
         "image": "media/mountain.jpg",

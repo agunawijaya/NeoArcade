@@ -1,18 +1,41 @@
 import { CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
-import { halfWidthAt, lanesAt, lateralAt } from '../engine/road';
+import { laneLateral, LANE_POSITIONS } from '../engine/road';
 import { revealGap } from '../engine/sight';
 import { drawCrash } from './crash';
 import { drawParticle } from './effects';
-import { mix, type Palette } from './palette';
+import {
+  chevronShape,
+  chevronsOf,
+  conesOf,
+  LANE_METRES,
+  laneEndsBetween,
+  laneEndsSign,
+  LANE_END_PAINT,
+  mergeArrowShape,
+  mergeArrowsOf,
+  sliceAt,
+  type Shape,
+} from './lanes';
+import { DRIVER_COLOURS, mix, withAlpha, type Palette } from './palette';
 import { parcelsBetween, type ParcelKind } from './fields';
 import { hash, hasFence, polesBetween, propsBetween } from './scenery';
-import { drawCarrot, drawChequers, drawSign } from './sprites/bits';
+import {
+  drawBarrier,
+  drawCarrot,
+  drawChequers,
+  drawCone,
+  drawLaneEndsSign,
+  drawSign,
+} from './sprites/bits';
 import { drawCarTop } from './sprites/car';
 import { DONKEY_HEIGHT, DONKEY_LENGTH, drawDonkey, drawDonkeyShadow } from './sprites/donkey';
 import { drawPole, drawProp, PROP_HEIGHT } from './sprites/props';
 import {
+  ghostAlpha,
   summitProgress,
   type Box,
+  type CarFrame,
+  type CrashFrame,
   type Frame,
   type HazardFrame,
   type RoadView,
@@ -26,12 +49,13 @@ import { drawWeather } from './weather';
  * The Classic view: the road runs up the middle of the screen, as it did on
  * the CGA screen in 1981, with the car creeping upward as it dodges. Here it
  * is a little table-top diorama: fields on either side, soft shadows,
- * swaying grass, a hedge-row at the far end that donkeys trot out from.
+ * swaying grass, a hedge-row at the far end that donkeys trot out from. The
+ * camera stays put over the lane band, so when the road shifts it visibly
+ * snakes across the fields, and the car goes with it.
  *
  * One metre is the same number of pixels along and across the road, so the
  * car and the donkeys keep their true proportions.
  */
-export const LANE_METRES = 3.5;
 /** Donkeys and props are upright cut-outs, drawn a touch squat as on a tilted table. */
 const TILT = 0.82;
 /** How much of a donkey rises above the sight line when it appears. */
@@ -54,8 +78,8 @@ export function classicLayout(viewport: Viewport, climb: number): ClassicLayout 
   // A few pixels of air under the HUD, so a donkey never touches it.
   const available = Math.max(1, height - insetTop - insetBottom - 6);
   const span = DONKEY_REACH + revealGap(0) + CAR_LENGTH + ROAD_BEHIND;
-  // Three lanes and their verges must fit across, whatever the shape of the screen.
-  const scale = Math.min(available / span, (width - 20) / (3 * LANE_METRES + 2.2));
+  // The whole lane band and its verges must fit across, whatever the shape of the screen.
+  const scale = Math.min(available / span, (width - 20) / (LANE_POSITIONS * LANE_METRES + 2.2));
   const top = insetTop + 3 + (available - span * scale) / 2;
   const sightY = top + DONKEY_REACH * scale;
   const sightAhead = revealGap(climb);
@@ -94,6 +118,7 @@ interface Billboard {
 export class ClassicView implements RoadView {
   readonly camera = 'classic' as const;
 
+  /** The camera already takes in the whole lane band, so two cars fit as they are. */
   layout(viewport: Viewport, climb: number): ClassicLayout {
     return classicLayout(viewport, climb);
   }
@@ -105,12 +130,12 @@ export class ClassicView implements RoadView {
 
     this.drawGround(ctx, frame, viewport, layout, nearest, farthest);
     this.drawRoad(ctx, frame, layout, nearest, farthest);
-    this.drawRoadMarks(ctx, frame, layout);
+    this.drawRoadMarks(ctx, frame, layout, nearest);
 
     const billboards: Billboard[] = [];
     this.collectScenery(ctx, frame, viewport, layout, nearest, farthest, billboards);
-    this.collectHazards(ctx, frame, layout, billboards);
-    if (!frame.crash) this.collectCar(ctx, frame, layout, billboards);
+    this.collectHazards(ctx, frame, layout, nearest, billboards);
+    for (const car of frame.cars) this.collectCar(ctx, frame, layout, car, billboards);
     billboards.sort((a, b) => a.y - b.y);
     for (const billboard of billboards) billboard.draw();
 
@@ -129,7 +154,7 @@ export class ClassicView implements RoadView {
     this.drawNight(ctx, frame, viewport, layout);
     this.drawHedgerow(ctx, frame, viewport, layout);
     drawWeather(ctx, frame, viewport);
-    if (frame.crash) this.drawCrash(ctx, frame, viewport, layout);
+    for (const crash of frame.crashes) this.drawCrash(ctx, frame, crash, viewport, layout);
   }
 
   private drawGround(
@@ -176,19 +201,22 @@ export class ClassicView implements RoadView {
     farthest: number,
   ) {
     const { palette, road } = frame;
-    const steps: number[] = [];
-    for (let along = nearest; along <= farthest + 30; along += 0.5) steps.push(along);
-    const edge = (along: number, side: -1 | 1, extra: number) =>
-      layout.centreX + side * (halfWidthAt(road, along) * layout.laneWidth + extra * layout.scale);
+    const steps: { along: number; left: number; right: number }[] = [];
+    for (let along = nearest; along <= farthest + 30; along += 0.5) {
+      const { left, right } = sliceAt(road, along);
+      steps.push({ along, left, right });
+    }
+    const edge = (step: (typeof steps)[number], side: -1 | 1, extra: number) =>
+      layout.x(side < 0 ? step.left : step.right) + side * extra * layout.scale;
     const outline = (extra: number) => {
       ctx.beginPath();
-      steps.forEach((along, index) => {
-        const point = [edge(along, -1, extra), layout.y(along - frame.nose)] as const;
+      steps.forEach((step, index) => {
+        const point = [edge(step, -1, extra), layout.y(step.along - frame.nose)] as const;
         if (index === 0) ctx.moveTo(...point);
         else ctx.lineTo(...point);
       });
-      for (const along of [...steps].reverse())
-        ctx.lineTo(edge(along, 1, extra), layout.y(along - frame.nose));
+      for (const step of [...steps].reverse())
+        ctx.lineTo(edge(step, 1, extra), layout.y(step.along - frame.nose));
       ctx.closePath();
     };
     ctx.fillStyle = palette.verge;
@@ -205,9 +233,9 @@ export class ClassicView implements RoadView {
     ctx.lineWidth = Math.max(1.5, layout.scale * 0.14);
     for (const side of [-1, 1] as const) {
       ctx.beginPath();
-      steps.forEach((along, index) => {
-        const x = edge(along, side, -0.25);
-        const y = layout.y(along - frame.nose);
+      steps.forEach((step, index) => {
+        const x = edge(step, side, -0.25);
+        const y = layout.y(step.along - frame.nose);
         if (index === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
@@ -221,23 +249,25 @@ export class ClassicView implements RoadView {
       along < farthest + 30;
       along += dash * 2
     ) {
-      const lanes = lanesAt(road, along);
-      for (let divider = 0; divider < lanes - 1; divider++) {
-        const lateral = (lateralAt(road, along, divider) + lateralAt(road, along, divider + 1)) / 2;
-        const top = layout.y(along + dash - frame.nose);
-        const width = Math.max(2, layout.scale * 0.16);
+      const top = layout.y(along + dash - frame.nose);
+      const width = Math.max(2, layout.scale * 0.16);
+      for (const lateral of sliceAt(road, along).dividers) {
         ctx.fillRect(layout.x(lateral) - width / 2, top, width, dash * layout.scale);
       }
     }
   }
 
-  private drawRoadMarks(ctx: CanvasRenderingContext2D, frame: Frame, layout: ClassicLayout) {
+  private drawRoadMarks(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: ClassicLayout,
+    nearest: number,
+  ) {
     const { road, palette } = frame;
     for (const patch of road.mud) {
       for (const lane of patch.lanes) {
         for (let along = patch.from; along < patch.to; along += 2.2) {
-          const lateral = lateralAt(road, along, lane);
-          const x = layout.x(lateral);
+          const x = layout.x(laneLateral(lane));
           const y = layout.y(along - frame.nose);
           ctx.fillStyle = palette.mud;
           ctx.beginPath();
@@ -258,38 +288,67 @@ export class ClassicView implements RoadView {
         }
       }
     }
+    this.drawLaneEndPaint(ctx, frame, layout, nearest);
     if (road.finish !== null) {
       const gap = road.finish - frame.nose;
       if (gap < layout.sightAhead + 30 && gap > -20) {
+        const { left, right } = sliceAt(road, road.finish);
         ctx.save();
-        ctx.translate(layout.centreX, layout.y(gap));
+        ctx.translate(layout.x((left + right) / 2), layout.y(gap));
         ctx.scale(layout.scale, layout.scale);
-        drawChequers(ctx, halfWidthAt(road, road.finish) * 2 * LANE_METRES, 1.4);
+        drawChequers(ctx, (right - left) * LANE_METRES, 1.4);
         ctx.restore();
       }
     }
     if (frame.commitGap !== null) {
       const y = layout.y(frame.commitGap);
-      const half = halfWidthAt(road, frame.nose + frame.commitGap) * layout.laneWidth;
+      const { left, right } = sliceAt(road, frame.nose + frame.commitGap);
       ctx.save();
       ctx.setLineDash([layout.scale * 0.6, layout.scale * 0.4]);
       ctx.lineDashOffset = -frame.time * layout.scale * 2;
       ctx.strokeStyle = '#ff5e8a';
       ctx.lineWidth = Math.max(2, layout.scale * 0.18);
       ctx.beginPath();
-      ctx.moveTo(layout.centreX - half, y);
-      ctx.lineTo(layout.centreX + half, y);
+      ctx.moveTo(layout.x(left), y);
+      ctx.lineTo(layout.x(right), y);
       ctx.stroke();
       ctx.restore();
     }
     if (frame.dropLane !== null) {
-      const x = layout.x(lateralAt(road, frame.nose + layout.sightAhead, frame.dropLane));
+      const x = layout.x(laneLateral(frame.dropLane));
       ctx.fillStyle = 'rgba(255, 94, 138, 0.75)';
       ctx.beginPath();
       ctx.moveTo(x - layout.scale * 0.6, layout.sightY - layout.scale * 0.2);
       ctx.lineTo(x + layout.scale * 0.6, layout.sightY - layout.scale * 0.2);
       ctx.lineTo(x, layout.sightY + layout.scale * 0.7);
       ctx.fill();
+    }
+  }
+
+  /** Chevrons and merge arrows painted down a lane that is ending. */
+  private drawLaneEndPaint(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: ClassicLayout,
+    nearest: number,
+  ) {
+    const paint = (shape: Shape) => {
+      ctx.beginPath();
+      shape.forEach(([along, across], index) => {
+        const x = layout.centreX + across * layout.scale;
+        const y = layout.y(along - frame.nose);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    };
+    const farthest = frame.nose + layout.sightAhead + 2;
+    for (const end of laneEndsBetween(frame.road, nearest, farthest)) {
+      ctx.fillStyle = withAlpha(LANE_END_PAINT, 0.85);
+      for (const along of chevronsOf(end)) paint(chevronShape(end, along));
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      for (const along of mergeArrowsOf(end)) paint(mergeArrowShape(end, along));
     }
   }
 
@@ -305,9 +364,13 @@ export class ClassicView implements RoadView {
     const { palette, road } = frame;
     const reach = viewport.width / 2 / layout.scale;
     const hidden = farthest - 1.5;
+    // Metres from the middle of the lane band to the road's edge on one side, at `along`.
+    const edge = (along: number, side: -1 | 1) => {
+      const { left, right } = sliceAt(road, along);
+      return (side < 0 ? left : right) * LANE_METRES;
+    };
     for (const prop of propsBetween(palette, nearest - 6, hidden, reach, 2.4)) {
-      const roadEdge = halfWidthAt(road, prop.along) * LANE_METRES;
-      const across = prop.side * (roadEdge + 1.2 + prop.offset);
+      const across = edge(prop.along, prop.side) + prop.side * (1.2 + prop.offset);
       const x = layout.centreX + across * layout.scale;
       if (Math.abs(across) > reach + 6) continue;
       const y = layout.y(prop.along - frame.nose);
@@ -329,7 +392,7 @@ export class ClassicView implements RoadView {
       });
     }
     for (const along of polesBetween(palette, nearest - 10, hidden)) {
-      const x = layout.centreX - (halfWidthAt(road, along) * LANE_METRES + 2.2) * layout.scale;
+      const x = layout.centreX + (edge(along, -1) - 2.2) * layout.scale;
       const y = layout.y(along - frame.nose);
       billboards.push({
         y,
@@ -346,9 +409,9 @@ export class ClassicView implements RoadView {
     for (const side of [-1, 1] as const) {
       for (let along = Math.floor(nearest / 2.5) * 2.5; along < hidden; along += 2.5) {
         if (!hasFence(palette, along, side)) continue;
-        const x =
-          layout.centreX + side * (halfWidthAt(road, along) * LANE_METRES + 1.1) * layout.scale;
+        const x = layout.centreX + (edge(along, side) + side * 1.1) * layout.scale;
         const y = layout.y(along - frame.nose);
+        const nextX = layout.centreX + (edge(along + 2.5, side) + side * 1.1) * layout.scale;
         const next = layout.y(along + 2.5 - frame.nose);
         billboards.push({
           y,
@@ -361,7 +424,13 @@ export class ClassicView implements RoadView {
               post,
               layout.scale * 1.1 * TILT,
             );
-            ctx.fillRect(x - post / 4, next - layout.scale * 0.95 * TILT, post / 2, y - next);
+            // The rail follows the verge as the road swings across.
+            ctx.strokeStyle = palette.fence;
+            ctx.lineWidth = post / 2;
+            ctx.beginPath();
+            ctx.moveTo(x, y - layout.scale * 0.95 * TILT);
+            ctx.lineTo(nextX, next - layout.scale * 0.95 * TILT);
+            ctx.stroke();
           },
         });
       }
@@ -372,45 +441,59 @@ export class ClassicView implements RoadView {
     ctx: CanvasRenderingContext2D,
     frame: Frame,
     layout: ClassicLayout,
+    nearest: number,
     billboards: Billboard[],
   ) {
-    const { palette } = frame;
+    const { palette, road } = frame;
+    const upright = (x: number, y: number, draw: () => void) =>
+      billboards.push({
+        y,
+        draw: () => {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(layout.scale, layout.scale * TILT);
+          draw();
+          ctx.restore();
+        },
+      });
     for (const hazard of frame.hazards) {
       if (hazard.gap > layout.sightAhead + 0.01) continue;
       const x = layout.x(hazard.lateral);
+      if (hazard.kind === 'barrier') {
+        upright(x, layout.y(hazard.gap), () => drawBarrier(ctx, frame.time));
+        continue;
+      }
       const y = layout.y(hazard.gap + (hazard.kind === 'donkey' ? DONKEY_DEPTH / 2 : 0.25));
-      billboards.push({
-        y,
-        draw: () => {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(layout.scale, layout.scale * TILT);
-          if (hazard.kind === 'carrot') {
-            shadow(ctx, palette, 0.25);
-            drawCarrot(ctx, frame.time, hazard.seed);
-          } else {
-            drawDonkeyShadow(ctx, palette.shadow);
-            drawDonkeySprite(ctx, hazard, frame, layout.scale < 12);
-          }
-          ctx.restore();
-        },
+      upright(x, y, () => {
+        if (hazard.kind === 'carrot') {
+          shadow(ctx, palette, 0.25);
+          drawCarrot(ctx, frame.time, hazard.seed);
+        } else {
+          drawDonkeyShadow(ctx, palette.shadow);
+          drawDonkeySprite(ctx, hazard, frame, layout.scale < 12);
+        }
       });
     }
-    for (const sign of frame.road.signs) {
+    const sight = frame.nose + layout.sightAhead;
+    for (const end of laneEndsBetween(road, nearest, sight)) {
+      for (const cone of conesOf(end)) {
+        if (cone.along > sight || cone.along < nearest) continue;
+        upright(layout.x(cone.lateral), layout.y(cone.along - frame.nose), () => drawCone(ctx));
+      }
+      const sign = laneEndsSign(road, end);
+      if (sign.along <= sight) {
+        const { left, right } = sliceAt(road, sign.along);
+        const lateral = sign.side < 0 ? left - 0.35 : right + 0.35;
+        upright(layout.x(lateral), layout.y(sign.along - frame.nose), () =>
+          drawLaneEndsSign(ctx, end.merge),
+        );
+      }
+    }
+    for (const sign of road.signs) {
       const gap = sign.at - frame.nose;
       if (gap > layout.sightAhead || gap < -20) continue;
-      const x = layout.x(halfWidthAt(frame.road, sign.at) + 0.35);
-      const y = layout.y(gap);
-      billboards.push({
-        y,
-        draw: () => {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(layout.scale, layout.scale * TILT);
-          drawSign(ctx, sign.kind);
-          ctx.restore();
-        },
-      });
+      const x = layout.x(sliceAt(road, sign.at).right + 0.35);
+      upright(x, layout.y(gap), () => drawSign(ctx, sign.kind));
     }
   }
 
@@ -418,19 +501,26 @@ export class ClassicView implements RoadView {
     ctx: CanvasRenderingContext2D,
     frame: Frame,
     layout: ClassicLayout,
+    car: CarFrame,
     billboards: Billboard[],
   ) {
-    const { car } = frame;
     const centreY = layout.noseY + (CAR_LENGTH / 2) * layout.scale;
     billboards.push({
       y: layout.noseY + CAR_LENGTH * layout.scale,
       draw: () => {
-        if (car.ghost && Math.floor(frame.time * 12) % 2 === 0) return;
         const x = layout.x(car.lateral);
         // Reaching the top, the car sails off the far end of the road.
         const summit = summitProgress(frame) * (layout.noseY + CAR_LENGTH * layout.scale * 2);
         const lift = (car.hop + car.bounce) * layout.scale + summit;
         ctx.save();
+        ctx.globalAlpha = ghostAlpha(car, frame);
+        if (car.driver !== null) {
+          // Each Rival driver's car sits in a pool of its own colour.
+          ctx.fillStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.45);
+          ctx.beginPath();
+          ctx.ellipse(x, centreY, layout.scale * 1.45, layout.scale * 2.75, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.fillStyle = frame.palette.shadow;
         ctx.beginPath();
         // The shadow stays on the road through a hop, but drives off with the car.
@@ -472,28 +562,30 @@ export class ClassicView implements RoadView {
     ctx.save();
     ctx.fillStyle = `rgba(8, 10, 30, ${(dark - 0.35) * 0.55})`;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
-    if (lights && !frame.crash) {
+    if (lights) {
       ctx.globalCompositeOperation = 'lighter';
-      const x = layout.x(frame.car.lateral);
-      const beam = ctx.createRadialGradient(
-        x,
-        layout.noseY,
-        layout.scale,
-        x,
-        layout.noseY - layout.scale * 10,
-        layout.scale * 11,
-      );
-      beam.addColorStop(0, 'rgba(255, 238, 180, 0.1)');
-      beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
-      ctx.fillStyle = beam;
-      // Nested cones of faint light add up to a soft-edged beam.
-      for (const spread of [1.6, 2.4, 3.2, 4]) {
-        ctx.beginPath();
-        ctx.moveTo(x - layout.scale * spread * 0.3, layout.noseY);
-        ctx.lineTo(x - layout.scale * spread, layout.noseY - layout.scale * 14);
-        ctx.lineTo(x + layout.scale * spread, layout.noseY - layout.scale * 14);
-        ctx.lineTo(x + layout.scale * spread * 0.3, layout.noseY);
-        ctx.fill();
+      for (const car of frame.cars) {
+        const x = layout.x(car.lateral);
+        const beam = ctx.createRadialGradient(
+          x,
+          layout.noseY,
+          layout.scale,
+          x,
+          layout.noseY - layout.scale * 10,
+          layout.scale * 11,
+        );
+        beam.addColorStop(0, 'rgba(255, 238, 180, 0.1)');
+        beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
+        ctx.fillStyle = beam;
+        // Nested cones of faint light add up to a soft-edged beam.
+        for (const spread of [1.6, 2.4, 3.2, 4]) {
+          ctx.beginPath();
+          ctx.moveTo(x - layout.scale * spread * 0.3, layout.noseY);
+          ctx.lineTo(x - layout.scale * spread, layout.noseY - layout.scale * 14);
+          ctx.lineTo(x + layout.scale * spread, layout.noseY - layout.scale * 14);
+          ctx.lineTo(x + layout.scale * spread * 0.3, layout.noseY);
+          ctx.fill();
+        }
       }
     }
     ctx.restore();
@@ -571,12 +663,10 @@ export class ClassicView implements RoadView {
   private drawCrash(
     ctx: CanvasRenderingContext2D,
     frame: Frame,
+    crash: CrashFrame,
     viewport: Viewport,
     layout: ClassicLayout,
   ) {
-    const crash = frame.crash;
-    if (!crash) return;
-    const car = frame.car;
     const carBox = layout.carBox(crash.carLateral);
     const donkeyBox = layout.donkeyBox(0, crash.donkeyLateral);
     const donkey: HazardFrame = {
@@ -595,6 +685,7 @@ export class ClassicView implements RoadView {
       seed: crash.donkeySeed,
       hat: crash.donkeyHat,
     };
+    const barrierFoot = { x: layout.x(crash.donkeyLateral), y: layout.y(0) };
     drawCrash(
       ctx,
       crash.age,
@@ -606,8 +697,8 @@ export class ClassicView implements RoadView {
           context.translate(carBox.x + carBox.width / 2, carBox.y + carBox.height / 2);
           context.scale(layout.scale, layout.scale);
           drawCarTop(context, {
-            shape: car.look.shape,
-            paint: car.look.paint,
+            shape: crash.look.shape,
+            paint: crash.look.paint,
             lean: 0,
             daylight: frame.palette.daylight,
             stuck: false,
@@ -617,16 +708,31 @@ export class ClassicView implements RoadView {
         },
       },
       {
-        box: donkeyBox,
-        draw: (context) => {
+        box:
+          crash.obstacle === 'donkey'
+            ? donkeyBox
+            : {
+                x: barrierFoot.x - 1.6 * layout.scale,
+                y: barrierFoot.y - 1.5 * layout.scale * TILT,
+                width: 3.2 * layout.scale,
+                height: 1.5 * layout.scale * TILT,
+              },
+        draw: (context, wobble = 0) => {
           context.save();
-          context.translate(donkeyBox.x + donkeyBox.width / 2, donkeyBox.y + donkeyBox.height);
-          context.scale(layout.scale, layout.scale * TILT);
-          drawDonkeySprite(context, donkey, frame, false);
+          if (crash.obstacle === 'barrier') {
+            context.translate(barrierFoot.x, barrierFoot.y);
+            context.scale(layout.scale, layout.scale * TILT);
+            drawBarrier(context, frame.time, wobble);
+          } else {
+            context.translate(donkeyBox.x + donkeyBox.width / 2, donkeyBox.y + donkeyBox.height);
+            context.scale(layout.scale, layout.scale * TILT);
+            drawDonkeySprite(context, donkey, frame, false);
+          }
           context.restore();
         },
       },
       frame.reducedMotion,
+      crash.obstacle,
     );
   }
 }

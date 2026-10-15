@@ -1,7 +1,6 @@
 import { CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
-import { halfWidthAt, lanesAt, lateralAt } from '../engine/road';
+import { laneLateral, LANE_POSITIONS } from '../engine/road';
 import { revealGap } from '../engine/sight';
-import { LANE_METRES } from './classic-view';
 import { drawCrash } from './crash';
 import { drawParticle } from './effects';
 import { parcelsBetween } from './fields';
@@ -16,12 +15,28 @@ import {
   shaded,
   type IsoProjection,
 } from './iso';
-import { coatFor, mix, type Palette, type PropKind } from './palette';
-import { hash, hasFence, polesBetween, propsBetween } from './scenery';
-import { drawCarrot, drawSign } from './sprites/bits';
 import {
+  chevronShape,
+  chevronsOf,
+  conesOf,
+  LANE_METRES,
+  laneEndsBetween,
+  laneEndsSign,
+  LANE_END_PAINT,
+  mergeArrowShape,
+  mergeArrowsOf,
+  sliceAt,
+  type Shape,
+} from './lanes';
+import { coatFor, DRIVER_COLOURS, mix, withAlpha, type Palette, type PropKind } from './palette';
+import { hash, hasFence, polesBetween, propsBetween } from './scenery';
+import { drawCarrot, drawLaneEndsSign, drawSign } from './sprites/bits';
+import {
+  ghostAlpha,
   summitProgress,
   type Box,
+  type CarFrame,
+  type CrashFrame,
   type Frame,
   type RoadView,
   type Viewport,
@@ -38,7 +53,9 @@ import { drawWeather } from './weather';
  * The car stays put in the lower left. Donkeys appear where the road leaves
  * the screen, which is exactly the sight line; the view stretches distance
  * ahead so that line lands on the edge of any screen. Only low things stand
- * on the viewer's side of the road, so nothing can hide a lane.
+ * on the viewer's side of the road, so nothing can hide a lane. The camera
+ * stays over the lane band, so a shifting road visibly snakes across the
+ * model world.
  */
 export interface IsoLayout extends ViewLayout {
   viewport: Viewport;
@@ -74,8 +91,9 @@ export function isoLayout(viewport: Viewport, climb: number): IsoLayout {
     };
   };
   // The longest reach at which a donkey on the sight line, in any lane, is whole on screen.
+  const outermost = laneLateral(LANE_POSITIONS - 1);
   const fits = (stretch: number) =>
-    [-1, 1].every((lateral) => {
+    [-outermost, outermost].every((lateral) => {
       const box = boxAt(stretch, sightAhead, lateral);
       return box.x + box.width <= width - 2 && box.y >= insetTop + 2;
     });
@@ -147,6 +165,10 @@ export class IsoView implements RoadView {
       pieces.push({
         depth: isoDepth(along, across),
         draw: () => {
+          if (hazard.kind === 'barrier') {
+            drawIsoBarrier(ctx, projection, along, across, frame.time, 0);
+            return;
+          }
           if (hazard.kind === 'carrot') {
             isoShadow(ctx, projection, along + 0.2, across, 0.3, palette.shadow);
             const point = iso(projection, along + 0.2, across);
@@ -185,24 +207,8 @@ export class IsoView implements RoadView {
         },
       });
     }
-    if (!frame.crash) {
-      const across = frame.car.lateral * LANE_METRES;
-      pieces.push({
-        depth: isoDepth(-CAR_LENGTH / 2, across),
-        draw: () => {
-          if (frame.car.ghost && Math.floor(frame.time * 12) % 2 === 0) return;
-          // Reaching the top, the car zooms off up the road.
-          const ahead = summitProgress(frame) * layout.stretch * layout.sightAhead * 1.4;
-          isoShadow(ctx, projection, ahead - CAR_LENGTH / 2, across, 2.2, palette.shadow);
-          drawIsoCar(ctx, projection, ahead, across, frame.car.hop + frame.car.bounce, {
-            shape: frame.car.look.shape,
-            paint: frame.car.look.paint,
-            daylight: palette.daylight,
-            lean: frame.car.lean,
-          });
-        },
-      });
-    }
+    this.collectLaneEnds(ctx, frame, layout, u, pieces);
+    for (const car of frame.cars) this.collectCar(ctx, frame, layout, car, pieces);
     pieces.sort((a, b) => a.depth - b.depth);
     for (const piece of pieces) piece.draw();
 
@@ -216,7 +222,87 @@ export class IsoView implements RoadView {
     drawSunlight(ctx, frame, viewport);
     this.drawNight(ctx, frame, viewport, layout);
     drawWeather(ctx, frame, viewport);
-    if (frame.crash) this.drawCrash(ctx, frame, viewport, layout);
+    for (const crash of frame.crashes) this.drawCrash(ctx, frame, crash, viewport, layout);
+  }
+
+  private collectCar(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: IsoLayout,
+    car: CarFrame,
+    pieces: Piece[],
+  ) {
+    const { projection } = layout;
+    const { palette } = frame;
+    const across = car.lateral * LANE_METRES;
+    pieces.push({
+      depth: isoDepth(-CAR_LENGTH / 2, across),
+      draw: () => {
+        // Reaching the top, the car zooms off up the road.
+        const ahead = summitProgress(frame) * layout.stretch * layout.sightAhead * 1.4;
+        ctx.save();
+        ctx.globalAlpha = ghostAlpha(car, frame);
+        if (car.driver !== null) {
+          // Each Rival driver's car sits in a pool of its own colour.
+          isoShadow(
+            ctx,
+            projection,
+            ahead - CAR_LENGTH / 2,
+            across,
+            2.7,
+            withAlpha(DRIVER_COLOURS[car.driver], 0.5),
+          );
+        }
+        isoShadow(ctx, projection, ahead - CAR_LENGTH / 2, across, 2.2, palette.shadow);
+        drawIsoCar(ctx, projection, ahead, across, car.hop + car.bounce, {
+          shape: car.look.shape,
+          paint: car.look.paint,
+          daylight: palette.daylight,
+          lean: car.lean,
+        });
+        ctx.restore();
+      },
+    });
+  }
+
+  /** The cones and the "lane ends" sign of a lane that is ending, up to the sight line. */
+  private collectLaneEnds(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: IsoLayout,
+    u: (position: number) => number,
+    pieces: Piece[],
+  ) {
+    const { projection } = layout;
+    const { road } = frame;
+    const sight = frame.nose + layout.sightAhead;
+    for (const end of laneEndsBetween(road, frame.nose - 20, sight)) {
+      for (const cone of conesOf(end)) {
+        if (cone.along > sight) continue;
+        const along = u(cone.along);
+        const across = cone.lateral * LANE_METRES;
+        pieces.push({
+          depth: isoDepth(along, across),
+          draw: () => drawIsoCone(ctx, projection, along, across),
+        });
+      }
+      const sign = laneEndsSign(road, end);
+      if (sign.along > sight) continue;
+      const edges = sliceAt(road, sign.along);
+      const along = u(sign.along);
+      const across = (sign.side < 0 ? edges.left : edges.right) * LANE_METRES + sign.side * 1.2;
+      pieces.push({
+        depth: isoDepth(along, across),
+        draw: () => {
+          const point = iso(projection, along, across);
+          ctx.save();
+          ctx.translate(point.x, point.y);
+          ctx.scale(projection.unit * 1.2, projection.unit * 1.2);
+          drawLaneEndsSign(ctx, end.merge);
+          ctx.restore();
+        },
+      });
+    }
   }
 
   private drawBackground(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport) {
@@ -358,27 +444,16 @@ export class IsoView implements RoadView {
       ];
       isoFlat(ctx, projection, corners, colour);
     };
-    const half = (position: number) => halfWidthAt(road, position) * LANE_METRES;
+    const left = (position: number) => sliceAt(road, position).left * LANE_METRES;
+    const right = (position: number) => sliceAt(road, position).right * LANE_METRES;
     band(
-      (position) => -half(position) - 1,
-      (position) => half(position) + 1,
+      (position) => left(position) - 1,
+      (position) => right(position) + 1,
       palette.verge,
     );
-    band(
-      (position) => -half(position),
-      (position) => half(position),
-      palette.asphalt,
-    );
-    band(
-      (position) => -half(position),
-      (position) => -half(position) + 0.2,
-      palette.edgeLine,
-    );
-    band(
-      (position) => half(position) - 0.2,
-      (position) => half(position),
-      palette.edgeLine,
-    );
+    band(left, right, palette.asphalt);
+    band(left, (position) => left(position) + 0.2, palette.edgeLine);
+    band((position) => right(position) - 0.2, right, palette.edgeLine);
 
     for (const river of riversBetween(behind, ahead)) {
       // The bridge deck and its rails.
@@ -386,20 +461,20 @@ export class IsoView implements RoadView {
         ctx,
         projection,
         [
-          [u(river), -half(river) - 0.6],
-          [u(river + 5), -half(river) - 0.6],
-          [u(river + 5), half(river) + 0.6],
-          [u(river), half(river) + 0.6],
+          [u(river), left(river) - 0.6],
+          [u(river + 5), left(river) - 0.6],
+          [u(river + 5), right(river) + 0.6],
+          [u(river), right(river) + 0.6],
         ],
         mix(palette.fence, '#000000', 0.1),
         0.05,
       );
-      for (const side of [-1, 1]) {
+      for (const rail of [left(river) - 0.6, right(river) + 0.6]) {
         isoBox(
           ctx,
           projection,
           u(river),
-          side * (half(river) + 0.6) - 0.15,
+          rail - 0.15,
           0,
           u(river + 5) - u(river),
           0.3,
@@ -411,11 +486,8 @@ export class IsoView implements RoadView {
 
     const dash = mix(palette.dash, '#ffffff', frame.beatPulse * 0.6);
     for (let position = Math.floor(behind / 4) * 4; position < ahead; position += 4) {
-      const lanes = lanesAt(road, position);
-      for (let divider = 0; divider < lanes - 1; divider++) {
-        const middle =
-          ((lateralAt(road, position, divider) + lateralAt(road, position, divider + 1)) / 2) *
-          LANE_METRES;
+      for (const lateral of sliceAt(road, position).dividers) {
+        const middle = lateral * LANE_METRES;
         isoFlat(
           ctx,
           projection,
@@ -432,7 +504,7 @@ export class IsoView implements RoadView {
     for (const patch of road.mud) {
       if (patch.to < behind || patch.from > ahead) continue;
       for (const lane of patch.lanes) {
-        const middle = lateralAt(road, patch.from, lane) * LANE_METRES;
+        const middle = laneLateral(lane) * LANE_METRES;
         isoFlat(
           ctx,
           projection,
@@ -446,11 +518,12 @@ export class IsoView implements RoadView {
         );
       }
     }
+    this.paintLaneEnds(ctx, frame, layout, u);
     if (road.finish !== null && road.finish > behind && road.finish < ahead) {
       const cells = 8;
-      const width = half(road.finish) * 2;
+      const width = right(road.finish) - left(road.finish);
       for (let cell = 0; cell < cells; cell++) {
-        const from = -width / 2 + (cell * width) / cells;
+        const from = left(road.finish) + (cell * width) / cells;
         isoFlat(
           ctx,
           projection,
@@ -466,13 +539,13 @@ export class IsoView implements RoadView {
     }
     if (frame.commitGap !== null) {
       const along = frame.commitGap * layout.stretch;
-      const width = half(frame.nose + frame.commitGap);
+      const at = frame.nose + frame.commitGap;
       ctx.save();
       ctx.setLineDash([projection.unit * 0.6, projection.unit * 0.4]);
       ctx.strokeStyle = '#ff5e8a';
       ctx.lineWidth = Math.max(2, projection.unit * 0.2);
-      const a = iso(projection, along, -width);
-      const b = iso(projection, along, width);
+      const a = iso(projection, along, left(at));
+      const b = iso(projection, along, right(at));
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -482,7 +555,7 @@ export class IsoView implements RoadView {
     if (frame.dropLane !== null) {
       // Where the next donkey drops in: a chevron painted at the far end of the road.
       const along = layout.sightAhead * layout.stretch;
-      const lane = lateralAt(road, frame.nose + layout.sightAhead, frame.dropLane) * LANE_METRES;
+      const lane = laneLateral(frame.dropLane) * LANE_METRES;
       isoFlat(
         ctx,
         projection,
@@ -518,8 +591,7 @@ export class IsoView implements RoadView {
       const kind: PropKind =
         near && !LOW_PROPS.has(prop.kind) ? lowFor(palette, prop.variant) : prop.kind;
       const across =
-        prop.side *
-        (halfWidthAt(road, prop.along) * LANE_METRES + 2 + prop.offset * (near ? 0.6 : 1));
+        edgeOf(road, prop.along, prop.side) + prop.side * (2 + prop.offset * (near ? 0.6 : 1));
       const along = u(prop.along);
       pieces.push({
         depth: isoDepth(along, across),
@@ -529,7 +601,7 @@ export class IsoView implements RoadView {
     }
     for (const position of polesBetween(palette, behind, ahead)) {
       const along = u(position);
-      const across = -(halfWidthAt(road, position) * LANE_METRES + 2.5);
+      const across = edgeOf(road, position, -1) - 2.5;
       pieces.push({
         depth: isoDepth(along, across),
         draw: () => {
@@ -542,7 +614,7 @@ export class IsoView implements RoadView {
       for (let position = Math.ceil(behind / 2.5) * 2.5; position < ahead; position += 2.5) {
         if (!hasFence(palette, position, side) || onRiver(position)) continue;
         const along = u(position);
-        const across = side * (halfWidthAt(road, position) * LANE_METRES + 1.4);
+        const across = edgeOf(road, position, side) + side * 1.4;
         const next = u(position + 2.5);
         pieces.push({
           depth: isoDepth(along, across),
@@ -566,7 +638,7 @@ export class IsoView implements RoadView {
     for (const sign of road.signs) {
       if (sign.at < behind || sign.at > ahead) continue;
       const along = u(sign.at);
-      const across = -(halfWidthAt(road, sign.at) * LANE_METRES + 1.2);
+      const across = edgeOf(road, sign.at, -1) - 1.2;
       pieces.push({
         depth: isoDepth(along, across),
         draw: () => {
@@ -594,38 +666,66 @@ export class IsoView implements RoadView {
     ctx.save();
     ctx.fillStyle = `rgba(6, 8, 26, ${(dark - 0.35) * 0.55})`;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
-    if (lights && !frame.crash) {
+    if (lights) {
       ctx.globalCompositeOperation = 'lighter';
-      const across = frame.car.lateral * LANE_METRES;
-      const corners = [
-        iso(layout.projection, 0, across - 0.8),
-        iso(layout.projection, 12, across - 2.6),
-        iso(layout.projection, 12, across + 2.6),
-        iso(layout.projection, 0, across + 0.8),
-      ];
-      const start = corners[0] as { x: number; y: number };
-      const end = corners[1] as { x: number; y: number };
-      const beam = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
-      beam.addColorStop(0, 'rgba(255, 238, 180, 0.32)');
-      beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
-      ctx.fillStyle = beam;
-      ctx.beginPath();
-      corners.forEach((point, index) =>
-        index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
-      );
-      ctx.fill();
+      for (const car of frame.cars) {
+        const across = car.lateral * LANE_METRES;
+        const corners = [
+          iso(layout.projection, 0, across - 0.8),
+          iso(layout.projection, 12, across - 2.6),
+          iso(layout.projection, 12, across + 2.6),
+          iso(layout.projection, 0, across + 0.8),
+        ];
+        const start = corners[0] as { x: number; y: number };
+        const end = corners[1] as { x: number; y: number };
+        const beam = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+        beam.addColorStop(0, 'rgba(255, 238, 180, 0.32)');
+        beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
+        ctx.fillStyle = beam;
+        ctx.beginPath();
+        corners.forEach((point, index) =>
+          index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
+        );
+        ctx.fill();
+      }
     }
     ctx.restore();
+  }
+
+  /** Chevrons and merge arrows painted down a lane that is ending, up to the sight line. */
+  private paintLaneEnds(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: IsoLayout,
+    u: (position: number) => number,
+  ) {
+    const sight = frame.nose + layout.sightAhead;
+    const paint = (shape: Shape, colour: string) => {
+      if (shape.some(([along]) => along > sight)) return;
+      isoFlat(
+        ctx,
+        layout.projection,
+        shape.map(([along, across]) => [u(along), across] as const),
+        colour,
+      );
+    };
+    for (const end of laneEndsBetween(frame.road, frame.nose - 30, sight)) {
+      for (const along of chevronsOf(end)) {
+        paint(chevronShape(end, along), withAlpha(LANE_END_PAINT, 0.85));
+      }
+      for (const along of mergeArrowsOf(end)) {
+        paint(mergeArrowShape(end, along), 'rgba(255, 255, 255, 0.85)');
+      }
+    }
   }
 
   private drawCrash(
     ctx: CanvasRenderingContext2D,
     frame: Frame,
+    crash: CrashFrame,
     viewport: Viewport,
     layout: IsoLayout,
   ) {
-    const crash = frame.crash;
-    if (!crash) return;
     const { projection } = layout;
     const carAcross = crash.carLateral * LANE_METRES;
     const donkeyAcross = crash.donkeyLateral * LANE_METRES;
@@ -639,15 +739,19 @@ export class IsoView implements RoadView {
         box: carBox,
         draw: (context) =>
           drawIsoCar(context, projection, 0, carAcross, 0, {
-            shape: frame.car.look.shape,
-            paint: frame.car.look.paint,
+            shape: crash.look.shape,
+            paint: crash.look.paint,
             daylight: frame.palette.daylight,
             lean: 0,
           }),
       },
       {
         box: donkeyBox,
-        draw: (context) =>
+        draw: (context, wobble = 0) => {
+          if (crash.obstacle === 'barrier') {
+            drawIsoBarrier(context, projection, 0.4, donkeyAcross, frame.time, wobble);
+            return;
+          }
           drawIsoDonkey(context, projection, 0.4, donkeyAcross, {
             coat: coatFor(crash.donkeySeed),
             facing: crash.donkeyFacing,
@@ -657,9 +761,11 @@ export class IsoView implements RoadView {
             dazed: false,
             hop: 0,
             hat: crash.donkeyHat,
-          }),
+          });
+        },
       },
       frame.reducedMotion,
+      crash.obstacle,
     );
   }
 }
@@ -678,6 +784,66 @@ function drawSunlight(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Vie
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, viewport.width, viewport.height);
   ctx.restore();
+}
+
+/** Metres from the middle of the lane band to the road's edge on one side. */
+function edgeOf(road: Frame['road'], position: number, side: -1 | 1): number {
+  const { left, right } = sliceAt(road, position);
+  return (side < 0 ? left : right) * LANE_METRES;
+}
+
+/** A traffic cone as three stacked blocks, with its white band. */
+function drawIsoCone(
+  ctx: CanvasRenderingContext2D,
+  projection: IsoProjection,
+  u: number,
+  v: number,
+) {
+  isoBox(ctx, projection, u - 0.25, v - 0.25, 0, 0.5, 0.5, 0.08, shaded('#3a3640'));
+  isoBox(ctx, projection, u - 0.17, v - 0.17, 0.08, 0.34, 0.34, 0.22, shaded('#ff7a1f'));
+  isoBox(ctx, projection, u - 0.13, v - 0.13, 0.3, 0.26, 0.26, 0.12, shaded('#ffffff'));
+  isoBox(ctx, projection, u - 0.09, v - 0.09, 0.42, 0.18, 0.18, 0.2, shaded('#ff7a1f'));
+}
+
+/**
+ * The barrier across an ending lane: two posts, a red and white board in
+ * blocks, a blinking lamp on each post, and cones in front. `wobble` (metres)
+ * rocks the board after a hit.
+ */
+function drawIsoBarrier(
+  ctx: CanvasRenderingContext2D,
+  projection: IsoProjection,
+  u: number,
+  v: number,
+  time: number,
+  wobble: number,
+) {
+  const lean = wobble * 3;
+  for (const offset of [-1.25, 1.25]) {
+    isoBox(ctx, projection, u - 0.08, v + offset - 0.08, 0, 0.16, 0.16, 1.3, shaded('#4a4650'));
+  }
+  const blocks = 6;
+  for (let block = 0; block < blocks; block++) {
+    const from = v - 1.5 + (block * 3) / blocks;
+    const colour = block % 2 === 0 ? '#e8364f' : '#ffffff';
+    isoBox(ctx, projection, u - 0.06 + lean, from, 0.75, 0.12, 3 / blocks, 0.45, shaded(colour));
+  }
+  const on = Math.floor(time * 2.5) % 2 === 0;
+  for (const [index, offset] of [-1.25, 1.25].entries()) {
+    const lit = on === (index === 0);
+    isoBox(
+      ctx,
+      projection,
+      u - 0.1 + lean,
+      v + offset - 0.1,
+      1.3,
+      0.2,
+      0.2,
+      0.2,
+      shaded(lit ? '#ffcf33' : '#9a7a2a'),
+    );
+  }
+  for (const offset of [-0.85, 0, 0.85]) drawIsoCone(ctx, projection, u - 0.5, v + offset);
 }
 
 /** Every 260 m or so a river crosses the road. */

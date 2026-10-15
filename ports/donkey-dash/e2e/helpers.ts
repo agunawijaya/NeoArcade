@@ -80,6 +80,35 @@ export async function untilResults(page: Page, limitMs = 400_000) {
   await runUntil(page, () => document.body.dataset.phase === 'results', limitMs, 1000);
 }
 
+async function stepNow(page: Page) {
+  return Number(await page.evaluate(() => document.body.dataset.step ?? -1));
+}
+
+/**
+ * Replays presses worked out in Node, up to `until`, then stops the clock
+ * right on that step. The page publishes its engine step on <body>; a press
+ * made while it reads `step` is read by the update that takes step + 1, just
+ * as in Node. `press` is told which step it is pressing on.
+ */
+export async function driveTo(
+  page: Page,
+  presses: readonly number[],
+  until: number,
+  press: (step: number) => Promise<void>,
+) {
+  await runUntil(page, () => document.body.dataset.phase === 'play', 20_000, 16);
+  const from = await stepNow(page);
+  const ahead = presses.filter((step) => step >= from && step < until);
+  for (const target of [...ahead, until]) {
+    let step = await stepNow(page);
+    if (target - step > 6) await page.clock.runFor((target - step - 4) * FRAME_MS * 0.95);
+    for (step = await stepNow(page); step < target; step = await stepNow(page)) {
+      await page.clock.runFor(16);
+    }
+    if (target !== until) await press(target);
+  }
+}
+
 export function watchForErrors(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

@@ -1,6 +1,8 @@
 import type { GamePass, PassManifest } from '@shared/pass';
 import type manifest from '../../pass.manifest';
 import type { DuelEvent } from '../engine/duel';
+import type { RivalEvent, RivalSide } from '../engine/rival';
+import type { CpuLevel } from '../engine/rival-cpu';
 import type { RunEvent } from '../engine/run';
 import { ROUTES, type RouteId } from '../engine/routes';
 
@@ -52,6 +54,15 @@ export interface DuelSummary {
   donkeyStreak: number;
 }
 
+export interface RivalSummary {
+  /** The CPU's level, or null for two players. */
+  cpu: CpuLevel | null;
+  winner: RivalSide;
+}
+
+/** XP for beating each CPU level, which also says how much it is worth beating. */
+const RIVAL_WIN_XP: Record<CpuLevel, number> = { easy: 20, normal: 30, hard: 45, brutal: 60 };
+
 export class PassReporter {
   private dodged = 0;
   private nearMisses = 0;
@@ -60,9 +71,14 @@ export class PassReporter {
   private onBeat = 0;
   private wobblers = 0;
   private bestCombo = 0;
+  private merges = 0;
+  private lateMerges = 0;
+  private traps = 0;
   private lastCarrotAt = -Infinity;
   private heldDodgeAt = -Infinity;
   private threeLaneClean = false;
+  /** The road is narrowing again after a clean three-lane stretch: its barrier settles the badge. */
+  private leavingThreeLanes = false;
 
   constructor(private readonly pass: DonkeyPass) {}
 
@@ -70,6 +86,12 @@ export class PassReporter {
   observe(event: RunEvent | DuelEvent, roadTime: number) {
     switch (event.type) {
       case 'pass':
+        if (event.hazard.kind === 'barrier') {
+          if ((event.nearMiss?.tier ?? 0) >= 2) this.lateMerges += 1;
+          if (this.leavingThreeLanes && this.threeLaneClean) this.pass.unlock('three-lanes');
+          this.leavingThreeLanes = false;
+          break;
+        }
         this.dodged += 1;
         if (event.hazard.role === 'wobbler') this.wobblers += 1;
         if (event.threatened && !event.neutral && roadTime - this.heldDodgeAt < 1.5) {
@@ -92,14 +114,45 @@ export class PassReporter {
         break;
       case 'switch':
         if (event.held && event.dodging) this.heldDodgeAt = roadTime;
+        if (event.merging) this.merges += 1;
         break;
       case 'lanes':
-        if (event.lanes === 3) this.threeLaneClean = true;
-        else if (this.threeLaneClean) this.pass.unlock('three-lanes');
+        if (event.lanes === 3) {
+          this.threeLaneClean = true;
+          this.leavingThreeLanes = false;
+        } else {
+          this.leavingThreeLanes = this.threeLaneClean;
+        }
         break;
       case 'crash':
         this.threeLaneClean = false;
+        this.leavingThreeLanes = false;
         if (roadTime - this.lastCarrotAt < 1.2) this.pass.unlock('worth-it');
+        break;
+    }
+  }
+
+  /**
+   * Watches Rival Driver. Only what people do counts: everything the players
+   * on this browser do, and nothing the CPU (on `cpu`'s side, if any) does.
+   */
+  observeRace(event: RivalEvent, cpu: RivalSide | null) {
+    switch (event.type) {
+      case 'dodge':
+        if (event.car !== cpu) this.dodged += 1;
+        break;
+      case 'move':
+        if (event.car !== cpu && event.merging) this.merges += 1;
+        break;
+      case 'crash':
+        // The CPU caught out, or, with two players on one browser, either of them.
+        if (event.trapped && (cpu === null || event.car === cpu)) {
+          this.traps += 1;
+          this.pass.unlock('gotcha');
+        }
+        break;
+      case 'escape':
+        if (event.car !== cpu && event.count >= 3) this.pass.unlock('slippery');
         break;
     }
   }
@@ -111,6 +164,10 @@ export class PassReporter {
     if (this.whiskers > 0) this.pass.progress('whisker-master', { add: this.whiskers });
     if (this.onBeat > 0) this.pass.progress('on-the-beat', { add: this.onBeat });
     if (this.wobblers > 0) this.pass.progress('mind-made-up', { add: this.wobblers });
+    if (this.merges > 0) this.pass.progress('lane-changer', { add: this.merges });
+    if (this.lateMerges > 0) this.pass.progress('merge-master', { add: this.lateMerges });
+    if (this.merges > 0) this.pass.stat('merges', { add: this.merges });
+    if (this.traps > 0) this.pass.stat('traps', { add: this.traps });
     if (this.dodged > 0) this.pass.stat('dodged', { add: this.dodged });
     if (this.nearMisses > 0) this.pass.stat('nearMisses', { add: this.nearMisses });
     if (this.carrots > 0) this.pass.stat('carrots', { add: this.carrots });
@@ -122,6 +179,9 @@ export class PassReporter {
     this.onBeat = 0;
     this.wobblers = 0;
     this.bestCombo = 0;
+    this.merges = 0;
+    this.lateMerges = 0;
+    this.traps = 0;
   }
 
   finishRun(summary: RunSummary) {
@@ -165,6 +225,26 @@ export class PassReporter {
         `${route.name} · ${leg?.name ?? ''}`,
       );
     }
+  }
+
+  finishRival(summary: RivalSummary) {
+    this.commit();
+    const { pass } = this;
+    pass.stat('runs', { add: 1 });
+    const { cpu, winner } = summary;
+    if (cpu === null) {
+      pass.stat('rivalWins', { add: 1 });
+      pass.award(20, 'Played Rival Driver');
+      return;
+    }
+    if (winner === 0) {
+      pass.stat('rivalWins', { add: 1 });
+      if (cpu === 'hard' || cpu === 'brutal') pass.unlock('rival-ready');
+      pass.award(RIVAL_WIN_XP[cpu], `Beat the ${cpu} CPU in Rival Driver`);
+      return;
+    }
+    if (cpu === 'easy') pass.unlock('road-rage');
+    pass.award(10, 'Played Rival Driver');
   }
 
   /** A Classic Duel point to the Driver: the first ever is a badge. */

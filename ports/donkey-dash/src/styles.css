@@ -390,7 +390,7 @@ body {
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -417,7 +417,8 @@ body {
 }
 
 .mode-card:hover,
-.mode-card:focus-visible {
+.mode-card:focus-visible,
+.mode-card:focus-within {
   transform: translateY(-3px);
   border-color: var(--selected-line);
   box-shadow: 0 22px 44px -22px rgb(255 150 40 / 0.6);
@@ -474,6 +475,60 @@ body {
 
 .mode-card--versus .mode-card__art {
   background: linear-gradient(135deg, #ff7a3d 50%, #8c8a8f 50%);
+}
+
+.mode-card--rival .mode-card__art {
+  background: linear-gradient(180deg, #33408f, #ff8a5c);
+}
+
+/* Three lanes, and two cars side by side in them. */
+.mode-card--rival .mode-card__art::before {
+  background:
+    linear-gradient(90deg, transparent 28%, #4a4252 28% 72%, transparent 72%),
+    linear-gradient(180deg, #9bbf55, #6b8f3a);
+}
+
+/* Two little cars, side by side, seen from behind: a roof and a body each. */
+.mode-card--rival .mode-card__art::after {
+  left: 50%;
+  bottom: 8px;
+  width: 30%;
+  height: 26%;
+  background:
+    linear-gradient(#26324a, #26324a) 9% 0 / 30% 42% no-repeat,
+    linear-gradient(#4ab8ff, #4ab8ff) 3% 100% / 42% 62% no-repeat,
+    linear-gradient(#26324a, #26324a) 91% 0 / 30% 42% no-repeat,
+    linear-gradient(#ff5e8a, #ff5e8a) 97% 100% / 42% 62% no-repeat;
+  border-radius: 3px;
+  transform: translateX(-50%);
+}
+
+.mode-card--rival {
+  cursor: default;
+}
+
+.mode-card__choices {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mode-card__choice {
+  flex: 1;
+  min-height: 34px;
+  padding: 0.35em 0.6em;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--wash);
+  color: var(--ink);
+  font: 700 0.82rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+.mode-card__choice:hover,
+.mode-card__choice:focus-visible {
+  border-color: var(--selected-line);
+  background: var(--selected-wash);
 }
 
 .mode-card__text {
@@ -1107,9 +1162,98 @@ body {
   background: radial-gradient(circle, #fff3c4 30%, transparent 33%);
 }
 
+.garage__swatch[data-trail='cones'] {
+  background: linear-gradient(
+    to top,
+    transparent 22%,
+    #ff7a1f 22% 40%,
+    #ffffff 40% 52%,
+    #ff7a1f 52% 78%,
+    transparent 78%
+  );
+  clip-path: polygon(30% 78%, 70% 78%, 54% 22%, 46% 22%);
+}
+
 .garage__name {
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+/* Rival Driver's keys on the settings screen ---------------------------------- */
+
+.keys {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.keys__drivers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.keys__driver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--wash);
+}
+
+.keys__driver[data-driver='0'] {
+  --driver: #4ab8ff;
+}
+
+.keys__driver[data-driver='1'] {
+  --driver: #ff5e8a;
+}
+
+.keys__name {
+  color: var(--driver);
+  font: 700 0.85rem var(--font-body);
+}
+
+.keys__button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.keys__cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 64px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 3px;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  color: var(--ink);
+}
+
+.keys__cap b {
+  color: var(--driver);
+}
+
+.keys__cap kbd {
+  font: 700 0.95rem var(--font-mono);
+}
+
+.keys__button:hover .keys__cap,
+.keys__button:focus-visible .keys__cap {
+  border-color: var(--selected-line);
+  background: var(--selected-wash);
+}
+
+.keys__hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
 }
 
 /* Overlays: pause and results --------------------------------------------------- */
@@ -1236,6 +1380,44 @@ body {
 .results__stats dd {
   margin: 0;
   font-weight: 600;
+}
+
+.results__tally {
+  margin: 18px auto 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.results__tally th,
+.results__tally td {
+  padding: 5px 14px;
+}
+
+.results__tally thead th {
+  font: 400 1.05rem/1.2 var(--font-display);
+}
+
+.results__tally thead th[data-driver='0'] {
+  color: #4ab8ff;
+}
+
+.results__tally thead th[data-driver='1'] {
+  color: #ff5e8a;
+}
+
+.results__tally tbody th {
+  color: var(--ink-faint);
+  font-weight: 400;
+  text-align: left;
+}
+
+.results__tally tbody td {
+  font-weight: 700;
+  text-align: center;
+}
+
+.results__tally tbody tr + tr {
+  border-top: 1px solid var(--line);
 }
 
 .results__note {
@@ -1630,6 +1812,158 @@ body[data-camera='chase'] .hud__popups {
   font: 700 0.75rem var(--font-body);
 }
 
+/* Rival Driver's HUD --------------------------------------------------------------- */
+
+.hud__plate[data-driver='0'],
+.hud__steer-driver[data-driver='0'] {
+  --driver: #4ab8ff;
+}
+
+.hud__plate[data-driver='1'],
+.hud__steer-driver[data-driver='1'] {
+  --driver: #ff5e8a;
+}
+
+.hud__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--driver);
+  box-shadow: 0 0 8px var(--driver);
+}
+
+.hud__rounds,
+.hud__meter {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.hud__plate--right .hud__rounds,
+.hud__plate--right .hud__meter {
+  justify-content: flex-end;
+}
+
+.hud__pip {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--wash-strong);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.hud__pip.is-won {
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
+}
+
+.hud__notch {
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--wash-strong);
+  transition: background 0.15s ease;
+}
+
+.hud__notch.is-full {
+  background: var(--driver);
+  box-shadow: 0 0 5px var(--driver);
+}
+
+.hud__plate[data-state='crashed'] .hud__meter,
+.hud__plate[data-state='ghost'] .hud__meter {
+  opacity: 0.4;
+}
+
+.hud__plate[data-state='crashed'] .hud__dot {
+  animation: blink 0.5s steps(1) infinite;
+}
+
+.hud__steer {
+  position: absolute;
+  inset: auto 0 max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  padding: 0 var(--edge-right) 0 calc(var(--edge-left) + 96px);
+}
+
+/* With keys, the reminder bows out once the race is under way; on a touch screen it is the controls. */
+@media (pointer: fine) {
+  .hud__steer {
+    animation: steer-reminder 6s ease forwards;
+  }
+}
+
+@keyframes steer-reminder {
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.hud__steer-driver {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+}
+
+.hud__steer-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--driver);
+  font: 700 0.8rem var(--font-body);
+}
+
+.hud__steer-zone kbd {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--wash-strong);
+  color: var(--ink);
+  font: 600 0.72rem var(--font-mono);
+}
+
+.hud__steer-name {
+  color: var(--ink-soft);
+  font: 700 0.75rem var(--font-body);
+}
+
+/* On a touch screen the pills show the zones themselves: each fills its share of the screen. */
+@media (pointer: coarse) {
+  .hud__steer {
+    gap: 8px;
+    padding: 0 var(--edge-right) 0 calc(var(--edge-left) + 88px);
+  }
+
+  .hud__steer kbd {
+    display: none;
+  }
+
+  .hud__steer-driver {
+    flex: 1;
+    justify-content: space-between;
+  }
+}
+
+/* Upright, the phone lies between two players: the second one's zones face them, at the top. */
+@media (pointer: coarse) and (orientation: portrait) {
+  .hud__steer[data-drivers='2'] .hud__steer-driver[data-driver='1'] {
+    position: absolute;
+    top: calc(-100vh + 150px);
+    right: var(--edge-right);
+    left: var(--edge-left);
+    transform: rotate(180deg);
+  }
+}
+
 /* Phones -------------------------------------------------------------------------- */
 
 @media (max-width: 980px) {
@@ -1697,7 +2031,7 @@ body[data-camera='chase'] .hud__popups {
 
 @media (max-height: 520px) {
   .modes {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
   }
 

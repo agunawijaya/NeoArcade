@@ -2,6 +2,8 @@ import type { DailyLog } from '@shared/daily';
 import type { HighScoreTable } from '@shared/storage';
 import type { DuelState } from '../engine/duel';
 import type { Difficulty } from '../engine/modes';
+import type { RivalSide, RivalState } from '../engine/rival';
+import type { CpuLevel } from '../engine/rival-cpu';
 import { ROUTES, type RouteId } from '../engine/routes';
 import { legStars, metresDriven, runScore, type RunState } from '../engine/run';
 import {
@@ -16,6 +18,7 @@ import { DIFFICULTY_NAMES } from '../settings';
 import type { ResultsContent } from '../ui/overlays';
 import { shareText, type DailyResult } from './daily';
 import type { PassReporter } from './pass-report';
+import { CPU_RIVALS } from './rivals';
 import type { SessionOutcome } from './session';
 
 export interface WrapUpContext {
@@ -42,6 +45,9 @@ const NAMES = ['Player 1', 'Player 2'] as const;
  */
 export function describeOutcome(outcome: SessionOutcome, context: WrapUpContext): ResultsContent {
   if (outcome.kind === 'duel') return duelResults(outcome.state, outcome.lastPoint, context);
+  if (outcome.kind === 'rival') {
+    return rivalResults(outcome.state, outcome.cpu, outcome.names, context);
+  }
   const { request, state } = outcome;
   if (request.kind === 'trip') return legResults(state, request.route, request.leg, context);
   if (request.kind === 'daily')
@@ -188,6 +194,54 @@ function legResults(
           },
       ...(canContinue ? [{ label: 'Drive it again', run: context.retry }] : []),
       { label: 'Routes', run: context.trip },
+    ],
+  };
+}
+
+const LEVEL_NAMES: Record<CpuLevel, string> = {
+  easy: 'Easy',
+  normal: 'Normal',
+  hard: 'Hard',
+  brutal: 'Brutal',
+};
+
+function rivalResults(
+  state: RivalState,
+  cpu: CpuLevel | null,
+  names: readonly [string, string],
+  context: WrapUpContext,
+): ResultsContent {
+  const winner = state.winner ?? 0;
+  context.pass.finishRival({ cpu, winner });
+  const row = (label: string, value: (side: RivalSide) => number) => ({
+    label,
+    values: [String(value(0)), String(value(1))] as const,
+  });
+  const stats = (side: RivalSide) => state.cars[side].stats;
+  const won = cpu === null || winner === 0;
+  return {
+    title:
+      cpu === null
+        ? `${names[winner]} wins!`
+        : winner === 0
+          ? `You beat ${CPU_RIVALS[cpu].name}!`
+          : `${CPU_RIVALS[cpu].name} wins`,
+    subtitle: `Rival Driver · rounds ${state.rounds[0]}–${state.rounds[1]}${cpu ? ` · ${LEVEL_NAMES[cpu]}` : ''}`,
+    tone: won ? 'good' : 'bad',
+    stats: [],
+    tally: {
+      names,
+      rows: [
+        row('Rounds', (side) => state.rounds[side]),
+        row('Dodges', (side) => stats(side).dodges),
+        row('Crashes', (side) => stats(side).crashes),
+        row('Traps sprung', (side) => stats(side).trapsSprung),
+        row('Longest clean streak', (side) => stats(side).bestStreak),
+      ],
+    },
+    actions: [
+      { label: 'Rematch', primary: true, run: context.retry },
+      { label: 'Main menu', run: context.menu },
     ],
   };
 }

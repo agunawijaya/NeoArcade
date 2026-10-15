@@ -1,7 +1,9 @@
 import { createRng, type Rng } from '@shared/rng';
 import {
+  BARRIER_DEPTH,
   CAR_LENGTH,
   CLASSIC_SPEED,
+  CLOSING_DISTANCE,
   DONKEY_DEPTH,
   ORIGINAL,
   PIXEL,
@@ -9,8 +11,19 @@ import {
   WINNING_CLIMB,
 } from './constants';
 import { createDrive, gapOf, stepDrive, type Drive, type DriveEvent } from './drive';
-import { makeCarrot, makeDonkey, type Hazard, type WobbleHop } from './hazards';
-import { createRoad, lanesAt, nextLane, TRANSITION_LENGTH, type LaneCount } from './road';
+import { makeBarrier, makeCarrot, makeDonkey, type Hazard, type WobbleHop } from './hazards';
+import { canGetPast, standingAfter, type Course, type Obstacle } from './reach';
+import {
+  createRoad,
+  inLayout,
+  LANE_POSITIONS,
+  lanesOf,
+  layoutAt,
+  pavedLanes,
+  TAPER_LENGTH,
+  type LaneChange,
+  type Layout,
+} from './road';
 import { revealGap } from './sight';
 
 /**
@@ -21,7 +34,9 @@ import { revealGap } from './sight';
  *
  * Classic Duel plays it against the computer at the original's pace. In
  * Donkey vs Driver a second player steers each donkey until it crosses the
- * commit line, and the two swap roles every point.
+ * commit line, and the two swap roles every point. In both, the road shifts
+ * now and then, more gently than in the runs: a wave may bring a lane that
+ * opens and one that ends at a barrier after its donkey has gone by.
  */
 export interface DuelConfig {
   seed: number;
@@ -41,6 +56,10 @@ export const VERSUS_SPEED = 13.5;
 export const CRASH_SECONDS = 3.2;
 /** "Donkey loses!" and the car sailing off the top. */
 export const POINT_SECONDS = 1.9;
+/** How often a wave brings a shift of the road, once the first donkey of a point is past. */
+const SHIFT_CHANCE = 0.18;
+/** Seconds of room a duel's shift leaves beyond a quick player's needs. */
+const SHIFT_SLACK = 0.12;
 
 export type DuelSide = 'donkey' | 'driver';
 export type PlayerIndex = 0 | 1;
@@ -51,7 +70,9 @@ export interface Wave {
   number: number;
   kind: WaveKind;
   donkeys: Hazard[];
-  /** The wave ends, and the next donkey starts, once its last donkey is this far past the nose. */
+  /** The barrier of a lane that ends in this wave, if one does. */
+  barrier: Hazard | null;
+  /** The wave ends, and the next donkey starts, once its last donkey (or barrier) is this far past the nose. */
   endGap: number;
 }
 
@@ -102,15 +123,16 @@ export interface DuelInput {
 
 export function createDuel(config: DuelConfig): DuelState {
   const rng = createRng(config.seed);
+  const drive = createDrive(createRoad(), config.speed);
   const state: DuelState = {
     config,
-    drive: createDrive(createRoad(), config.speed),
+    drive,
     phase: { kind: 'drive' },
     wave: null,
     scores: { donkey: 0, driver: 0 },
     playerScores: [0, 0],
     driver: 0,
-    dropLane: rng.int(0, 1),
+    dropLane: drive.road.start.first + rng.int(0, 1),
     round: 1,
     winner: null,
     rng,
@@ -163,7 +185,7 @@ export function donkeyPlayer(state: DuelState): PlayerIndex {
 
 function waveIsOver(state: DuelState): boolean {
   const wave = state.wave;
-  const last = wave?.donkeys.at(-1);
+  const last = wave?.barrier ?? wave?.donkeys.at(-1);
   return !wave || !last || gapOf(state.drive, last) <= wave.endGap;
 }
 
@@ -194,33 +216,34 @@ function buildWave(state: DuelState, climb: number): Wave {
   const spawnGap = revealGap(climb) + (ORIGINAL.revealY - startY) * PIXEL;
   const endGap = (carY(climb) - (ORIGINAL.waveEndY + ORIGINAL.donkeyHeightPx)) * PIXEL;
   const kind = config.hazards ? chooseWaveKind(state, climb) : 'plain';
-  const lanes: LaneCount = kind === 'three-lanes' ? 3 : 2;
-  const lane = config.versus ? Math.min(state.dropLane, lanes - 1) : rng.int(0, lanes - 1);
-  const position = drive.car.nose + spawnGap;
+  // A new lane must open beyond the sight line, so nothing pops up on the visible road.
+  const farEnough = drive.car.nose + revealGap(climb) + TAPER_LENGTH;
+  let position = drive.car.nose + spawnGap;
 
   if (kind === 'three-lanes') {
-    drive.road.stretches.push({
-      from: drive.car.nose + TRANSITION_LENGTH + 0.5,
-      to: position + CAR_LENGTH + DONKEY_DEPTH + TRANSITION_LENGTH + 2,
-    });
+    openLane(drive, widened(layoutAt(drive.road, farEnough), rng), farEnough);
+    position = Math.max(position, farEnough + 1);
   }
+  const layout = layoutAt(drive.road, position);
+  const lane = config.versus ? nearestOpen(layout, state.dropLane) : rng.pick(lanesOf(layout));
   if (kind === 'mud') {
-    drive.road.mud.push({ from: drive.car.nose, to: position + 1, lanes: [0, 1] });
+    drive.road.mud.push({ from: drive.car.nose, to: position + 1, lanes: lanesOf(layout) });
   }
 
   const commitGap = config.versus ? config.speed * VERSUS_COMMIT_SECONDS : null;
   const role = config.versus ? 'rival' : kind === 'wobbler' ? 'wobbler' : 'wave';
   const hops =
     kind === 'wobbler'
-      ? wobbleHops(rng, lane, revealGap(climb), wobbleCommitGap(state, climb))
+      ? wobbleHops(rng, layout, lane, revealGap(climb), wobbleCommitGap(state, climb))
       : [];
   const first = makeDonkey(drive.nextHazardId++, position, lane, role, hops, commitGap);
   const donkeys = [first];
 
   if (kind === 'pair') {
-    // The second donkey trails in the other lane, far enough behind for one clean switch.
+    // The second donkey trails in another lane, far enough behind for one clean switch.
     const trail = config.speed * (0.62 + (CAR_LENGTH + DONKEY_DEPTH) / config.speed);
-    donkeys.push(makeDonkey(drive.nextHazardId++, position + trail, 1 - lane, 'pair'));
+    const other = rng.pick(lanesOf(layout).filter((candidate) => candidate !== lane));
+    donkeys.push(makeDonkey(drive.nextHazardId++, position + trail, other, 'pair'));
   }
   if (kind === 'carrot') {
     // A carrot in the donkey's own lane, a moment before it: greed has a price.
@@ -228,7 +251,15 @@ function buildWave(state: DuelState, climb: number): Wave {
     drive.hazards.push(makeCarrot(drive.nextHazardId++, position - lead, lane));
   }
   drive.hazards.push(...donkeys);
-  return { number: climb, kind, donkeys, endGap };
+
+  const shift =
+    kind === 'three-lanes'
+      ? narrowed(layout, rng)
+      : climb > 1 && rng.chance(SHIFT_CHANCE) && shiftFits(state, climb)
+        ? shifted(layout, rng)
+        : null;
+  const barrier = shift ? closeAfter(state, donkeys, shift, Math.max(farEnough, position)) : null;
+  return { number: climb, kind, donkeys, barrier, endGap };
 }
 
 function chooseWaveKind(state: DuelState, climb: number): WaveKind {
@@ -250,22 +281,121 @@ function chooseWaveKind(state: DuelState, climb: number): WaveKind {
   );
 }
 
+/** Shifts, like the widening road, only come while there is time to see them coming. */
+function shiftFits(state: DuelState, climb: number): boolean {
+  return revealGap(climb) / state.config.speed >= 0.45 && state.wave?.barrier === null;
+}
+
 function wobbleCommitGap(state: DuelState, climb: number): number {
   return Math.max(revealGap(climb) * 0.55, state.config.speed * 0.32);
 }
 
 /** One to three hops between coming into view and the commit gap, ending in a random lane. */
-function wobbleHops(rng: Rng, lane: number, sightGap: number, commitGap: number): WobbleHop[] {
+function wobbleHops(
+  rng: Rng,
+  layout: Layout,
+  lane: number,
+  sightGap: number,
+  commitGap: number,
+): WobbleHop[] {
+  const lanes = lanesOf(layout);
   const hops: WobbleHop[] = [];
   const count = rng.int(1, 3);
   let current = lane;
   for (let index = 0; index < count; index++) {
     const gap = commitGap + ((sightGap - commitGap) * (count - index)) / (count + 1);
-    const next = index === count - 1 ? rng.int(0, 1) : 1 - current;
+    const next =
+      index === count - 1
+        ? rng.pick(lanes)
+        : rng.pick(lanes.filter((candidate) => candidate !== current));
     if (next !== current) hops.push({ gap, lane: next });
     current = next;
   }
   return hops;
+}
+
+/** A lane opening at `at`, with nothing closing. */
+function openLane(drive: Drive, next: Layout, at: number) {
+  const before = layoutAt(drive.road, at);
+  const opens = lanesOf(next).find((lane) => !inLayout(before, lane)) ?? null;
+  drive.road.changes.push({ at, layout: next, opens, closes: null, barrier: null });
+}
+
+/**
+ * Starts the road's change to `next` once the wave's donkeys are behind it,
+ * and puts the barrier of the closing lane where every lane past the donkeys
+ * leaves time to merge. Returns the barrier.
+ */
+function closeAfter(state: DuelState, donkeys: Hazard[], next: Layout, from: number): Hazard {
+  const { drive } = state;
+  const before = layoutAt(drive.road, from);
+  const opens = lanesOf(next).find((lane) => !inLayout(before, lane)) ?? null;
+  const closes = lanesOf(before).find((lane) => !inLayout(next, lane)) as number;
+  const last = Math.max(...donkeys.map((donkey) => donkey.position));
+  const at = Math.max(from, last + DONKEY_DEPTH);
+  const change: LaneChange = { at, layout: next, opens, closes, barrier: null };
+  drive.road.changes.push(change);
+  let barrier = at + CLOSING_DISTANCE;
+  while (!mergeFits(state, donkeys, change, barrier)) barrier += 1;
+  change.barrier = barrier;
+  const hazard = makeBarrier(drive.nextHazardId++, barrier, closes);
+  drive.hazards.push(hazard);
+  return hazard;
+}
+
+/** Whether, whichever lane each donkey ends up in, a driver who got past them can merge in time. */
+function mergeFits(state: DuelState, donkeys: Hazard[], change: LaneChange, barrier: number) {
+  const { drive, config } = state;
+  const now = drive.roadTime;
+  const course: Course = {
+    road: {
+      ...drive.road,
+      changes: drive.road.changes.map((c) => (c === change ? { ...c, barrier } : c)),
+    },
+    steering: 'one-button',
+    slack: SHIFT_SLACK,
+    timeAtPosition: (position) => now + (position - drive.car.nose) / config.speed,
+    positionAtTime: (time) => drive.car.nose + (time - now) * config.speed,
+  };
+  const obstacleAt = (position: number, blocked: number[], depth: number): Obstacle => {
+    const arrival = course.timeAtPosition(position);
+    return {
+      position,
+      arrival,
+      known: arrival - revealGap(drive.climb) / config.speed,
+      clear: (CAR_LENGTH + depth) / config.speed,
+      blocked,
+    };
+  };
+  const end = obstacleAt(barrier, [change.closes as number], BARRIER_DEPTH);
+  const last = donkeys.at(-1) as Hazard;
+  // A steerable donkey may end up in any lane, so every one must leave a way to merge.
+  return pavedLanes(course.road, last.position).every((lane) => {
+    const past = standingAfter(course.road, obstacleAt(last.position, [lane], DONKEY_DEPTH));
+    return canGetPast(course, past, end);
+  });
+}
+
+function widened(layout: Layout, rng: Rng): Layout {
+  const options = [layout.first - 1, layout.first].filter(
+    (first) => first >= 0 && first + 3 <= LANE_POSITIONS,
+  );
+  return { first: rng.pick(options), count: 3 };
+}
+
+function narrowed(layout: Layout, rng: Rng): Layout {
+  return { first: rng.pick([layout.first, layout.first + layout.count - 2]), count: 2 };
+}
+
+function shifted(layout: Layout, rng: Rng): Layout {
+  const options = [layout.first - 1, layout.first + 1].filter(
+    (first) => first >= 0 && first + layout.count <= LANE_POSITIONS,
+  );
+  return { first: rng.pick(options), count: layout.count };
+}
+
+function nearestOpen(layout: Layout, lane: number): number {
+  return Math.min(layout.first + layout.count - 1, Math.max(layout.first, lane));
 }
 
 function steerDonkey(state: DuelState, events: DuelEvent[]) {
@@ -274,10 +404,10 @@ function steerDonkey(state: DuelState, events: DuelEvent[]) {
     toggleDropLane(state, events);
     return;
   }
-  const lanes = lanesAt(state.drive.road, rival.position);
+  const layout = layoutAt(state.drive.road, rival.position);
   const from = rival.lane;
-  rival.lane = nextLane(from, lanes);
-  state.dropLane = Math.min(rival.lane, 1);
+  rival.lane = from >= layout.first + layout.count - 1 ? layout.first : from + 1;
+  state.dropLane = rival.lane;
   const car = state.drive.car;
   if (rival.revealed && car.lane === from) {
     const gap = gapOf(state.drive, rival);
@@ -286,8 +416,12 @@ function steerDonkey(state: DuelState, events: DuelEvent[]) {
   events.push({ type: 'hop', hazard: rival, from });
 }
 
+/** Between waves the donkey player picks where the next one drops, along the far end of the road. */
 function toggleDropLane(state: DuelState, events: DuelEvent[]) {
-  state.dropLane = 1 - state.dropLane;
+  const { drive } = state;
+  const layout = layoutAt(drive.road, drive.car.nose + revealGap(drive.climb));
+  const lane = nearestOpen(layout, state.dropLane);
+  state.dropLane = lane >= layout.first + layout.count - 1 ? layout.first : lane + 1;
   events.push({ type: 'drop-lane', lane: state.dropLane });
 }
 
@@ -328,13 +462,15 @@ function nextRound(state: DuelState, events: DuelEvent[]) {
   state.drive.climb = 0;
   state.drive.hazards = [];
   state.drive.road = createRoad();
+  const start = state.drive.road.start;
   const car = state.drive.car;
-  car.lane = 0;
-  car.lanes = 2;
-  car.previousLane = 0;
+  car.lane = start.first;
+  car.lanes = start.count;
+  car.previousLane = start.first;
   car.heldPresses = [];
   car.switchedAt = state.drive.roadTime;
   car.nose = nose;
+  state.dropLane = nearestOpen(start, state.dropLane);
   state.round += 1;
   if (config.versus) state.driver = donkeyPlayer(state);
   events.push({ type: 'round', round: state.round, driver: state.driver });

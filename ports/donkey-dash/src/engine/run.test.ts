@@ -24,8 +24,8 @@ function steps(run: RunState, count: number, press: (run: RunState) => boolean =
   return events;
 }
 
-/** A run whose planned road is emptied, with one donkey placed by hand. */
-function runWithDonkeyAhead(lane = 0) {
+/** A run whose planned road is emptied, with one donkey placed by hand, by default in the car's lane. */
+function runWithDonkeyAhead(lane = 1) {
   const run = createRun(endlessRun(1, 'normal', false, true));
   run.drive.hazards = [makeDonkey(999, 30, lane, 'single')];
   run.planner.fill = () => undefined;
@@ -73,7 +73,7 @@ describe('points', () => {
   it('pay for a late dodge and add up with the distance', () => {
     const run = runWithDonkeyAhead();
     const leaveAt = 30 - run.drive.speed * 0.15;
-    const events = steps(run, 200, (r) => r.drive.car.nose >= leaveAt && r.drive.car.lane === 0);
+    const events = steps(run, 200, (r) => r.drive.car.nose >= leaveAt && r.drive.car.lane === 1);
     expect(events.find((event) => event.type === 'near-miss')).toMatchObject({
       points: 100,
       combo: 1,
@@ -85,7 +85,7 @@ describe('points', () => {
   it('break the combo with a comfortable dodge of a donkey in your lane', () => {
     const run = runWithDonkeyAhead();
     run.combo = 3;
-    const events = steps(run, 200, (r) => r.drive.car.nose >= 16 && r.drive.car.lane === 0);
+    const events = steps(run, 200, (r) => r.drive.car.nose >= 16 && r.drive.car.lane === 1);
     expect(events).toContainEqual({ type: 'combo-broken', combo: 3 });
     expect(run.combo).toBe(0);
   });

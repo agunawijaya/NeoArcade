@@ -15,8 +15,11 @@ import type { Palette } from './palette';
 export interface RoadView {
   readonly camera: CameraView;
   draw(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport): void;
-  /** Where things land on screen; pure, so the fairness tests can check it without a canvas. */
-  layout(viewport: Viewport, climb: number): ViewLayout;
+  /**
+   * Where things land on screen; pure, so the fairness tests can check it
+   * without a canvas. `twoCars` asks for room for Rival Driver's two cars.
+   */
+  layout(viewport: Viewport, climb: number, twoCars?: boolean): ViewLayout;
 }
 
 export interface Viewport {
@@ -45,7 +48,7 @@ export interface ViewLayout {
 }
 
 export interface CarFrame {
-  /** Lane widths from the middle of the road, eased through a lane change. */
+  /** Lane widths from the middle of the lane band, eased through a lane change. */
   lateral: number;
   /** Lean into a lane change, -1…1. */
   lean: number;
@@ -53,11 +56,15 @@ export interface CarFrame {
   hop: number;
   /** Suspension bounce, metres. */
   bounce: number;
-  /** Blinking after a crash, while donkeys wave it through. */
+  /** Blinking after a crash, while donkeys wave it through; a Rival ghost. */
   ghost: boolean;
   /** Wheels spinning in mud. */
   stuck: boolean;
   look: Look;
+  /** Rival Driver: whose car it is, for its number plate. Null when there is only one. */
+  driver: 0 | 1 | null;
+  /** A refused move: -1…1 towards the lane it could not take, fading. */
+  bump: number;
 }
 
 export interface HazardFrame {
@@ -88,6 +95,10 @@ export interface CrashFrame {
   /** Seconds since impact. */
   age: number;
   carLateral: number;
+  /** The crashed car's own look: in Rival Driver, not necessarily the player's. */
+  look: Look;
+  /** What it hit: the split donkey, or a barrier and its cones. */
+  obstacle: 'donkey' | 'barrier';
   donkeyLateral: number;
   donkeySeed: number;
   donkeyFacing: 1 | -1;
@@ -103,7 +114,12 @@ export interface Frame {
   /** The duel climb, eased so the car glides up. */
   climb: number;
   road: Road;
-  car: CarFrame;
+  /** The cars on the road: one, or Rival Driver's two. A car that has crashed out is not here. */
+  cars: CarFrame[];
+  /** Rival Driver: two cars share the road, even while one of them is off it. */
+  twoCars: boolean;
+  /** Where the chase camera follows across the road, in lane widths. */
+  focus: number;
   hazards: HazardFrame[];
   /** Donkey vs Driver: the commit line, metres ahead of the nose. */
   commitGap: number | null;
@@ -111,12 +127,23 @@ export interface Frame {
   dropLane: number | null;
   /** 0…1 flash on each beat of the music, 0 without rhythm. */
   beatPulse: number;
-  crash: CrashFrame | null;
+  /** Crashes playing out; Rival Driver can have one per car. */
+  crashes: CrashFrame[];
   /** The Driver has reached the top: seconds since, while the car sails off. */
   summit: number | null;
   palette: Palette;
   particles: readonly Particle[];
   reducedMotion: boolean;
+}
+
+/**
+ * How solid to draw a car: a ghost (shielded after a crash, or a Rival car
+ * back on the road) pulses between faint and half there, and never vanishes.
+ */
+export function ghostAlpha(car: CarFrame, frame: Frame): number {
+  if (!car.ghost) return 1;
+  if (frame.reducedMotion) return 0.5;
+  return Math.floor(frame.time * 8) % 2 === 0 ? 0.3 : 0.7;
 }
 
 /** How far the car has sailed off towards the top after reaching it, 0…1. */

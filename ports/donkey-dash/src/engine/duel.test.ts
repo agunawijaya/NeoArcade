@@ -77,6 +77,28 @@ describe('Classic Duel', () => {
     expect(seen).toEqual(new Set(['plain', 'wobbler', 'pair', 'mud', 'three-lanes', 'carrot']));
   });
 
+  it('shifts the road gently: now and then, after the donkey, and never on a quick driver', () => {
+    let waves = 0;
+    let shifts = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const duel = createDuel(classicDuel(seed, 3));
+      const events = play(duel, 60 * 200, pilot(0.1));
+      for (const event of events) {
+        if (event.type !== 'wave') continue;
+        waves += 1;
+        const { barrier, donkeys, number } = event.wave;
+        if (!barrier) continue;
+        shifts += 1;
+        expect(number).toBeGreaterThan(1);
+        for (const donkey of donkeys) expect(barrier.position).toBeGreaterThan(donkey.position);
+      }
+      expect(duel.scores.donkey, `seed ${seed}`).toBe(0);
+    }
+    expect(shifts).toBeGreaterThan(0);
+    // The runs bring a shift every few rows; a duel, about one wave in ten.
+    expect(shifts / waves).toBeLessThan(0.15);
+  });
+
   it('runs at the original speed', () => {
     expect(createDuel(classicDuel(1)).drive.speed).toBe(CLASSIC_SPEED);
   });
@@ -89,7 +111,7 @@ describe('Donkey vs Driver', () => {
     if (!rival) throw new Error('No donkey in the first wave.');
     const before = rival.lane;
     stepDuel(duel, { driver: false, donkey: true });
-    expect(rival.lane).toBe(1 - before);
+    expect(rival.lane).not.toBe(before);
     while (!rival.committed) stepDuel(duel, { driver: false });
     const committedLane = rival.lane;
     stepDuel(duel, { driver: false, donkey: true });

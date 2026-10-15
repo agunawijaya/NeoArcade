@@ -1,17 +1,23 @@
 import type { AudioEngine } from '@shared/audio';
 import { DIFFICULTIES, type Difficulty } from '../engine/modes';
+import { ROUNDS_RANGE } from '../engine/rival';
+import { CPU_LEVELS, type CpuLevel } from '../engine/rival-cpu';
+import { CPU_RIVALS } from '../game/rivals';
 import {
   CAMERA_VIEWS,
+  DEFAULT_RIVAL_KEYS,
   DIFFICULTY_NAMES,
   MODE_IDS,
   POINTS_RANGE,
   type ModeId,
+  type RivalKeys,
   type ScreenFilter,
   type Settings,
 } from '../settings';
 import type { ThemeChoice, ThemePreference } from '../theme';
 import { button, h, icon } from './dom';
 import { ICONS } from './icons';
+import { keyLabel } from './keys';
 import { CAMERA_NAMES } from './overlays';
 
 export interface SettingsHandlers {
@@ -32,6 +38,14 @@ const MODE_NAMES: Record<ModeId, string> = {
   daily: 'Daily Road',
   classic: 'Classic Duel',
   versus: 'Donkey vs Driver',
+  rival: 'Rival Driver',
+};
+
+const CPU_NAMES: Record<CpuLevel, string> = {
+  easy: 'Easy',
+  normal: 'Normal',
+  hard: 'Hard',
+  brutal: 'Brutal',
 };
 
 const DIFFICULTY_NOTES: Record<Difficulty, string> = {
@@ -106,7 +120,45 @@ export function buildSettingsScreen(
           (difficulty) => update({ ...settings, difficulty }),
         ),
       ),
-      group('Points to win · Classic Duel and Donkey vs Driver', stepper()),
+      group(
+        'Points to win · Classic Duel and Donkey vs Driver',
+        stepper(
+          'Points to win',
+          `First to ${settings.points}`,
+          settings.points,
+          POINTS_RANGE,
+          (points) => update({ ...settings, points }),
+        ),
+      ),
+      group(
+        'Rival Driver · the CPU',
+        segmented(
+          'cpu',
+          settings.rival.cpu,
+          CPU_LEVELS.map((level) => ({
+            value: level,
+            label: CPU_NAMES[level],
+            note: CPU_RIVALS[level].name,
+          })),
+          (cpu) => update({ ...settings, rival: { ...settings.rival, cpu } }),
+        ),
+      ),
+      group(
+        'Rival Driver · rounds to win',
+        stepper(
+          'Rounds to win',
+          `First to ${settings.rival.rounds}`,
+          settings.rival.rounds,
+          ROUNDS_RANGE,
+          (rounds) => update({ ...settings, rival: { ...settings.rival, rounds } }),
+        ),
+      ),
+      group(
+        'Rival Driver · two buttons each',
+        keyLayout(settings.rival.keys, (keys) =>
+          update({ ...settings, rival: { ...settings.rival, keys } }),
+        ),
+      ),
       group(
         'Hazards',
         h(
@@ -167,31 +219,6 @@ export function buildSettingsScreen(
     );
   };
 
-  const stepper = () => {
-    const change = (delta: number) =>
-      update({
-        ...settings,
-        points: Math.min(POINTS_RANGE.max, Math.max(POINTS_RANGE.min, settings.points + delta)),
-      });
-    return h(
-      'div',
-      { class: 'stepper', role: 'group', 'aria-label': 'Points to win' },
-      button('−', () => change(-1), 'stepper__button', {
-        'aria-label': 'Fewer points',
-        'data-focus-key': 'points-minus',
-      }),
-      h(
-        'output',
-        { class: 'stepper__value', 'aria-live': 'polite' },
-        `First to ${settings.points}`,
-      ),
-      button('+', () => change(1), 'stepper__button', {
-        'aria-label': 'More points',
-        'data-focus-key': 'points-plus',
-      }),
-    );
-  };
-
   render();
 
   const element = h(
@@ -218,6 +245,91 @@ export function buildSettingsScreen(
       render();
     },
   };
+}
+
+/** A number to step up and down within a range. */
+function stepper(
+  name: string,
+  shown: string,
+  value: number,
+  range: { min: number; max: number },
+  change: (value: number) => void,
+): HTMLElement {
+  const step = (delta: number) => change(Math.min(range.max, Math.max(range.min, value + delta)));
+  const key = name.toLowerCase().replaceAll(' ', '-');
+  return h(
+    'div',
+    { class: 'stepper', role: 'group', 'aria-label': name },
+    button('−', () => step(-1), 'stepper__button', {
+      'aria-label': `Fewer: ${name}`,
+      'data-focus-key': `${key}-minus`,
+    }),
+    h('output', { class: 'stepper__value', 'aria-live': 'polite' }, shown),
+    button('+', () => step(1), 'stepper__button', {
+      'aria-label': `More: ${name}`,
+      'data-focus-key': `${key}-plus`,
+    }),
+  );
+}
+
+/**
+ * Rival Driver's two buttons for each driver, drawn as key caps. Choosing a
+ * cap waits for the next key and puts it there; a key another cap already
+ * has swaps places with it, so the four always stay different.
+ */
+function keyLayout(keys: RivalKeys, change: (keys: RivalKeys) => void): HTMLElement {
+  const caps = keys.map((pair, driver) =>
+    h(
+      'div',
+      { class: 'keys__driver', 'data-driver': String(driver) },
+      h('span', { class: 'keys__name' }, `Driver ${driver + 1}`),
+      ...pair.map((code, side) =>
+        button(
+          h(
+            'span',
+            { class: 'keys__cap' },
+            h('b', {}, side === 0 ? '◀' : '▶'),
+            h('kbd', {}, keyLabel(code)),
+          ),
+          () => listen(driver, side),
+          'keys__button',
+          {
+            'aria-label': `Driver ${driver + 1}, steer ${side === 0 ? 'left' : 'right'}: ${keyLabel(code)}. Choose to change.`,
+            'data-focus-key': `key-${driver}-${side}`,
+          },
+        ),
+      ),
+    ),
+  );
+  const hint = h('p', { class: 'keys__hint', role: 'status' }, 'Choose a key to change it.');
+  const reset = button('Reset keys', () => change(DEFAULT_RIVAL_KEYS), 'button button--small', {
+    'data-focus-key': 'keys-reset',
+  });
+
+  const listen = (driver: number, side: number) => {
+    hint.textContent = `Press a key for Driver ${driver + 1}, ${side === 0 ? 'left' : 'right'}… (Esc to keep it)`;
+    const onKey = (event: KeyboardEvent) => {
+      // Ahead of the menus' own arrow keys: this key is meant for the slot.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.removeEventListener('keydown', onKey, true);
+      if (event.code === 'Escape' || !event.code) {
+        hint.textContent = 'Choose a key to change it.';
+        return;
+      }
+      const next: [[string, string], [string, string]] = [[...keys[0]], [...keys[1]]];
+      const current = next[driver]?.[side] as string;
+      for (const pair of next) {
+        for (let index = 0; index < 2; index++)
+          if (pair[index] === event.code) pair[index] = current;
+      }
+      (next[driver] as [string, string])[side] = event.code;
+      change(next);
+    };
+    window.addEventListener('keydown', onKey, true);
+  };
+
+  return h('div', { class: 'keys' }, h('div', { class: 'keys__drivers' }, ...caps), hint, reset);
 }
 
 function group(label: string, control: HTMLElement): HTMLElement {

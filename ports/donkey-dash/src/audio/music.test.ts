@@ -1,6 +1,7 @@
 import { compileSong } from '@shared/audio';
 import { describe, expect, it } from 'vitest';
 import { DAILY_BPM, ENDLESS_BPM } from '../engine/modes';
+import { RIVAL_BPM } from '../engine/rival';
 import { ROUTE_IDS, ROUTES } from '../engine/routes';
 import { bpmOf, shift, SONG_IDS, songFor } from './music';
 
@@ -18,6 +19,7 @@ describe('the soundtrack', () => {
     for (const route of ROUTE_IDS) expect(bpmOf(route)).toBe(ROUTES[route].bpm);
     expect(bpmOf('endless')).toBe(ENDLESS_BPM);
     expect(bpmOf('daily')).toBe(DAILY_BPM);
+    expect(bpmOf('rival')).toBe(RIVAL_BPM);
   });
 
   it('moves notes by semitones across octaves', () => {

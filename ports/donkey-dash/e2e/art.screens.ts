@@ -8,7 +8,7 @@ import { endlessRun } from '../src/engine/modes';
 import { legRun, legSeed, ROUTE_IDS, type RouteId } from '../src/engine/routes';
 import { createRun, stepRun, type RunConfig } from '../src/engine/run';
 import type { CameraView } from '../src/settings';
-import { FRAME_MS, openGame, run, runUntil, startMode, type OpenOptions } from './helpers';
+import { driveTo, openGame, run, runUntil, startMode, type OpenOptions } from './helpers';
 
 /**
  * Screenshots for art direction, the docs and the Hall. Every moment is
@@ -76,25 +76,6 @@ function planRun(config: RunConfig, fromStep = 600, daring = 0): Plan {
   }
   const scenic = crowd >= 0 ? crowd : single >= 0 ? single : fromStep;
   return { presses, scenic, nearMiss };
-}
-
-async function stepNow(page: Page) {
-  return Number(await page.evaluate(() => document.body.dataset.step ?? -1));
-}
-
-/** Replays the presses still ahead up to `until`, then stops the clock right on that step. */
-async function driveTo(page: Page, presses: number[], until: number, press: () => Promise<void>) {
-  await runUntil(page, () => document.body.dataset.phase === 'play', 20_000, 16);
-  const from = await stepNow(page);
-  const ahead = presses.filter((step) => step >= from && step < until);
-  for (const target of [...ahead, until]) {
-    let step = await stepNow(page);
-    if (target - step > 6) await page.clock.runFor((target - step - 4) * FRAME_MS * 0.95);
-    for (step = await stepNow(page); step < target; step = await stepNow(page)) {
-      await page.clock.runFor(16);
-    }
-    if (target !== until) await press();
-  }
 }
 
 const tapOrKey = (page: Page) => () => page.keyboard.press('Space');

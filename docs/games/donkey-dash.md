@@ -86,7 +86,9 @@ a fresh start. There is no end: the game goes on until Esc.
 
 ## What the port keeps
 
-- Two lanes and one button that flips lanes instantly.
+- One button that switches lanes instantly, on a road of two lanes most of
+  the time (the road now shifts, see below; Rival Driver alone has two
+  buttons).
 - A donkey at a time in Classic Duel, a random lane, a random start above
   the screen, the same speed and the same wave length, on this scale: the
   engine's one fairness constant (`SIGHT_DISTANCE`, 16 m) is the original's
@@ -117,6 +119,15 @@ a fresh start. There is no end: the game goes on until Esc.
 | 12 | Car at x 105/147, road 80 pixels wide. | Lanes 3.5 m wide; the car is 4.5 m long, a donkey 1.2 m deep. | Modern proportions for the new views; the duel's timings are unchanged. |
 | 13 | Esc quits. | Esc pauses; the Hall button leaves. | A web page, not a program. |
 | 14 | Requires the Color/Graphics Adapter and BASICA. | Runs anywhere with a browser. | — |
+| 15 | Two fixed lanes. | The road shifts, in every mode, with no off switch: lanes are positions W X Y Z, two (or three) are open, and the open set slides one position at a time. The new lane opens first; the old one closes at a barrier at least one full sight (16 m) later, marked with chevrons, cones, a "lane ends" sign and merge arrows (`engine/road.ts`, `render/lanes.ts`). | Owner request (DD-02, prompt 007); [ADR 0019](../adr/0019-donkey-dash-shifting-road.md). |
+| 16 | — | Staying in a closing lane hits its barrier: a crash exactly like a donkey's in every mode's scoring (a life, a point to the Donkey, an emptied Rival meter), with its own crash: the car splits as in 1981, the barrier rocks, cones fly, BONK!. Leaving the lane in its last 0.32 s is a near miss; earlier, a neutral pass. | Owner request; reuses the signature crash. |
+| 17 | Two lanes, always. | Classic Duel shifts gently: from the second donkey of a climb, while the window is at least 0.45 s, 18 % of waves bring a shift, and the lane only starts closing once that wave's donkey is past. About one wave in ten; the 1981 rules and scoring are unchanged. | Owner decision. |
+| 18 | — | Three-lane stretches open and close like any shift: one outer lane ends at a barrier (before, the middle lane merged right with no warning). | One mechanism for every change of the road's shape. |
+| 19 | One key. | **Rival Driver**: two buttons per driver, left and right. The only mode that breaks the one-button rule. | Owner request (DD-01): blocking needs a direction. |
+| 20 | Eleven dodges in a row reach the top. | Rival Driver's race meter fills in **8** clean donkey rows; a crash empties it, as in 1981. Classic Duel keeps eleven. | With two cars, eleven let one slip near the top decide a round outright; eight keeps a round winnable after a crash, and CPU-against-CPU matches stay close between equal levels. |
+| 21 | — | Rival Driver's rules: refused moves into the other car's lane, neither car moving when both go for the same lane in the same step, ghosts after a crash, traps attributed by the engine, dead heats settled by sudden death; a CPU rival at four levels. | [ADR 0020](../adr/0020-donkey-dash-two-car-blocking.md), [ADR 0021](../adr/0021-donkey-dash-cpu-rival.md). |
+| 22 | — | Daily Road results record the rules they were driven under (`DAILY_RULES` 2). Results from before the shift are kept as records, marked on the calendar; the streak and the road number carry on. | The same seed now lays out a different road. |
+| 23 | — | The autopilot, the planner and the CPU rival share one search (`engine/reach.ts`) that walks through time as the road changes shape. | One proof of fairness, used by everything that drives. |
 
 ## Where the brief and the source disagree (the source wins)
 
@@ -151,17 +162,39 @@ moment it appears to the moment it would reach the car
 | Endless, Frantic | 0.97 s (16.5 m/s) | 0.59 s (27 m/s) |
 | Daily Road | 1.23 s (13 m/s) | 0.73 s (22 m/s) |
 | Road Trip | 1.45 s (Morning Chores, 11 m/s) | 0.76 s (Whiteout and The Summit Herd, 21 m/s) |
+| Rival Driver | 1.14 s (14 m/s) | 0.84 s (19 m/s) |
 
 Speeds rise by beat, `start + (max − start) × k / (k + ramp)`, so the top
 speed is approached, never reached. `ramp` is the beat at which the speed
 is halfway there: half the leg on a Road Trip, 360 beats in Endless on
 Normal (420 on Relaxed, 220 on Frantic), 200 on the Daily Road.
 
-The planner only builds a pattern if a player can clear the donkeys before
-it, press as often as needed (0.14 s a press, 0.15 s more in mud) and still
-see the next row 0.3 s before they must move, plus a slack of 0.22 to
-0.30 s depending on the route. A driver reacting in 0.3 s finishes every
-planned road without a crash (`planner.test.ts`).
+The planner only builds a pattern if a player can clear the donkeys (or
+barrier) before it, press as often as needed (0.14 s a press, 0.15 s more
+in mud), wait for a lane to open if need be, and still see the next row
+0.3 s before they must move, plus a slack of 0.22 to 0.30 s depending on
+the route (0.26 s on First Snow and 0.32 s on The Summit Herd, see below).
+A driver reacting in 0.3 s finishes every planned road without a crash
+(`planner.test.ts`).
+
+A lane that ends is always announced at least one full window before its
+barrier: its markings start where it begins to close, which comes into
+view a full sight ahead, and the barrier stands at least another 16 m on.
+
+### The shifting road in each mode
+
+| | First shift | How often, once going |
+|---|---|---|
+| Endless | beat 20 | weight 3, as often as a pair of donkeys |
+| Daily Road | beat 16 | weight 3 |
+| Road Trip, Farm Lanes | beat 40 (Morning Chores), 30, 24 | weight 1, then 2: the gentle start |
+| Road Trip, other routes | beat 28 | weight 3 |
+| Rival Driver | beat 8 | weight 3 of 11 |
+| Classic Duel, Donkey vs Driver | the second donkey of a climb | 18 % of waves while the window is 0.45 s or more |
+
+Measured with a quick autopilot over 12 seeds, a lane ends about 4.9 times
+a minute in Endless and on the Daily Road, and a duel shifts in 9 % of its
+waves (3.7 times a minute).
 
 ### Playtest results
 
@@ -171,8 +204,84 @@ little before each press.
 
 | | Result |
 |---|---|
-| Endless, median run of 12 | Relaxed 302 s, Normal 178 s, Frantic 103 s |
-| Daily Road, 20 roads | 13 finished |
-| Road Trip, 10 attempts a leg | Every leg finished at least 7 times out of 10 (the Snow Road legs 10, 8 and 7); clean runs fall from Farm Lanes to Snow Road |
+| Endless, median run of 12 | Relaxed 303 s, Normal 151 s, Frantic 103 s |
+| Daily Road, 20 roads | 11 finished |
+| Road Trip, 10 attempts a leg | Every leg finished at least 6 times out of 10 (the Snow Road legs 8, 7 and 6); clean runs fall from Farm Lanes to Snow Road |
 
 A keyboard player on a desktop is quicker than this, and gets further.
+
+### Re-balancing for the shifting road (prompt 007)
+
+The same scripted phone player drove the engine as it was before the road
+shifted (the previous commit) and as it is now, on the same seeds, with
+bigger samples than the playtest so that the comparison is not noise.
+
+| | Before | After |
+|---|---|---|
+| Endless, 36 runs, median (mean) | Relaxed 266 s (290), Normal 164 s (184), Frantic 96 s (101) | Relaxed 288 s (307), Normal 156 s (177), Frantic 101 s (105) |
+| Daily Road, 60 roads | 42 finished, 103 crashes | 43 finished, 104 crashes |
+| The Summit Herd, 40 attempts | 27 finished, 79 crashes | 24 finished, 82 crashes |
+
+Road Trip, 30 attempts a leg, legs finished (clean):
+
+| Route | Leg 1, before → after | Leg 2, before → after | Boss, before → after |
+|---|---|---|---|
+| Farm Lanes | 30 (30) → 30 (30) | 30 (24) → 30 (25) | 30 (20) → 30 (25) |
+| Mountain Pass | 30 (24) → 30 (23) | 30 (20) → 30 (25) | 29 (16) → 29 (15) |
+| Desert Highway | 29 (14) → 29 (13) | 28 (14) → 29 (11) | 19 (5) → 27 (7) |
+| Foggy Night | 29 (15) → 30 (16) | 26 (7) → 28 (11) | 29 (13) → 28 (7) |
+| Snow Road | 26 (7) → 26 (5) | 21 (4) → 25 (6) | 19 (1) → 19 (2) |
+
+What changed to get there:
+
+- Shifts come in through the existing introduction tables, as a phrase
+  with a weight like any hazard, so the old speed curves and rests stayed
+  as they were. Endless and the Daily Road needed nothing else: their
+  numbers are within the spread between samples.
+- Farm Lanes introduces shifts late and rarely (Morning Chores at beat 40,
+  weight 1), so the first leg stays a gentle start.
+- On Snow Road the new road made First Snow and The Summit Herd harder
+  than the curve allowed (The Summit Herd fell to 7 finishes in 30). Each
+  leg can now override its route's slack: First Snow has 0.26 s and The
+  Summit Herd 0.32 s instead of the route's 0.22 s, which brought both
+  back in line.
+- The Daily Road's 20-road playtest swings with the seeds (16 of 20 before,
+  11 of 20 after, on different roads); over 60 roads the finish rate is
+  the same.
+
+### Rival Driver tuning
+
+`drive.playtest.ts` races every CPU level against every other over 16
+matches (first to three, both sides of the road), and two scripted humans
+against every level over 40: the phone player above, who also blocks when
+a block is right there, and a quick keyboard player (0.34 s to react,
+0.15 s between presses) who sets traps and holds the middle lane.
+
+| Row beats column | Easy | Normal | Hard | Brutal |
+|---|---|---|---|---|
+| Easy | 50 % | 19 % | 13 % | 0 % |
+| Normal | 63 % | 44 % | 13 % | 6 % |
+| Hard | 94 % | 81 % | 44 % | 0 % |
+| Brutal | 94 % | 94 % | 94 % | 56 % |
+
+| Human against | Easy | Normal | Hard | Brutal |
+|---|---|---|---|---|
+| Phone player wins | 70 % | 38 % | 23 % | 3 % |
+| Quick player wins | — | — | — | 63 % |
+
+A match against the CPU takes about two minutes. Normal is a fair fight
+for a casual player; Brutal beats a casual player almost every time but
+loses more than half its matches to a quick one who holds the middle,
+which is what "sharp, not cheating" asks for.
+
+Against Easy over 16 matches (`rival.test.ts`), per minute of racing:
+
+| | Trap attempts | Crashes | Wins against Easy |
+|---|---|---|---|
+| Easy | 0 | 3.4 | 9 of 16 |
+| Normal | 0.5 | 2.8 | 13 of 16 |
+| Hard | 1.5 | 2.7 | 14 of 16 |
+| Brutal | 0.9 | 1.9 | 16 of 16 |
+
+Brutal tries fewer traps than Hard because it spends its quiet moments in
+the middle lane, where it is safest, rather than hunting for a block.

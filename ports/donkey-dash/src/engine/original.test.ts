@@ -8,7 +8,8 @@ import {
   STEP_SECONDS,
   WINNING_CLIMB,
 } from './constants';
-import { classicDuel, createDuel, stepDuel, type DuelEvent } from './duel';
+import { classicDuel, createDuel, stepDuel, type DuelEvent, type Wave } from './duel';
+import { inLayout, layoutAt } from './road';
 import { reactionWindow, revealGap } from './sight';
 
 /** The original's donkey speed in pixels a second: 6 pixels every tick of the PC timer. */
@@ -36,11 +37,14 @@ describe('Classic Duel keeps the timings of DONKEY.BAS', () => {
   });
 
   it('starts each donkey up to 32 pixels above the screen and ends the wave at y 124', () => {
-    const duel = createDuel(classicDuel(5));
+    // A long match, to see plenty of waves.
+    const duel = createDuel(classicDuel(5, 11));
     const waveLengths: number[] = [];
     const revealDelays: number[] = [];
     let waveStarted = 0;
     let time = 0;
+    let current: Wave | null = duel.wave;
+    let shifts = 0;
     const lanes = new Set<number>();
     for (let step = 0; step < 60 * 400 && waveLengths.length < 200; step++) {
       // Never crash: the car is waved through, so every wave runs its full length.
@@ -48,11 +52,20 @@ describe('Classic Duel keeps the timings of DONKEY.BAS', () => {
       const events: DuelEvent[] = stepDuel(duel, { driver: false });
       time += STEP_SECONDS;
       for (const event of events) {
-        if (event.type === 'reveal') revealDelays.push(time - waveStarted);
+        if (event.type === 'reveal' && event.hazard.kind === 'donkey') {
+          revealDelays.push(time - waveStarted);
+        }
         if (event.type === 'wave') {
-          if (event.wave.number > 1) waveLengths.push(time - waveStarted);
+          // A wave that shifts the road lasts until its barrier is past: the original's had none.
+          if (current?.barrier) shifts++;
+          else if (event.wave.number > 1) waveLengths.push(time - waveStarted);
           waveStarted = time;
-          lanes.add(event.wave.donkeys[0]?.lane ?? -1);
+          current = event.wave;
+          const donkey = event.wave.donkeys[0];
+          if (donkey) {
+            expect(inLayout(layoutAt(duel.drive.road, donkey.position), donkey.lane)).toBe(true);
+            lanes.add(donkey.lane - layoutAt(duel.drive.road, donkey.position).first);
+          }
         }
       }
     }
@@ -65,6 +78,9 @@ describe('Classic Duel keeps the timings of DONKEY.BAS', () => {
     for (const delay of revealDelays) {
       expect(delay).toBeLessThanOrEqual(35 / PIXELS_PER_SECOND + 2 * STEP_SECONDS);
     }
+    // Either lane of the road, 50/50; and the road shifts now and then, gently.
     expect(lanes).toEqual(new Set([0, 1]));
+    expect(shifts).toBeGreaterThan(4);
+    expect(shifts).toBeLessThan(waveLengths.length / 3);
   });
 });

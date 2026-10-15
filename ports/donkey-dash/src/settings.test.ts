@@ -35,3 +35,45 @@ describe('settings', () => {
     expect(sanitiseSettings({ points: 2.5 }).points).toBe(5);
   });
 });
+
+describe('Rival Driver settings', () => {
+  it('start against a Normal CPU, first to three, with A and D against the arrow keys', () => {
+    expect(defaultSettings().rival).toEqual({
+      opponent: 'cpu',
+      cpu: 'normal',
+      rounds: 3,
+      keys: [
+        ['KeyA', 'KeyD'],
+        ['ArrowLeft', 'ArrowRight'],
+      ],
+    });
+  });
+
+  it('keep rebound keys only when they are four different keys', () => {
+    const keys = [
+      ['KeyJ', 'KeyL'],
+      ['Numpad4', 'Numpad6'],
+    ];
+    expect(sanitiseSettings({ rival: { keys } }).rival.keys).toEqual(keys);
+    for (const broken of [
+      [
+        ['KeyA', 'KeyA'],
+        ['KeyJ', 'KeyL'],
+      ],
+      [['KeyA', 'KeyD']],
+      [
+        ['KeyA', 'KeyD'],
+        ['Key A', 'KeyL'],
+      ],
+      'KeyA',
+    ]) {
+      expect(sanitiseSettings({ rival: { keys: broken } }).rival.keys).toEqual(
+        defaultSettings().rival.keys,
+      );
+    }
+    expect(sanitiseSettings({ rival: { cpu: 'impossible', rounds: 12 } }).rival).toMatchObject({
+      cpu: 'normal',
+      rounds: 9,
+    });
+  });
+});

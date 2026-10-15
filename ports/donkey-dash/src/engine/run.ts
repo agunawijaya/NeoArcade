@@ -1,5 +1,12 @@
 import { GRACE_SECONDS, STEP_SECONDS } from './constants';
-import { createDrive, pruneHazards, stepDrive, type Drive, type DriveEvent } from './drive';
+import {
+  createDrive,
+  leaveClosedLane,
+  pruneHazards,
+  stepDrive,
+  type Drive,
+  type DriveEvent,
+} from './drive';
 import type { Hazard } from './hazards';
 import { RoadPlanner, type PlanConfig } from './planner';
 import { createRoad, pruneRoad, type SignKind } from './road';
@@ -122,6 +129,8 @@ export function stepRun(state: RunState, input: { driver: boolean }): RunEvent[]
     if (phase.steps >= phase.length) {
       state.phase = { kind: 'drive' };
       drive.car.graceUntil = drive.roadTime + GRACE_SECONDS;
+      // Back on the road beside a barrier, not through it.
+      events.push(...leaveClosedLane(drive));
       events.push({ type: 'resume' });
     }
     return events;
@@ -185,7 +194,7 @@ function crash(state: RunState, hazard: Hazard, events: RunEvent[]) {
 
 function pass(state: RunState, event: Extract<DriveEvent, { type: 'pass' }>, events: RunEvent[]) {
   const { stats } = state;
-  stats.passed += 1;
+  if (event.hazard.kind === 'donkey') stats.passed += 1;
   if (!event.threatened || event.neutral) return;
   if (!event.nearMiss) {
     breakCombo(state, events);

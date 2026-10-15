@@ -56,12 +56,16 @@ export const DIFFICULTY_RULES: Record<Difficulty, DifficultyRules> = {
 const ENDLESS_INTRODUCTIONS: Partial<Record<PhraseKind, number>> = {
   single: 0,
   carrots: 12,
+  shift: 20,
   pair: 32,
   mud: 64,
   wobbler: 96,
   'three-lanes': 136,
   herd: 176,
 };
+
+/** With the hazards off: lone donkeys, and the road still shifts, since that is never off. */
+const PLAIN_ROAD: Partial<Record<PhraseKind, number>> = { single: 0, shift: 20 };
 
 export const ENDLESS_BPM = 120;
 
@@ -77,7 +81,7 @@ export function endlessRun(
       seed,
       bpm: ENDLESS_BPM,
       speed: rules.endlessSpeed,
-      introduce: hazards ? ENDLESS_INTRODUCTIONS : { single: 0 },
+      introduce: hazards ? ENDLESS_INTRODUCTIONS : PLAIN_ROAD,
       rest: rules.rest,
       slack: rules.slack,
       wobbleCommitSeconds: rules.wobbleCommitSeconds,
@@ -93,6 +97,12 @@ export function endlessRun(
 
 /** Daily Road #1. */
 export const DAILY_LAUNCH = '2026-09-28';
+/**
+ * Which rules the Daily Road is played under. The shifting road made the same
+ * seed lay out a different road, so results now record the rules they were
+ * driven by; older ones, from before the road shifted, are rules 1.
+ */
+export const DAILY_RULES = 2;
 export const DAILY_BPM = 112;
 /** About two and a half minutes of road at 112 beats a minute. */
 export const DAILY_LENGTH_BEATS = 288;
@@ -100,6 +110,7 @@ export const DAILY_LENGTH_BEATS = 288;
 const DAILY_INTRODUCTIONS: Partial<Record<PhraseKind, number>> = {
   single: 0,
   carrots: 8,
+  shift: 16,
   pair: 24,
   mud: 48,
   wobbler: 76,
@@ -123,7 +134,7 @@ export function dailyRun(
       seed,
       bpm: DAILY_BPM,
       speed: rules.speed,
-      introduce: hazards ? DAILY_INTRODUCTIONS : { single: 0 },
+      introduce: hazards ? DAILY_INTRODUCTIONS : PLAIN_ROAD,
       rest: rules.rest,
       slack: rules.slack,
       wobbleCommitSeconds: rules.wobbleCommitSeconds,

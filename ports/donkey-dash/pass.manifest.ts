@@ -21,6 +21,43 @@ function car(pen: EmblemPen) {
   pen.circle(44, 48, 5, { fill: 'accent' });
 }
 
+/** Two lanes, the right one bending into the left: the shifting road. */
+function merge(pen: EmblemPen) {
+  pen.path('M22 54V10', { stroke: 'ink', width: 5 });
+  pen.path('M42 54V38c0-9-5-14-13-18', { stroke: 'ink', width: 5 });
+  pen.polygon(
+    [
+      [22, 16],
+      [34, 14],
+      [28, 25],
+    ],
+    { fill: 'accent' },
+  );
+}
+
+/** A traffic cone, with its white band. */
+function cone(pen: EmblemPen) {
+  pen.rect(14, 47, 34, 6, { radius: 2 });
+  pen.polygon(
+    [
+      [20, 47],
+      [42, 47],
+      [33, 12],
+      [29, 12],
+    ],
+    { fill: 'accent' },
+  );
+  pen.polygon(
+    [
+      [25, 35],
+      [37, 35],
+      [35, 26],
+      [27, 26],
+    ],
+    { fill: 'face' },
+  );
+}
+
 export default definePassManifest({
   game: 'donkey-dash',
   badges: [
@@ -96,6 +133,24 @@ export default definePassManifest({
       },
     },
     {
+      id: 'lane-changer',
+      name: 'Lane Changer',
+      description:
+        'Got out of twenty-five closing lanes before their barriers. The cones thank you.',
+      hint: 'Move out of a lane that is ending, before its barrier, 25 times.',
+      tier: 'bronze',
+      target: 25,
+      emblem: merge,
+    },
+    {
+      id: 'gotcha',
+      name: 'Gotcha!',
+      description: 'Boxed your rival in, right in front of trouble. Nothing personal.',
+      hint: 'In Rival Driver, make the other car crash by blocking its way out.',
+      tier: 'bronze',
+      emblem: glyphs.target,
+    },
+    {
       id: 'first-leg',
       name: 'Learner’s Permit',
       description: 'Finished your first Road Trip leg. The open road is yours.',
@@ -134,6 +189,29 @@ export default definePassManifest({
       emblem: (pen) => {
         glyphs.wind(pen);
         pen.star(46, 16, 7, 3, 4, { fill: 'accent' });
+      },
+    },
+    {
+      id: 'merge-master',
+      name: 'Merge Master',
+      description: 'Ten merges in the last fifth of a second before a barrier. Zip!',
+      hint: 'Leave a closing lane within 0.2 s of its barrier, 10 times.',
+      tier: 'silver',
+      target: 10,
+      emblem: (pen) => {
+        cone(pen);
+        pen.star(49, 16, 9, 3.5, 4, { fill: 'shine' });
+      },
+    },
+    {
+      id: 'slippery',
+      name: 'Slippery',
+      description: 'Slipped out of three traps in one Rival match. Butter would be proud.',
+      hint: 'In one Rival Driver match, get away three times after the other car blocks you.',
+      tier: 'silver',
+      emblem: (pen) => {
+        pen.path('M32 9c11 15 17 23 17 31a17 17 0 0 1-34 0c0-8 6-16 17-31z');
+        pen.path('M24 41a8 8 0 0 0 8 8', { stroke: 'face', width: 3 });
       },
     },
     {
@@ -217,6 +295,18 @@ export default definePassManifest({
       emblem: glyphs.medal,
     },
     {
+      id: 'rival-ready',
+      name: 'Rival Ready',
+      description: 'Beat the CPU on Hard. Vera Vroom has already asked for a rematch.',
+      hint: 'Win a Rival Driver match against the CPU on Hard or Brutal.',
+      tier: 'gold',
+      emblem: (pen) => {
+        car(pen);
+        pen.path('M46 6v20', { stroke: 'ink', width: 3 });
+        pen.rect(46, 6, 12, 9, { fill: 'accent' });
+      },
+    },
+    {
       id: 'stubborn',
       name: 'Stubborn',
       description: 'Lost ten points in a row to the Donkey. It admires your persistence.',
@@ -236,6 +326,13 @@ export default definePassManifest({
       description: 'Crashed moments after grabbing a carrot. It was a very good carrot.',
       tier: 'secret',
       emblem: carrot,
+    },
+    {
+      id: 'road-rage',
+      name: 'Road Rage',
+      description: 'Lost a Rival match to Dotty Dawdle on Easy. She waved the whole way.',
+      tier: 'secret',
+      emblem: glyphs.bolt,
     },
     {
       id: 'photo-finish',
@@ -274,6 +371,8 @@ export default definePassManifest({
     { id: 'horn-hee-haw', name: 'Hee-haw horn', kind: 'Horn', unlock: { badge: 'stubborn' } },
     { id: 'paint-chrome', name: 'Chrome', kind: 'Paint', unlock: { badge: 'road-tripper' } },
     { id: 'hat-crown', name: 'Golden crown', kind: 'Donkey hat', unlock: { badge: 'all-stars' } },
+    { id: 'trail-cones', name: 'Traffic cones', kind: 'Trail', unlock: { badge: 'merge-master' } },
+    { id: 'paint-racing', name: 'Racing green', kind: 'Paint', unlock: { badge: 'rival-ready' } },
   ],
   stats: [
     { key: 'runs', label: 'Runs and duels played' },
@@ -284,5 +383,8 @@ export default definePassManifest({
     { key: 'bestCombo', label: 'Best near-miss combo' },
     { key: 'stars', label: 'Road Trip stars', unit: '/ 45' },
     { key: 'bestStreak', label: 'Best Daily streak', unit: 'days' },
+    { key: 'merges', label: 'Closing lanes left in time' },
+    { key: 'traps', label: 'Rival traps sprung' },
+    { key: 'rivalWins', label: 'Rival Driver wins' },
   ],
 });

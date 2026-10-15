@@ -15,10 +15,18 @@ export const STEP_SECONDS = 1 / STEPS_PER_SECOND;
  */
 export const SIGHT_DISTANCE = 16;
 
+/**
+ * A closing lane's barrier stands at least this far beyond the point where
+ * the lane starts closing, so its "lane ends" sign and chevrons are in view
+ * for a whole reaction window before the barrier itself comes into view.
+ */
+export const CLOSING_DISTANCE = SIGHT_DISTANCE;
+
 /** Hitboxes along the road. The car's nose is its front bumper. */
 export const CAR_LENGTH = 4.5;
 export const DONKEY_DEPTH = 1.2;
 export const CARROT_DEPTH = 0.5;
+export const BARRIER_DEPTH = 0.6;
 
 /** How long mud holds a lane switch back. */
 export const MUD_DELAY = 0.15;

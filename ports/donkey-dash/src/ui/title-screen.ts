@@ -7,6 +7,8 @@ export const CREDIT = 'Inspired by DONKEY.BAS, © IBM Corp. 1981, 1982.';
 
 export interface TitleHandlers {
   play(mode: ModeId): void;
+  /** Rival Driver, against a friend on this screen or against the CPU. */
+  rival(opponent: 'friend' | 'cpu'): void;
   garage(): void;
   settings(): void;
   toggleTheme(): void;
@@ -21,7 +23,7 @@ export interface ModeCardText {
 interface ModeInfo {
   title: string;
   line: string;
-  art: 'trip' | 'endless' | 'daily' | 'classic' | 'versus';
+  art: ModeId;
 }
 
 const MODES: Record<ModeId, ModeInfo> = {
@@ -50,6 +52,11 @@ const MODES: Record<ModeId, ModeInfo> = {
     line: 'Two players: one drives, one is the donkey.',
     art: 'versus',
   },
+  rival: {
+    title: 'Rival Driver',
+    line: 'Two cars, three lanes, and no room to spare.',
+    art: 'rival',
+  },
 };
 
 export interface TitleScreen {
@@ -61,6 +68,35 @@ export interface TitleScreen {
   focusFirst(): void;
 }
 
+/** Rival Driver's card is two buttons in one: a race against a friend, or against the CPU. */
+function rivalCard(info: ModeInfo, status: HTMLElement, handlers: TitleHandlers): HTMLElement {
+  return h(
+    'div',
+    {
+      class: `mode-card mode-card--${info.art}`,
+      role: 'group',
+      'aria-labelledby': 'mode-card-rival',
+      'data-mode': 'rival',
+    },
+    h('span', { class: 'mode-card__art', 'aria-hidden': 'true' }),
+    h(
+      'span',
+      { class: 'mode-card__text' },
+      h('strong', { class: 'mode-card__title', id: 'mode-card-rival' }, info.title),
+      h('span', { class: 'mode-card__line' }, info.line),
+      status,
+      h(
+        'span',
+        { class: 'mode-card__choices' },
+        button('vs Friend', () => handlers.rival('friend'), 'mode-card__choice', {
+          'data-rival': 'friend',
+        }),
+        button('vs CPU', () => handlers.rival('cpu'), 'mode-card__choice', { 'data-rival': 'cpu' }),
+      ),
+    ),
+  );
+}
+
 export function buildTitleScreen(handlers: TitleHandlers, howToPlayHref: string): TitleScreen {
   const statuses = new Map<ModeId, HTMLElement>();
   const flags = new Map<ModeId, HTMLElement>();
@@ -70,6 +106,7 @@ export function buildTitleScreen(handlers: TitleHandlers, howToPlayHref: string)
     const flag = h('span', { class: 'mode-card__flag', hidden: true });
     statuses.set(mode, status);
     flags.set(mode, flag);
+    if (mode === 'rival') return rivalCard(info, status, handlers);
     return button(
       h(
         'span',
@@ -167,7 +204,7 @@ export function buildTitleScreen(handlers: TitleHandlers, howToPlayHref: string)
       element.addEventListener('pointerdown', skipIntro, { once: true });
     },
     focusFirst() {
-      element.querySelector<HTMLElement>('.mode-card')?.focus();
+      element.querySelector<HTMLElement>('button.mode-card')?.focus();
     },
   };
 }

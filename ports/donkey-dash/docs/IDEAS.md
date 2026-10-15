@@ -33,6 +33,11 @@ and with a scripted player. That leaves some gaps.
   phone and keyboard would show whether Normal, the Road Trip curve and the
   Daily Road finish rate feel right. Speeds live in `DIFFICULTY_RULES`
   (`engine/modes.ts`) and in each leg (`engine/routes.ts`).
+- **Rival Driver with real people.** The CPU levels were tuned against two
+  scripted players (`drive.playtest.ts`). Watch real players against
+  Normal and Brutal, and two friends sharing one phone held sideways: is
+  the bump readable, do the touch zones feel right, and does the ghost read
+  as harmless? The styles are in `CPU_STYLES` (`engine/rival-cpu.ts`).
 
 ## 2. Polish
 
@@ -71,6 +76,12 @@ these ideas need little new engine work.
   that feints and commits late. The donkey player's input is a single
   button (`steerDonkey` and `toggleDropLane` in `engine/duel.ts`), so a
   small "donkey brain", like the autopilot for the driver, is enough.
+- **Rival Driver online.** A match is a seed and two input streams, and the
+  engine is the same bit for bit in every browser, so two players could
+  race on two screens by sending only their presses. It needs a small relay
+  and a little input delay, nothing else.
+- **CPU against CPU on the title.** The demo drives one car; a Rival match
+  between two CPU drivers behind the menu would show off the new mode.
 - **A gentle mode.** A slower Road Trip for younger or less practised
   players, clearly marked, with its own stars so it does not devalue the
   real ones.
@@ -84,6 +95,11 @@ these ideas need little new engine work.
   swings open on the beat, a donkey that turns round halfway. Each one goes
   through the planner's feasibility check (`engine/planner.ts`), so it
   cannot become unfair.
+- **More road shapes.** Today the road moves one lane at a time across a
+  band four lanes wide. A fork where the road splits round a farmhouse, or
+  a road that narrows to one lane for a bridge, would go through the same
+  proof (`engine/reach.ts`); `road.ts` and `lanes.ts` say what the views
+  need to know.
 - **A twist per boss.** Every stubborn herd works the same way today. Each
   route's boss could have its own: a herd in fog, a herd on the beat, a
   herd that shuffles once.

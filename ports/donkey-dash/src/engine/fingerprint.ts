@@ -3,14 +3,17 @@ import { classicDuel, createDuel, stepDuel, versusDuel } from './duel';
 import type { Drive } from './drive';
 import { dailyRun, endlessRun } from './modes';
 import { legRun, legSeed } from './routes';
+import { createRival, rivalMatch, stepRival } from './rival';
+import { createRivalDriver, CPU_STYLES } from './rival-cpu';
 import { createRun, stepRun } from './run';
 
 /**
  * A short digest of everything the engine does for a fixed set of seeds and
- * scripted players: every hazard placed, every position, every event, down
- * to the last bit of each floating-point number. Daily Road only works if
- * this comes out the same in every browser, so the cross-browser test runs
- * it in Chromium, Firefox and WebKit and compares.
+ * scripted players (Rival Driver's CPUs among them): every hazard placed,
+ * every position, every event, down to the last bit of each floating-point
+ * number. Daily Road only works if this comes out the same in every browser,
+ * so the cross-browser test runs it in Chromium, Firefox and WebKit and
+ * compares.
  */
 export function engineFingerprint(): string {
   const digest = new Digest();
@@ -34,6 +37,18 @@ export function engineFingerprint(): string {
     }
     digest.number(duel.playerScores[0]).number(duel.scores.donkey);
   }
+  const rival = createRival(rivalMatch(1981, 2));
+  const drivers = [
+    createRivalDriver(CPU_STYLES.hard, 0, 3),
+    createRivalDriver(CPU_STYLES.brutal, 1, 4),
+  ];
+  for (let step = 0; step < 8_000 && rival.phase.kind !== 'over'; step++) {
+    const events = stepRival(rival, [drivers[0]!.decide(rival), drivers[1]!.decide(rival)]);
+    digest.drive(rival.drive);
+    for (const car of rival.cars) digest.number(car.lane).number(car.meter);
+    for (const event of events) digest.text(event.type);
+  }
+  digest.number(rival.rounds[0]).number(rival.rounds[1]);
   return digest.hex();
 }
 

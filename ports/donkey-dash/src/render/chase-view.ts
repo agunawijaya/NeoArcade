@@ -1,19 +1,34 @@
-import { CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
-import { halfWidthAt, lanesAt, lateralAt } from '../engine/road';
+import { BARRIER_DEPTH, CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
+import { closingLaneAt, edgesAt, laneLateral, layoutAt, type Road } from '../engine/road';
 import { revealGap } from '../engine/sight';
-import { LANE_METRES } from './classic-view';
 import { drawCrash } from './crash';
 import { drawParticle } from './effects';
 import { parcelBeside, type Parcel } from './fields';
-import { coatFor, mix, type Palette } from './palette';
+import {
+  chevronShape,
+  chevronsOf,
+  conesOf,
+  LANE_METRES,
+  laneEndsBetween,
+  laneEndsSign,
+  LANE_END_PAINT,
+  mergeArrowShape,
+  mergeArrowsOf,
+  sliceAt,
+  type Shape,
+} from './lanes';
+import { coatFor, DRIVER_COLOURS, mix, withAlpha, type Palette } from './palette';
 import { hash, hasFence, polesBetween, propsBetween } from './scenery';
-import { drawCarrot, drawSign } from './sprites/bits';
+import { drawBarrier, drawCarrot, drawCone, drawLaneEndsSign, drawSign } from './sprites/bits';
 import { drawCarRear } from './sprites/car';
 import { DONKEY_HEIGHT, DONKEY_LENGTH, drawDonkey, drawDonkeyShadow } from './sprites/donkey';
 import { drawPole, drawProp, PROP_HEIGHT } from './sprites/props';
 import {
+  ghostAlpha,
   summitProgress,
   type Box,
+  type CarFrame,
+  type CrashFrame,
   type Frame,
   type HazardFrame,
   type RoadView,
@@ -32,6 +47,9 @@ import { drawWeather } from './weather';
  * Distances ahead are stretched by a factor so the crest can sit at a good
  * distance on screen; the time a donkey takes from the crest to the car is
  * exactly the engine's reaction window.
+ *
+ * When the road shifts, it bends towards its new lanes: the camera follows
+ * the car across, and the road ahead curves off the way the lanes are going.
  */
 export interface ChaseLayout extends ViewLayout {
   focal: number;
@@ -67,10 +85,17 @@ const CREST_RISE = 0.45;
 /** The smallest a donkey on the crest may look, in pixels across. */
 const CREST_DONKEY_PIXELS = 30;
 
-export function chaseLayout(viewport: Viewport, climb: number): ChaseLayout {
+/**
+ * With two cars side by side the camera stands further back, so that both
+ * stay on screen even on the outer lanes of a road four lanes wide.
+ */
+const TWO_CAR_SHARE = 0.14;
+
+export function chaseLayout(viewport: Viewport, climb: number, twoCars = false): ChaseLayout {
   const { width, height, insetTop, insetBottom } = viewport;
   const portrait = height > width;
-  const carShare = portrait ? 0.32 : Math.max(0.15, Math.min(0.21, 300 / width));
+  const oneCar = portrait ? 0.32 : Math.max(0.15, Math.min(0.21, 300 / width));
+  const carShare = twoCars ? Math.min(oneCar, TWO_CAR_SHARE) : oneCar;
   const focal = (carShare * width * CAR_DEPTH) / CAR_WIDTH;
   const crestDepth = Math.max(16, Math.min(46, (focal * DONKEY_LENGTH) / CREST_DONKEY_PIXELS));
   const carBottom = height - Math.max(insetBottom + 24, height * 0.08);
@@ -142,11 +167,12 @@ interface Sprite {
   draw(): void;
 }
 
-/** One slice of the ground from the crest to the car: its depth, road position and half-width. */
+/** One slice of the ground from the crest to the car: its depth, road position and edges, in metres. */
 interface RoadRow {
   depth: number;
   position: number;
-  half: number;
+  left: number;
+  right: number;
 }
 
 /** Metres behind the bumper over which dust and trails fade away. */
@@ -164,15 +190,15 @@ export class ChaseView implements RoadView {
   readonly camera = 'chase' as const;
   private cameraAcross = 0;
 
-  layout(viewport: Viewport, climb: number): ChaseLayout {
-    return chaseLayout(viewport, climb);
+  layout(viewport: Viewport, climb: number, twoCars = false): ChaseLayout {
+    return chaseLayout(viewport, climb, twoCars);
   }
 
   draw(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport) {
-    const layout = this.layout(viewport, frame.climb);
-    const curve = curveAt(frame.nose);
+    const layout = this.layout(viewport, frame.climb, frame.twoCars);
+    const curve = bendOf(frame.road, frame.nose, layout.sightAhead);
     // The camera follows the car across, but only part of the way, so the road sways.
-    this.cameraAcross = frame.car.lateral * LANE_METRES * 0.6;
+    this.cameraAcross = frame.focus * LANE_METRES * 0.6;
     const across = (metres: number) => metres - this.cameraAcross;
     const roadPosition = (depth: number) => frame.nose + layout.gapAt(depth);
 
@@ -182,10 +208,11 @@ export class ChaseView implements RoadView {
     const sprites: Sprite[] = [];
     this.collectScenery(ctx, frame, layout, curve, across, sprites);
     this.collectHazards(ctx, frame, layout, curve, across, sprites);
-    if (!frame.crash) {
+    this.collectLaneEnds(ctx, frame, layout, curve, across, sprites);
+    for (const car of frame.cars) {
       sprites.push({
         depth: layout.carDepth,
-        draw: () => this.drawCar(ctx, frame, layout, across(frame.car.lateral * LANE_METRES)),
+        draw: () => this.drawCar(ctx, frame, layout, car, across(car.lateral * LANE_METRES)),
       });
     }
     sprites.sort((a, b) => b.depth - a.depth);
@@ -209,7 +236,7 @@ export class ChaseView implements RoadView {
 
     this.drawNight(ctx, frame, viewport, layout, across);
     drawWeather(ctx, frame, viewport);
-    if (frame.crash) this.drawCrash(ctx, frame, viewport, layout, across);
+    for (const crash of frame.crashes) this.drawCrash(ctx, frame, crash, viewport, layout, across);
   }
 
   private drawBackdrop(
@@ -314,22 +341,23 @@ export class ChaseView implements RoadView {
     depths.push(1.4);
     const rows: RoadRow[] = depths.map((depth) => {
       const position = roadPosition(depth);
-      return { depth, position, half: halfWidthAt(road, position) * LANE_METRES };
+      const { left, right } = sliceAt(road, position);
+      return { depth, position, left: left * LANE_METRES, right: right * LANE_METRES };
     });
     const crestY = layout.project(layout.crestDepth, across(0), 0, curve).y;
 
     // Big shapes first, each drawn once, so no seams show between strips.
     ctx.fillStyle = palette.grass[0];
     ctx.fillRect(0, crestY, viewport.width, viewport.height - crestY);
-    const outline = (inner: (half: number) => number, outer: (half: number) => number) => {
+    const outline = (inner: (row: RoadRow) => number, outer: (row: RoadRow) => number) => {
       ctx.beginPath();
       rows.forEach((row, index) => {
-        const point = layout.project(row.depth, across(inner(row.half)), 0, curve);
+        const point = layout.project(row.depth, across(inner(row)), 0, curve);
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       });
       for (const row of [...rows].reverse()) {
-        const point = layout.project(row.depth, across(outer(row.half)), 0, curve);
+        const point = layout.project(row.depth, across(outer(row)), 0, curve);
         ctx.lineTo(point.x, point.y);
       }
       ctx.closePath();
@@ -373,13 +401,13 @@ export class ChaseView implements RoadView {
 
     ctx.fillStyle = palette.verge;
     outline(
-      (half) => -half - 1.1,
-      (half) => half + 1.1,
+      (row) => row.left - 1.1,
+      (row) => row.right + 1.1,
     );
     ctx.fillStyle = palette.asphalt;
     outline(
-      (half) => -half,
-      (half) => half,
+      (row) => row.left,
+      (row) => row.right,
     );
 
     const dash = mix(palette.dash, '#ffffff', frame.beatPulse * 0.6);
@@ -390,49 +418,45 @@ export class ChaseView implements RoadView {
       if (band) {
         ctx.fillStyle = palette.asphaltLight;
         ctx.globalAlpha = 0.5;
-        strip(far, near, -far.half, far.half, -near.half, near.half);
+        strip(far, near, far.left, far.right, near.left, near.right);
         ctx.globalAlpha = 1;
         // Lane dashes on every other band; they flash on the beat.
         ctx.fillStyle = dash;
-        const lanes = lanesAt(road, near.position);
-        for (let divider = 0; divider < lanes - 1; divider++) {
-          const middle = (position: number) =>
-            ((lateralAt(road, position, divider) + lateralAt(road, position, divider + 1)) / 2) *
-            LANE_METRES;
-          const farX = middle(far.position);
-          const nearX = middle(near.position);
-          strip(far, near, farX - 0.08, farX + 0.08, nearX - 0.08, nearX + 0.08);
+        for (const lateral of sliceAt(road, near.position).dividers) {
+          const x = lateral * LANE_METRES;
+          strip(far, near, x - 0.08, x + 0.08, x - 0.08, x + 0.08);
         }
       }
       for (const patch of road.mud) {
         if (near.position >= patch.to || far.position < patch.from) continue;
         ctx.fillStyle = palette.mud;
         for (const lane of patch.lanes) {
-          const farX = lateralAt(road, far.position, lane) * LANE_METRES;
-          const nearX = lateralAt(road, near.position, lane) * LANE_METRES;
+          const x = laneLateral(lane) * LANE_METRES;
           const wobble = 0.3 * Math.sin(near.position * 1.7 + lane);
-          strip(far, near, farX - 1.3 + wobble, farX + 1.3, nearX - 1.3 + wobble, nearX + 1.3);
+          strip(far, near, x - 1.3 + wobble, x + 1.3, x - 1.3 + wobble, x + 1.3);
         }
       }
       const finish = road.finish;
       if (finish !== null && finish >= near.position && finish < far.position) {
         const cells = 10;
+        const width = near.right - near.left;
         for (let cell = 0; cell < cells; cell++) {
-          const from = -near.half + (cell * 2 * near.half) / cells;
-          const to = from + (2 * near.half) / cells;
+          const from = near.left + (cell * width) / cells;
+          const to = from + width / cells;
           ctx.fillStyle = cell % 2 === 0 ? '#ffffff' : '#1d1a20';
           strip(far, near, from, to, from, to);
         }
       }
     }
+    this.paintLaneEnds(ctx, frame, layout, curve, across, rows);
     ctx.fillStyle = palette.edgeLine;
     outline(
-      (half) => -half,
-      (half) => -half + 0.18,
+      (row) => row.left,
+      (row) => row.left + 0.18,
     );
     outline(
-      (half) => half - 0.18,
-      (half) => half,
+      (row) => row.right - 0.18,
+      (row) => row.right,
     );
 
     // Distance fades into the haze.
@@ -445,15 +469,16 @@ export class ChaseView implements RoadView {
     ctx.fillRect(0, crestY, viewport.width, bottom - crestY);
 
     // The crest: a lighter lip where the road tips over the top.
+    const crest = sliceAt(road, frame.nose + layout.sightAhead);
     const lipLeft = layout.project(
       layout.crestDepth,
-      across(-halfWidthAt(road, frame.nose + layout.sightAhead) * LANE_METRES - 1.2),
+      across(crest.left * LANE_METRES - 1.2),
       0,
       curve,
     );
     const lipRight = layout.project(
       layout.crestDepth,
-      across(halfWidthAt(road, frame.nose + layout.sightAhead) * LANE_METRES + 1.2),
+      across(crest.right * LANE_METRES + 1.2),
       0,
       curve,
     );
@@ -466,9 +491,9 @@ export class ChaseView implements RoadView {
 
     if (frame.commitGap !== null) {
       const depth = layout.depthOf(frame.commitGap);
-      const half = halfWidthAt(road, frame.nose + frame.commitGap) * LANE_METRES;
-      const left = layout.project(depth, across(-half), 0, curve);
-      const right = layout.project(depth, across(half), 0, curve);
+      const edges = sliceAt(road, frame.nose + frame.commitGap);
+      const left = layout.project(depth, across(edges.left * LANE_METRES), 0, curve);
+      const right = layout.project(depth, across(edges.right * LANE_METRES), 0, curve);
       ctx.save();
       ctx.setLineDash([left.scale * 0.6, left.scale * 0.4]);
       ctx.strokeStyle = '#ff5e8a';
@@ -481,7 +506,7 @@ export class ChaseView implements RoadView {
     }
     if (frame.dropLane !== null) {
       // Where the next donkey drops in: a marker hanging over its lane on the crest.
-      const lane = lateralAt(road, frame.nose + layout.sightAhead, frame.dropLane) * LANE_METRES;
+      const lane = laneLateral(frame.dropLane) * LANE_METRES;
       const tip = layout.project(layout.crestDepth, across(lane), 0.4, curve);
       const size = Math.max(7, tip.scale * 0.7);
       ctx.fillStyle = 'rgba(255, 94, 138, 0.85)';
@@ -504,15 +529,16 @@ export class ChaseView implements RoadView {
     rows: readonly RoadRow[],
     point: (depth: number, metres: number) => { x: number; y: number },
   ) {
+    const edge = (row: RoadRow, side: -1 | 1) => (side < 0 ? row.left : row.right);
     const band = (run: readonly RoadRow[], side: -1 | 1, inner: number, outer: number) => {
       ctx.beginPath();
       run.forEach((row, index) => {
-        const { x, y } = point(row.depth, side * (row.half + inner));
+        const { x, y } = point(row.depth, edge(row, side) + side * inner);
         if (index === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       for (const row of [...run].reverse()) {
-        const { x, y } = point(row.depth, side * (row.half + outer));
+        const { x, y } = point(row.depth, edge(row, side) + side * outer);
         ctx.lineTo(x, y);
       }
       ctx.closePath();
@@ -545,7 +571,8 @@ export class ChaseView implements RoadView {
     const crest = frame.nose + layout.sightAhead;
     const place = (position: number, offsetFromEdge: number, side: -1 | 1) => {
       const depth = layout.depthOf(position - frame.nose);
-      const metres = side * (halfWidthAt(road, position) * LANE_METRES + offsetFromEdge);
+      const { left, right } = sliceAt(road, position);
+      const metres = (side < 0 ? left : right) * LANE_METRES + side * offsetFromEdge;
       return { depth, point: layout.project(depth, across(metres), 0, curve) };
     };
     for (const prop of propsBetween(palette, behind, crest, 40, 3)) {
@@ -635,9 +662,13 @@ export class ChaseView implements RoadView {
   ) {
     for (const hazard of frame.hazards) {
       if (hazard.gap > layout.sightAhead + 0.01) continue;
-      const depth = layout.depthOf(
-        hazard.gap + (hazard.kind === 'donkey' ? DONKEY_DEPTH / 2 : 0.25),
-      );
+      const middle =
+        hazard.kind === 'donkey'
+          ? DONKEY_DEPTH / 2
+          : hazard.kind === 'barrier'
+            ? BARRIER_DEPTH / 2
+            : 0.25;
+      const depth = layout.depthOf(hazard.gap + middle);
       // Past the car's bumper a donkey would loom huge over the camera.
       if (depth < layout.carDepth - 0.5) continue;
       const point = layout.project(depth, across(hazard.lateral * LANE_METRES), 0, curve);
@@ -651,6 +682,9 @@ export class ChaseView implements RoadView {
             groundShadow(ctx, frame.palette, 0.25);
             ctx.scale(1.6, 1.6);
             drawCarrot(ctx, frame.time, hazard.seed);
+          } else if (hazard.kind === 'barrier') {
+            groundShadow(ctx, frame.palette, 1.2);
+            drawBarrier(ctx, frame.time);
           } else {
             drawDonkeyShadow(ctx, frame.palette.shadow);
             drawChaseDonkey(ctx, hazard, frame, point.scale < 14);
@@ -661,19 +695,94 @@ export class ChaseView implements RoadView {
     }
   }
 
+  /** The cones and the "lane ends" sign of a lane that is ending, as upright things on the road. */
+  private collectLaneEnds(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: ChaseLayout,
+    curve: number,
+    across: (metres: number) => number,
+    sprites: Sprite[],
+  ) {
+    const { road } = frame;
+    const behind = frame.nose + layout.gapAt(layout.carDepth);
+    const crest = frame.nose + layout.sightAhead;
+    const stand = (along: number, metres: number, draw: () => void) => {
+      const depth = layout.depthOf(along - frame.nose);
+      if (along > crest || depth < layout.carDepth - 0.5) return;
+      const point = layout.project(depth, across(metres), 0, curve);
+      sprites.push({
+        depth,
+        draw: () => {
+          ctx.save();
+          ctx.translate(point.x, point.y);
+          ctx.scale(point.scale, point.scale);
+          draw();
+          ctx.restore();
+        },
+      });
+    };
+    for (const end of laneEndsBetween(road, behind, crest)) {
+      for (const cone of conesOf(end)) {
+        stand(cone.along, cone.lateral * LANE_METRES, () => drawCone(ctx));
+      }
+      const sign = laneEndsSign(road, end);
+      const edges = sliceAt(road, sign.along);
+      const metres = (sign.side < 0 ? edges.left : edges.right) * LANE_METRES + sign.side * 0.9;
+      stand(sign.along, metres, () => drawLaneEndsSign(ctx, end.merge));
+    }
+  }
+
+  /** Chevrons and merge arrows painted down a lane that is ending, from the car to the crest. */
+  private paintLaneEnds(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: ChaseLayout,
+    curve: number,
+    across: (metres: number) => number,
+    rows: readonly RoadRow[],
+  ) {
+    const nearest = rows.at(-1)?.position ?? frame.nose;
+    const crest = frame.nose + layout.sightAhead;
+    const paint = (shape: Shape) => {
+      if (shape.some(([along]) => along > crest || along < nearest)) return;
+      ctx.beginPath();
+      shape.forEach(([along, metres], index) => {
+        const point = layout.project(layout.depthOf(along - frame.nose), across(metres), 0, curve);
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    };
+    for (const end of laneEndsBetween(frame.road, nearest, crest)) {
+      ctx.fillStyle = withAlpha(LANE_END_PAINT, 0.85);
+      for (const along of chevronsOf(end)) paint(chevronShape(end, along));
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      for (const along of mergeArrowsOf(end)) paint(mergeArrowShape(end, along));
+    }
+  }
+
   private drawCar(
     ctx: CanvasRenderingContext2D,
     frame: Frame,
     layout: ChaseLayout,
+    car: CarFrame,
     metres: number,
   ) {
-    const { car } = frame;
-    if (car.ghost && Math.floor(frame.time * 12) % 2 === 0) return;
     // Reaching the top, the car races away over the crest.
     const depth =
       layout.carDepth + summitProgress(frame) * (layout.crestDepth - layout.carDepth + 6);
     const rear = layout.project(depth, metres);
     ctx.save();
+    ctx.globalAlpha = ghostAlpha(car, frame);
+    if (car.driver !== null) {
+      // Each Rival driver's car sits in a pool of its own colour.
+      ctx.fillStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.5);
+      ctx.beginPath();
+      ctx.ellipse(rear.x, rear.y, rear.scale * 1.5, rear.scale * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = frame.palette.shadow;
     ctx.beginPath();
     ctx.ellipse(rear.x, rear.y, rear.scale * 1.15, rear.scale * 0.28, 0, 0, Math.PI * 2);
@@ -705,35 +814,37 @@ export class ChaseView implements RoadView {
     ctx.save();
     ctx.fillStyle = `rgba(6, 8, 26, ${(dark - 0.35) * 0.5})`;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
-    if (lights && !frame.crash) {
+    if (lights) {
       ctx.globalCompositeOperation = 'lighter';
-      const metres = across(frame.car.lateral * LANE_METRES);
-      const curve = curveAt(frame.nose);
+      const curve = bendOf(frame.road, frame.nose, layout.sightAhead);
       // The beams leave the road just over the car's roof, so they seem to come from it.
       const roof = layout.carBox(0).y;
-      let near = layout.carDepth;
-      let far = layout.crestDepth;
-      for (let step = 0; step < 16; step++) {
-        const middle = (near + far) / 2;
-        if (layout.project(middle, metres, 0, curve).y > roof) near = middle;
-        else far = middle;
-      }
-      const start = layout.project(far, metres, 0, curve);
-      const end = layout.project(layout.noseDepth + 26, metres, 0, curve);
-      const beam = ctx.createLinearGradient(0, start.y, 0, end.y);
-      beam.addColorStop(0, 'rgba(255, 238, 180, 0)');
-      beam.addColorStop(0.15, 'rgba(255, 238, 180, 0.09)');
-      beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
-      ctx.fillStyle = beam;
-      // Nested cones of faint light add up to a soft-edged beam.
-      for (const width of [1.5, 2.3, 3.1, 3.9]) {
-        const spread = layout.project(layout.noseDepth + 26, metres + width, 0, curve);
-        ctx.beginPath();
-        ctx.moveTo(start.x - start.scale * width * 0.3, start.y);
-        ctx.lineTo(end.x - (spread.x - end.x), end.y);
-        ctx.lineTo(spread.x, end.y);
-        ctx.lineTo(start.x + start.scale * width * 0.3, start.y);
-        ctx.fill();
+      for (const car of frame.cars) {
+        const metres = across(car.lateral * LANE_METRES);
+        let near = layout.carDepth;
+        let far = layout.crestDepth;
+        for (let step = 0; step < 16; step++) {
+          const middle = (near + far) / 2;
+          if (layout.project(middle, metres, 0, curve).y > roof) near = middle;
+          else far = middle;
+        }
+        const start = layout.project(far, metres, 0, curve);
+        const end = layout.project(layout.noseDepth + 26, metres, 0, curve);
+        const beam = ctx.createLinearGradient(0, start.y, 0, end.y);
+        beam.addColorStop(0, 'rgba(255, 238, 180, 0)');
+        beam.addColorStop(0.15, 'rgba(255, 238, 180, 0.09)');
+        beam.addColorStop(1, 'rgba(255, 238, 180, 0)');
+        ctx.fillStyle = beam;
+        // Nested cones of faint light add up to a soft-edged beam.
+        for (const width of [1.5, 2.3, 3.1, 3.9]) {
+          const spread = layout.project(layout.noseDepth + 26, metres + width, 0, curve);
+          ctx.beginPath();
+          ctx.moveTo(start.x - start.scale * width * 0.3, start.y);
+          ctx.lineTo(end.x - (spread.x - end.x), end.y);
+          ctx.lineTo(spread.x, end.y);
+          ctx.lineTo(start.x + start.scale * width * 0.3, start.y);
+          ctx.fill();
+        }
       }
     }
     ctx.restore();
@@ -742,13 +853,11 @@ export class ChaseView implements RoadView {
   private drawCrash(
     ctx: CanvasRenderingContext2D,
     frame: Frame,
+    crash: CrashFrame,
     viewport: Viewport,
     layout: ChaseLayout,
     across: (metres: number) => number,
   ) {
-    const crash = frame.crash;
-    if (!crash) return;
-    const car = frame.car;
     const carMetres = across(crash.carLateral * LANE_METRES);
     const rear = layout.project(layout.carDepth, carMetres);
     const carBox: Box = {
@@ -792,8 +901,8 @@ export class ChaseView implements RoadView {
           context.translate(rear.x, rear.y);
           context.scale(rear.scale, rear.scale);
           drawCarRear(context, {
-            shape: car.look.shape,
-            paint: car.look.paint,
+            shape: crash.look.shape,
+            paint: crash.look.paint,
             lean: 0,
             daylight: frame.palette.daylight,
             stuck: false,
@@ -803,16 +912,26 @@ export class ChaseView implements RoadView {
         },
       },
       {
-        box: donkeyBox,
-        draw: (context) => {
+        box:
+          crash.obstacle === 'donkey'
+            ? donkeyBox
+            : {
+                x: foot.x - foot.scale * 1.6,
+                y: foot.y - foot.scale * 1.5,
+                width: foot.scale * 3.2,
+                height: foot.scale * 1.5,
+              },
+        draw: (context, wobble = 0) => {
           context.save();
           context.translate(foot.x, foot.y);
           context.scale(foot.scale, foot.scale);
-          drawChaseDonkey(context, donkey, frame, false);
+          if (crash.obstacle === 'barrier') drawBarrier(context, frame.time, wobble);
+          else drawChaseDonkey(context, donkey, frame, false);
           context.restore();
         },
       },
       frame.reducedMotion,
+      crash.obstacle,
     );
   }
 }
@@ -865,6 +984,30 @@ function parcelRuns(palette: Palette, rows: readonly RoadRow[], side: -1 | 1) {
 /** How the road bends here: a slow, smooth wander left and right, for looks only. */
 export function curveAt(position: number): number {
   return 0.0022 * Math.sin(position / 95) + 0.0011 * Math.sin(position / 41 + 1.3);
+}
+
+/** The most a shift of the road adds to the bend; with a third of the wander, never more than before. */
+const SHIFT_BEND = 0.0022;
+
+/**
+ * The bend the Chase view draws: a third of the gentle wander, plus a curve
+ * towards where the road is shifting. The open road's middle at the crest is
+ * compared with where the car is, so the road swings over as soon as the new
+ * lane comes into view, and straightens out once the car has followed it.
+ */
+export function bendOf(road: Road, nose: number, sightAhead: number): number {
+  const shift = openMiddle(road, nose + sightAhead) - openMiddle(road, nose);
+  return curveAt(nose) / 3 + Math.max(-1, Math.min(1, shift)) * SHIFT_BEND;
+}
+
+/** The middle of the lanes a car may stay in: the open ones, eased in as a new one widens. */
+function openMiddle(road: Road, position: number): number {
+  const closing = closingLaneAt(road, position);
+  const { left, right } = edgesAt(road, position);
+  // A closing lane is still paved but already on its way out: leave it out of the middle.
+  if (closing === null) return (left + right) / 2;
+  const layout = layoutAt(road, position);
+  return laneLateral(layout.first) + (layout.count - 1) / 2;
 }
 
 function fadeFor(depth: number, layout: ChaseLayout, palette: Palette): number {

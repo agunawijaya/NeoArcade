@@ -15,6 +15,10 @@ export interface Leg {
   lengthBeats: number;
   speed: { start: number; max: number };
   introduce: Partial<Record<PhraseKind, number>>;
+  /** Overrides how often a kind comes up; the first legs keep the shifting road gentle. */
+  weights?: Partial<Record<PhraseKind, number>>;
+  /** Overrides the route's slack, where a leg's own road needs more room to stay on the curve. */
+  slack?: number;
   boss: boolean;
   /** Near-miss points for the third star. */
   nearMissTarget: number;
@@ -35,7 +39,7 @@ export interface Route {
   legs: readonly [Leg, Leg, Leg];
 }
 
-const BASICS = { single: 0, carrots: 12, pair: 20 } as const;
+const BASICS = { single: 0, carrots: 12, pair: 20, shift: 28 } as const;
 
 export const ROUTES: Record<RouteId, Route> = {
   farm: {
@@ -52,7 +56,8 @@ export const ROUTES: Record<RouteId, Route> = {
         name: 'Morning Chores',
         lengthBeats: 96,
         speed: { start: 11, max: 13.5 },
-        introduce: { single: 0, carrots: 12 },
+        introduce: { single: 0, carrots: 12, shift: 40 },
+        weights: { shift: 1 },
         boss: false,
         nearMissTarget: 800,
       },
@@ -60,7 +65,8 @@ export const ROUTES: Record<RouteId, Route> = {
         name: 'Hay Day',
         lengthBeats: 112,
         speed: { start: 12, max: 14.5 },
-        introduce: { single: 0, carrots: 8, pair: 16 },
+        introduce: { single: 0, carrots: 8, pair: 16, shift: 30 },
+        weights: { shift: 2 },
         boss: false,
         nearMissTarget: 1200,
       },
@@ -68,7 +74,8 @@ export const ROUTES: Record<RouteId, Route> = {
         name: 'The Stubborn Herd',
         lengthBeats: 128,
         speed: { start: 12.5, max: 15 },
-        introduce: { single: 0, carrots: 8, pair: 12 },
+        introduce: { single: 0, carrots: 8, pair: 12, shift: 24 },
+        weights: { shift: 2 },
         boss: true,
         nearMissTarget: 1500,
       },
@@ -195,6 +202,7 @@ export const ROUTES: Record<RouteId, Route> = {
       {
         name: 'First Snow',
         lengthBeats: 144,
+        slack: 0.26,
         speed: { start: 15, max: 18.5 },
         introduce: { ...BASICS, mud: 20, wobbler: 44, 'three-lanes': 70, herd: 100 },
         boss: false,
@@ -211,6 +219,7 @@ export const ROUTES: Record<RouteId, Route> = {
       {
         name: 'The Summit Herd',
         lengthBeats: 176,
+        slack: 0.32,
         speed: { start: 16.5, max: 21 },
         introduce: { ...BASICS, mud: 12, wobbler: 24, 'three-lanes': 36, herd: 52 },
         boss: true,
@@ -237,8 +246,9 @@ export function legRun(
       bpm: route.bpm,
       speed: { ...leg.speed, rampBeats: leg.lengthBeats / 2 },
       introduce: leg.introduce,
+      weights: leg.weights,
       rest: { start: 3, end: 1.5 },
-      slack: route.slack,
+      slack: leg.slack ?? route.slack,
       wobbleCommitSeconds: route.wobbleCommitSeconds,
       lengthBeats: leg.lengthBeats,
       boss: leg.boss,

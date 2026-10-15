@@ -6,7 +6,7 @@ import type { Look } from '../garage';
 import type { Palette } from '../render/palette';
 import type { Stage } from '../render/stage';
 import type { RoadView } from '../render/view';
-import { Visuals } from './visuals';
+import { soloCar, Visuals } from './visuals';
 
 /**
  * The attract mode behind the title and menus: a car on autopilot driving
@@ -51,17 +51,20 @@ export class Demo {
     frameSeconds: number,
   ) {
     const crashPhase = this.run.phase.kind === 'crash' ? this.run.phase : null;
+    const { drive } = this.run;
     const frame = this.visuals.frame(
       {
-        drive: this.run.drive,
-        crash: crashPhase
-          ? { hazard: crashPhase.hazard, age: crashPhase.steps * STEP_SECONDS }
-          : null,
+        drive,
+        cars: crashPhase ? [] : [soloCar(drive, look)],
+        crashes: crashPhase
+          ? [{ hazard: crashPhase.hazard, age: crashPhase.steps * STEP_SECONDS, car: 0, look }]
+          : [],
+        freeze: true,
+        twoCars: false,
         summit: null,
         commitGap: null,
         dropLane: null,
         palette,
-        look,
         rivalHat: null,
       },
       this.reducedMotion() ? 0 : alpha,

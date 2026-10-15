@@ -1,12 +1,41 @@
 import { DIFFICULTIES, type Difficulty } from './engine/modes';
+import { ROUNDS_RANGE } from './engine/rival';
+import { CPU_LEVELS, type CpuLevel } from './engine/rival-cpu';
 
-export type ModeId = 'trip' | 'endless' | 'daily' | 'classic' | 'versus';
+export type ModeId = 'trip' | 'endless' | 'daily' | 'classic' | 'versus' | 'rival';
 export type CameraView = 'chase' | 'classic' | 'iso';
 export type ScreenFilter = 'none' | 'crt' | 'cga';
 
-export const MODE_IDS: readonly ModeId[] = ['trip', 'endless', 'daily', 'classic', 'versus'];
+export const MODE_IDS: readonly ModeId[] = [
+  'trip',
+  'endless',
+  'daily',
+  'classic',
+  'versus',
+  'rival',
+];
 export const CAMERA_VIEWS: readonly CameraView[] = ['chase', 'classic', 'iso'];
 export const SCREEN_FILTERS: readonly ScreenFilter[] = ['none', 'crt', 'cga'];
+
+/** Rival Driver's keys, by KeyboardEvent.code: each driver's left and right. */
+export type RivalKeys = readonly [readonly [string, string], readonly [string, string]];
+
+export const DEFAULT_RIVAL_KEYS: RivalKeys = [
+  ['KeyA', 'KeyD'],
+  ['ArrowLeft', 'ArrowRight'],
+];
+
+export type RivalOpponent = 'cpu' | 'friend';
+
+export interface RivalSettings {
+  /** Who the Settings screen's Play button races: the last one picked on the title. */
+  opponent: RivalOpponent;
+  /** How the CPU rival drives. */
+  cpu: CpuLevel;
+  /** Rounds to win a match. */
+  rounds: number;
+  keys: RivalKeys;
+}
 
 /** Everything chosen on the settings screen. Theme and sound levels are kept elsewhere. */
 export interface Settings {
@@ -20,6 +49,7 @@ export interface Settings {
   /** The modern hazards, per mode. Classic Duel starts without them, like 1981. */
   hazards: Record<'classic' | 'versus' | 'endless', boolean>;
   filter: ScreenFilter;
+  rival: RivalSettings;
 }
 
 export const DIFFICULTY_NAMES: Record<Difficulty, string> = {
@@ -39,6 +69,7 @@ export function defaultSettings(): Settings {
     rhythm: true,
     hazards: { classic: false, versus: false, endless: true },
     filter: 'none',
+    rival: { opponent: 'cpu', cpu: 'normal', rounds: 3, keys: DEFAULT_RIVAL_KEYS },
   };
 }
 
@@ -51,6 +82,10 @@ export function sanitiseSettings(raw: unknown): Settings {
     typeof stored.hazards === 'object' && stored.hazards !== null ? stored.hazards : {}
   ) as Partial<Record<keyof Settings['hazards'], unknown>>;
   const points = Number(stored.points);
+  const rival = (
+    typeof stored.rival === 'object' && stored.rival !== null ? stored.rival : {}
+  ) as Partial<Record<keyof RivalSettings, unknown>>;
+  const rounds = Number(rival.rounds);
 
   return {
     mode: oneOf(stored.mode, MODE_IDS, fallback.mode),
@@ -66,7 +101,28 @@ export function sanitiseSettings(raw: unknown): Settings {
       endless: flag(hazards.endless, fallback.hazards.endless),
     },
     filter: oneOf(stored.filter, SCREEN_FILTERS, fallback.filter),
+    rival: {
+      opponent: oneOf(rival.opponent, ['cpu', 'friend'] as const, fallback.rival.opponent),
+      cpu: oneOf(rival.cpu, CPU_LEVELS, fallback.rival.cpu),
+      rounds: Number.isInteger(rounds)
+        ? Math.min(ROUNDS_RANGE.max, Math.max(ROUNDS_RANGE.min, rounds))
+        : fallback.rival.rounds,
+      keys: rivalKeys(rival.keys) ?? fallback.rival.keys,
+    },
   };
+}
+
+/** Four different key codes, two per driver, or nothing. */
+function rivalKeys(value: unknown): RivalKeys | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const pairs = value.filter(
+    (pair): pair is [string, string] =>
+      Array.isArray(pair) &&
+      pair.length === 2 &&
+      pair.every((code) => typeof code === 'string' && /^[A-Za-z0-9]{1,24}$/.test(code)),
+  );
+  if (pairs.length !== 2 || new Set(pairs.flat()).size !== 4) return null;
+  return [pairs[0], pairs[1]] as RivalKeys;
 }
 
 function oneOf<T extends string>(value: unknown, options: readonly T[], otherwise: T): T {

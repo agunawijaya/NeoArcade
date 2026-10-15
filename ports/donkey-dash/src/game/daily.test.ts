@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRun } from '../engine/run';
 import { dailyRun } from '../engine/modes';
-import { DAILY, dailyResultOf, shareText, stripOf } from './daily';
+import { DAILY_RULES } from '../engine/modes';
+import { DAILY, dailyResultOf, isDailyResult, rulesOf, shareText, stripOf } from './daily';
 
 describe('Daily Road', () => {
   it('is number 1 on launch day, the same road for everyone that UTC day', () => {
@@ -23,6 +24,22 @@ describe('Daily Road', () => {
     const metres = Math.floor(run.drive.road.finish! * 0.55).toLocaleString('en');
     expect(text).toBe(`Donkey Dash · Daily #37 🚗💨 2 🫏💥 · ${metres} m\n🟩✨🟩💥🟩💥⬜⬜⬜⬜`);
     expect(text).not.toMatch(/lane|left|right/i);
+  });
+
+  it('keeps counting through a change of rules, and keeps the old results as they were', () => {
+    // The shifting road arrived on day 18; days before it still read as records.
+    expect(DAILY.forKey('2026-10-15').number).toBe(18);
+    const before = {
+      metres: 1840,
+      crashes: 1,
+      finished: false,
+      score: 2210,
+      strip: '🟩🟩💥⬜⬜⬜⬜⬜⬜⬜',
+    };
+    expect(isDailyResult(before)).toBe(true);
+    expect(rulesOf(before)).toBe(1);
+    expect(rulesOf(dailyResultOf(createRun(dailyRun(5))))).toBe(DAILY_RULES);
+    expect(DAILY_RULES).toBe(2);
   });
 
   it('flies the chequered flag for a finished road', () => {

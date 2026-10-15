@@ -130,6 +130,54 @@ export const SOUNDS = {
     gain: 0.18,
     duration: 0.12,
   },
+  /** A refused move: a dull thump of door on door, and a scrape. */
+  bump: [
+    {
+      wave: 'sine',
+      frequency: 140,
+      glideTo: 0.6,
+      envelope: { attack: 0.002, decay: 0.09, sustain: 0, release: 0.05 },
+      gain: 0.5,
+      duration: 0.08,
+    },
+    {
+      wave: 'noise',
+      frequency: 900,
+      filter: { type: 'bandpass', frequency: 1600, q: 2.5 },
+      envelope: { attack: 0.003, decay: 0.1, sustain: 0.1, release: 0.06 },
+      gain: 0.22,
+      duration: 0.12,
+    },
+  ],
+  /** A barrier going over: a metal clang, and plastic cones bouncing away. */
+  clank: [
+    {
+      wave: 'square',
+      frequency: 620,
+      glideTo: 0.92,
+      filter: { type: 'bandpass', frequency: 2400, q: 8 },
+      envelope: { attack: 0.001, decay: 0.35, sustain: 0.1, release: 0.4 },
+      gain: 0.2,
+      duration: 0.4,
+    },
+    {
+      wave: 'triangle',
+      frequency: 330,
+      glideTo: 1.4,
+      envelope: { attack: 0.002, decay: 0.06, sustain: 0, release: 0.04 },
+      gain: 0.22,
+      duration: 0.06,
+    },
+  ],
+  /** A crashed rival car dropping back onto the road. */
+  respawn: {
+    wave: 'triangle',
+    frequency: 523,
+    glideTo: 2,
+    envelope: { attack: 0.01, decay: 0.16, sustain: 0.2, release: 0.15 },
+    gain: 0.16,
+    duration: 0.18,
+  },
 } satisfies Record<string, Sound>;
 
 export type SoundName = keyof typeof SOUNDS;

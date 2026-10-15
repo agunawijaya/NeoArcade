@@ -44,6 +44,12 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
   on the road, or A on a gamepad. Esc pauses.
 - **Cameras.** Switch between Chase, Classic and Isometric from the pause
   menu. A donkey should come into view at the same moment in all three.
+- **The shifting road.** In any mode, wait for the "road shifts" sign. The
+  new lane should widen in first; then the old lane gets chevrons, cones,
+  a "lane ends" sign and an arrow, well before its barrier. Stay in it to
+  see the BONK! crash; press once to merge out. In Chase the road should
+  bend towards the new lane; in Classic and Isometric it should snake
+  across the fields, the fences following it.
 - **Classic Duel.** Dodge eleven donkeys in a row to reach the top. Crash on
   purpose to see the four-corner crash and BOOM!.
 - **Road Trip.** Start with Farm Lanes, then Morning Chores. Finish a leg
@@ -56,8 +62,18 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
   example A), Player 2 the right half (for example L). Player 2 moves the pink
   drop marker, then the donkey, until it reaches the pink commit line. P, M
   and H belong to Player 2 here, so they must not pause, mute or honk.
+- **Rival Driver.** On its title card, choose vs Friend: A and D steer the
+  blue car, the arrow keys the pink one. Steer into the other car to see
+  the bump and hear its horn. (Both steering into the same free lane in the
+  same sixtieth of a second moves neither; that one is hard to hit by hand,
+  and the engine tests cover it.) Crash on purpose: the meter empties and
+  the car comes back as a pulsing, see-through ghost that the other car
+  drives through. Then try vs CPU at each level
+  (Settings, Rival Driver: the CPU), and rebind a key there. On a phone, each
+  half of the screen is one driver, split into left and right.
 - **Settings.** Try the CGA and CRT screen filters, the Daylight and Golden
-  hour themes, Relaxed and Frantic, and points to win.
+  hour themes, Relaxed and Frantic, points to win, and Rival Driver's
+  rounds to win.
 - **Garage.** Locked parts say how to earn them. Fitted parts show on the
   car and on the Player 2 donkey.
 - **Reduced motion.** Turn on "reduce motion" in your system settings. The
@@ -80,7 +96,9 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
   | `garage` | The fitted parts |
   | `endless-relaxed`, `endless-normal`, `endless-frantic` | Endless best scores |
 
-  Delete `daily` to drive today's Daily Road again as a scored run. Delete
+  Delete `daily` to drive today's Daily Road again as a scored run. Results
+  kept from before the road shifted have no `rules` field and show "before
+  the road shifted" on the calendar. Delete
   every key to start from scratch. The Arcade Pass (XP, levels, badges) is
   `neoarcade:pass:profile`, shared by every game in the arcade.
 - **Open every route.** Paste this in the DevTools console, then reload. It
@@ -103,10 +121,10 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
 
 | Command | What it checks | Time |
 |---|---|---|
-| `npm test` | Every unit test in the repository: the engine, the fairness of the three views, settings, progress, daily sharing, the Arcade Pass reporter, music | Under a minute |
-| `npx playwright test -c ports/donkey-dash --project=smoke --project=phone` | The game in a desktop browser and a phone-sized one: start-up, input, pause, the Daily Road, the duels, two players, locked routes and garage parts, themes | 3 to 4 minutes |
-| `npx playwright test -c ports/donkey-dash --project=determinism-chromium` | The engine computes the same runs in the browser as in Node, bit for bit | Seconds |
-| `npx playwright test -c ports/donkey-dash --project=playtest` | A scripted player with a phone player's reactions: survival times, finish rates, and taps and keys on the real page ending exactly where Node says | About a minute |
+| `npm test` | Every unit test in the repository: the engine (including the property tests that prove every road can be driven, and the CPU rival's behaviour at each level), the fairness of the three views, settings, progress, daily sharing, the Arcade Pass reporter, music | About a minute |
+| `npx playwright test -c ports/donkey-dash --project=smoke --project=phone` | The game in a desktop browser and a phone-sized one: start-up, input, pause, the Daily Road, the duels, two players, Rival Driver's two buttons and blocking, locked routes and garage parts, themes | 3 to 4 minutes |
+| `npx playwright test -c ports/donkey-dash --project=determinism-chromium` | The engine computes the same runs, duels and Rival matches in the browser as in Node, bit for bit | Seconds |
+| `npx playwright test -c ports/donkey-dash --project=playtest` | Scripted players with human reactions: survival times, finish rates, CPU against CPU at every pairing, a phone player and a quick player against each CPU level, and taps, keys and a Rival race on the real page ending exactly where Node says | A minute or two |
 | `npm run lint` | ESLint and Prettier over the whole repository | Under a minute |
 | `npm run docs:check` | Every Mermaid diagram in the docs renders | About a minute |
 
@@ -130,8 +148,8 @@ Remove-Item Env:PLAYWRIGHT_BROWSERS_PATH
 ### The playtest numbers
 
 The playtests note their results (median Endless run per difficulty, Daily
-Road finish rate, Road Trip finishes per leg) as annotations. To read them,
-use the HTML report:
+Road finish rate, Road Trip finishes per leg, Rival Driver win rates) as
+annotations. To read them, use the HTML report:
 
 ```powershell
 npx playwright test -c ports/donkey-dash --project=playtest --reporter=html
@@ -141,7 +159,9 @@ npx playwright show-report
 ### Screenshots of everything
 
 Every mode, camera, route and screen size, reached by really playing, in
-about 2 minutes:
+about 4 minutes. `rival.screens.ts` adds lane ends and barrier crashes in
+each view, Rival Driver mid-trap in each view and theme, the touch zones,
+the results and the settings:
 
 ```powershell
 $env:SCREENSHOT_DIR = 'E:\Projects\NeoArcade\screens-check'

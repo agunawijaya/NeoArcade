@@ -96,6 +96,11 @@ export interface ResultsContent {
   tone: 'good' | 'bad' | 'plain';
   stars?: { earned: readonly boolean[]; labels: readonly string[]; fresh: readonly boolean[] };
   stats: readonly { label: string; value: string }[];
+  /** Rival Driver: the two drivers side by side, a column each. */
+  tally?: {
+    names: readonly [string, string];
+    rows: readonly { label: string; values: readonly [string, string] }[];
+  };
   /** Lines worth celebrating: a new best, a route opened. */
   notes?: readonly string[];
   share?: string;
@@ -125,11 +130,17 @@ export function buildResults() {
         h('h2', { class: 'results__title', id: 'results-title' }, content.title),
         content.subtitle ? h('p', { class: 'results__subtitle' }, content.subtitle) : null,
         content.stars ? starRow(content.stars) : null,
-        h(
-          'dl',
-          { class: 'results__stats' },
-          ...content.stats.flatMap((stat) => [h('dt', {}, stat.label), h('dd', {}, stat.value)]),
-        ),
+        content.tally ? tallyTable(content.tally) : null,
+        content.stats.length > 0
+          ? h(
+              'dl',
+              { class: 'results__stats' },
+              ...content.stats.flatMap((stat) => [
+                h('dt', {}, stat.label),
+                h('dd', {}, stat.value),
+              ]),
+            )
+          : null,
         ...(content.notes ?? []).map((line) => h('p', { class: 'results__note' }, line)),
         content.share ? shareBox(content.share) : null,
         h('div', { class: 'menu menu--row' }, ...primary),
@@ -157,6 +168,37 @@ function starRow(stars: NonNullable<ResultsContent['stars']>): HTMLElement {
         },
         icon(stars.earned[index] ? ICONS.starFilled : ICONS.star),
         h('span', {}, label),
+      ),
+    ),
+  );
+}
+
+function tallyTable(tally: NonNullable<ResultsContent['tally']>): HTMLElement {
+  return h(
+    'table',
+    { class: 'results__tally' },
+    h(
+      'thead',
+      {},
+      h(
+        'tr',
+        {},
+        h('td', {}),
+        ...tally.names.map((name, driver) =>
+          h('th', { scope: 'col', 'data-driver': String(driver) }, name),
+        ),
+      ),
+    ),
+    h(
+      'tbody',
+      {},
+      ...tally.rows.map((row) =>
+        h(
+          'tr',
+          {},
+          h('th', { scope: 'row' }, row.label),
+          ...row.values.map((value) => h('td', {}, value)),
+        ),
       ),
     ),
   );

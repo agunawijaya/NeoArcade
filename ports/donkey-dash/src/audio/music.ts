@@ -10,7 +10,7 @@ import type { RouteId } from '../engine/routes';
  * Runs are timed to the music: donkeys come into view on its beats, so every
  * song's tempo is the tempo of the road it plays on.
  */
-export type SongId = RouteId | 'endless' | 'daily' | 'title';
+export type SongId = RouteId | 'endless' | 'daily' | 'rival' | 'title';
 type Groove = 'train' | 'drive' | 'slow';
 
 interface Arrangement {
@@ -177,6 +177,22 @@ const ARRANGEMENTS: Record<SongId, Arrangement> = {
       'E4 - G4 - B4 - - - A4 - G4 - E4 - . .',
       'E5 - D5 - C5 - B4 - C5 - D5 - E5 - . .',
       'F#5 - - - E5 - D5 - C5 - A4 - F#4 - . .',
+    ],
+  },
+  rival: {
+    bpm: 120,
+    groove: 'drive',
+    chords: [
+      ['A2', 'C3', 'E3'],
+      ['F2', 'A2', 'C3'],
+      ['G2', 'B2', 'D3'],
+      ['E2', 'G#2', 'B2'],
+    ],
+    lead: [
+      'A4 - C5 - E5 - A5 - G5 - E5 - D5 - . .',
+      'F4 A4 C5 - F5 - E5 - C5 - A4 - F4 - . .',
+      'G4 - B4 - D5 - G5 - F5 - D5 - B4 - . .',
+      'E5 - D5 - C5 - B4 - G#4 - - - E4 - . .',
     ],
   },
   daily: {

@@ -41,7 +41,7 @@ export interface Paint {
 }
 
 export type HornSound = 'beep' | 'toot' | 'bell' | 'air' | 'hee-haw';
-export type TrailStyle = 'dust' | 'hearts' | 'notes' | 'sparkles' | 'rainbow';
+export type TrailStyle = 'dust' | 'hearts' | 'notes' | 'sparkles' | 'rainbow' | 'cones';
 export type HatStyle = 'straw' | 'cowboy' | 'party' | 'flower' | 'top' | 'crown';
 
 interface ItemBase {
@@ -162,6 +162,12 @@ export const GARAGE: readonly GarageItem[] = [
     paint: { body: '#2d3a6e', shade: '#1b2449', trim: '#ffd978' },
   },
   {
+    id: 'paint-racing',
+    slot: 'paint',
+    name: 'Racing green',
+    paint: { body: '#1f7a4d', shade: '#135033', trim: '#ffd23f' },
+  },
+  {
     id: 'paint-chrome',
     slot: 'paint',
     name: 'Chrome',
@@ -177,6 +183,7 @@ export const GARAGE: readonly GarageItem[] = [
   { id: 'trail-notes', slot: 'trail', name: 'Music notes', trail: 'notes' },
   { id: 'trail-sparkles', slot: 'trail', name: 'Sparkles', trail: 'sparkles' },
   { id: 'trail-rainbow', slot: 'trail', name: 'Rainbow', trail: 'rainbow' },
+  { id: 'trail-cones', slot: 'trail', name: 'Traffic cones', trail: 'cones' },
   { id: 'hat-straw', slot: 'hat', name: 'Straw hat', starter: true, hat: 'straw' },
   { id: 'hat-cowboy', slot: 'hat', name: 'Cowboy hat', hat: 'cowboy' },
   { id: 'hat-party', slot: 'hat', name: 'Party hat', hat: 'party' },

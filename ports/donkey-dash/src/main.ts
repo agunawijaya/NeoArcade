@@ -16,13 +16,20 @@ import { Controls } from './game/controls';
 import { Demo } from './game/demo';
 import { PassReporter } from './game/pass-report';
 import { describeOutcome } from './game/results';
+import { CPU_RIVALS, friendLook } from './game/rivals';
 import { Session, type ModeRequest, type SessionOutcome } from './game/session';
-import { loadLoadout, lookOf, saveLoadout, type Loadout } from './garage';
+import { loadLoadout, lookOf, saveLoadout, type Loadout, type Look } from './garage';
 import { paletteFor } from './render/palette';
 import { Stage } from './render/stage';
 import { createViews } from './render/views';
 import { loadProgress, saveProgress, totalStars } from './progress';
-import { DIFFICULTY_NAMES, sanitiseSettings, type ModeId, type Settings } from './settings';
+import {
+  DIFFICULTY_NAMES,
+  sanitiseSettings,
+  type ModeId,
+  type RivalOpponent,
+  type Settings,
+} from './settings';
 import { ThemePreference } from './theme';
 import { buildDailyScreen } from './ui/daily-screen';
 import { buildGarageScreen } from './ui/garage-screen';
@@ -88,6 +95,7 @@ const hud = new Hud({ pause: () => openPause(), mute: () => session?.toggleMute(
 const title = buildTitleScreen(
   {
     play: (mode) => chooseMode(mode),
+    rival: (opponent) => chooseRival(opponent),
     garage: () => showScreen('garage'),
     settings: () => showScreen('settings'),
     toggleTheme: () => themePreference.choose(themePreference.theme === 'light' ? 'dark' : 'light'),
@@ -187,7 +195,24 @@ function chooseMode(mode: ModeId) {
   store.set('settings', settings);
   if (mode === 'trip') showScreen('trip');
   else if (mode === 'daily') showScreen('daily');
+  else if (mode === 'rival') startSession({ kind: 'rival', opponent: settings.rival.opponent });
   else startSession({ kind: mode });
+}
+
+function chooseRival(opponent: RivalOpponent) {
+  settings = { ...settings, mode: 'rival', rival: { ...settings.rival, opponent } };
+  store.set('settings', settings);
+  startSession({ kind: 'rival', opponent });
+}
+
+/** Who is on the road: the names on the plates, and each car's look. */
+function drivers(request: ModeRequest): { names: [string, string]; looks: [Look, Look] } {
+  const look = lookOf(loadout);
+  if (request.kind === 'rival' && request.opponent === 'cpu') {
+    const cpu = CPU_RIVALS[settings.rival.cpu];
+    return { names: ['You', cpu.name], looks: [look, cpu.look] };
+  }
+  return { names: ['Player 1', 'Player 2'], looks: [look, friendLook(loadout)] };
 }
 
 function showScreen(next: Screen) {
@@ -236,6 +261,7 @@ function startSession(request: ModeRequest) {
   toasts.hold();
   controls.enable();
   cgaThroughout = settings.filter === 'cga';
+  const { names, looks } = drivers(request);
   session = new Session({
     request,
     settings,
@@ -246,10 +272,11 @@ function startSession(request: ModeRequest) {
     audio,
     controls,
     look: lookOf(loadout),
+    rivalLooks: looks,
     theme: () => themePreference.theme,
     reducedMotion,
     reporter,
-    names: ['Player 1', 'Player 2'],
+    names,
     onPause: () => openPause(),
     onPoint(side) {
       if (request.kind !== 'classic') return;
@@ -292,6 +319,8 @@ function endSession() {
   delete document.body.dataset.phase;
   delete document.body.dataset.step;
   delete document.body.dataset.lane;
+  delete document.body.dataset.lanes;
+  delete document.body.dataset.meters;
   delete document.body.dataset.moment;
 }
 
@@ -345,6 +374,10 @@ function refreshStatuses() {
     status: `First to ${settings.points} · ${settings.hazards.classic ? 'with hazards' : 'as in 1981'}`,
   });
   title.setStatus('versus', { status: `Two players · first to ${settings.points}` });
+  const cpu = CPU_RIVALS[settings.rival.cpu];
+  title.setStatus('rival', {
+    status: `CPU: ${cpu.name} · first to ${settings.rival.rounds}`,
+  });
 }
 
 function applyTheme() {

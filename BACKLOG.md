@@ -14,8 +14,8 @@ build gets copied here first.
 | ID | Area | Item | Origin | Priority | Size | Status | Prompt |
 |---|---|---|---|---|---|---|---|
 | HALL-01 | Hall | Categories as shelves (Arcade, Adventure, Simulation, Puzzle…) | Owner | High | M | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
-| DD-01 | Donkey Dash | Rival Driver mode: two cars, three lanes, blocking and trapping | Owner | High | L | Prompted | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
-| DD-02 | Donkey Dash | Shifting road: lanes slide sideways, forcing moves (always on) | Owner | High | M | Prompted | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
+| DD-01 | Donkey Dash | Rival Driver mode: two cars, three lanes, blocking and trapping | Owner | High | L | Done | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
+| DD-02 | Donkey Dash | Shifting road: lanes slide sideways, forcing moves (always on) | Owner | High | M | Done | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
 | HALL-02 | Hall | "Today in NeoArcade": all daily challenges in one place | Architect | Medium | S | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
 | HALL-03 | Hall | "Continue playing" row and recently played | Architect | Medium | S | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
 | HALL-04 | Hall | Origins timeline: browse games by the year of the original | Architect | Low | M | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
@@ -82,6 +82,11 @@ force it into a donkey.
 
 **Decided:** two buttons per driver; both vs Friend and vs CPU. Refined in prompt 007: both cars stay side by side on the same row; progress is a race meter per driver; a crash sends that car back to the start of its meter (as in 1981); first to fill the meter wins the round.
 
+**Done** (prompt 007, commit "Add the shifting road and Rival Driver to
+Donkey Dash"): the meter is 8 clean rows, rounds first to 3 (1–9), CPU
+Easy to Brutal as Dotty Dawdle, Rusty Rowe, Vera Vroom and The Baron.
+ADRs 0020 and 0021; tuning in `docs/games/donkey-dash.md`.
+
 ---
 
 ## DD-02 — Donkey Dash: shifting road
@@ -104,6 +109,11 @@ force it into a donkey.
 - New badges (e.g. "Lane Changer", "Merge Master"). Existing tuning (Road
   Trip curve, Daily Road seeds) must be re-balanced; past daily results stay
   valid as records.
+
+**Done** (prompt 007, commit "Add the shifting road and Rival Driver to
+Donkey Dash"): four lane positions with two or three open, open before
+close, every road proved drivable; Daily Road rules version 2. ADR 0019;
+before and after numbers in `docs/games/donkey-dash.md`.
 
 ---
 
