@@ -13,6 +13,14 @@ export const ICONS = {
   ),
   close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
   back: svg('<path d="M15 5l-7 7 7 7"/>'),
+  forward: svg('<path d="M9 5l7 7-7 7"/>'),
+  timeline: svg(
+    '<path d="M2.5 17h19"/><circle cx="6" cy="17" r="1.6" fill="currentColor"/><circle cx="12.5" cy="17" r="1.6" fill="currentColor"/><circle cx="18.5" cy="17" r="1.6" fill="currentColor"/><path d="M6 14V5.5h6v4H6M12.5 14V9.5"/>',
+  ),
+  flame: svg(
+    '<path d="M12 21.5c-3.7 0-6.2-2.5-6.2-5.8 0-3.3 2.5-5.1 3.5-8.1.9 1.7 1.9 2.5 3 2.8-.2-2.7.6-5.2 2.8-7.4.3 3.2 3.1 5.6 3.1 9.9 0 4.2-2.5 8.6-6.2 8.6z" fill="currentColor" fill-opacity="0.25"/>',
+  ),
+  clock: svg('<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 2.1"/>'),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'),
   download: svg('<path d="M12 4v11m-5-5 5 5 5-5"/><path d="M5 20h14"/>'),
   restore: svg('<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/>'),

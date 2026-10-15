@@ -3,7 +3,7 @@ import { parseRoute, routeToHash, type Route } from './routes';
 
 describe('parseRoute', () => {
   it('treats anything unknown as the lobby', () => {
-    for (const hash of ['', '#', '#/', '#/nowhere', '#/games', '#/games/']) {
+    for (const hash of ['', '#', '#/', '#/nowhere', '#/games', '#/games/', '#/category/shooters']) {
       expect(parseRoute(hash)).toEqual({ view: 'lobby' });
     }
   });
@@ -30,6 +30,15 @@ describe('parseRoute', () => {
     expect(parseRoute('#pass/')).toEqual({ view: 'pass' });
   });
 
+  it('reads a category page and the timeline', () => {
+    expect(parseRoute('#/category/card-board')).toEqual({
+      view: 'category',
+      category: 'card-board',
+    });
+    expect(parseRoute('#/timeline')).toEqual({ view: 'timeline' });
+    expect(parseRoute('#/timeline/long-haul')).toEqual({ view: 'timeline', slug: 'long-haul' });
+  });
+
   it('falls back to the game for an unknown doc', () => {
     expect(parseRoute('#/games/skyline-showdown/source')).toEqual({
       view: 'game',
@@ -45,6 +54,9 @@ describe('routeToHash', () => {
       { view: 'pass' },
       { view: 'game', slug: '_demo' },
       { view: 'doc', slug: 'skyline-showdown', doc: 'how-to-play' },
+      { view: 'category', category: 'simulation' },
+      { view: 'timeline' },
+      { view: 'timeline', slug: 'donkey-dash' },
     ];
     for (const route of routes) expect(parseRoute(routeToHash(route))).toEqual(route);
   });

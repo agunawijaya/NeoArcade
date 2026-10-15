@@ -310,6 +310,13 @@ as before, and old `?seed=` links replay the same cities.
   Match · Wardrobe · Badges · Settings · How to play · Back to Hall. The
   Daily button carries a quiet dot while today's is still open.
 
+### Links from the Hall (prompt 008)
+
+- The game tells the Hall which mode the player starts (a tour stage, a
+  puzzle, the daily, a quick match), for its Continue playing row, and opens
+  straight into that mode when the Hall links to it with `?play=`. Nothing
+  about the play itself changes.
+
 ## Known differences that stay on purpose
 
 - Rooftop props (water towers, antennas, chimneys, flags, billboards,

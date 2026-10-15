@@ -12,6 +12,7 @@ import {
   type DailyDay,
 } from '@shared/daily';
 import { hallUrl, mountHallButton } from '@shared/hall-link';
+import { reportPlay, takeResumeRequest, type ResumeRequest } from '@shared/last-played';
 import { createLoop } from '@shared/loop';
 import { connectPass, mountUnlockToasts } from '@shared/pass';
 import { randomSeed } from '@shared/rng';
@@ -486,6 +487,9 @@ function startSingleHaul(choice: DispatchChoice, route: OriginalRouteId) {
     }),
   );
   run = { mode: 'single', choice };
+  const direction =
+    choice.direction === 'east' ? 'Los Angeles → New York' : 'New York → Los Angeles';
+  reportMode({ mode: 'single' }, `Single Haul · ${direction}`);
   // Monday 1 March 1982, 8 AM at the terminal: 16:00 UTC in Los Angeles, 13:00 in New York.
   const departure = Date.UTC(1982, 2, 1, choice.direction === 'east' ? 16 : 13);
   if (settings.textMode) {
@@ -569,6 +573,7 @@ function planCareerLoad(contract: Contract, tyres: TyreOrder) {
         }),
       );
       run = { mode: 'career', contract };
+      reportMode({ mode: 'career' }, `Career · ${contractTitle(contract)}`);
       beginTrip(trip, departureUtc(current.day, contract.from), current.odometer, season);
     },
   );
@@ -639,6 +644,8 @@ function planDailyHaul(practice: boolean, tyres: TyreOrder) {
         }),
       );
       run = { mode: 'daily', day, haul, practice };
+      const { from, to } = dailyNames(haul);
+      reportMode({ mode: 'daily' }, `Daily Haul #${day.number} · ${from} → ${to}`);
       const offset = ZONE_OFFSETS[zoneOf(placeById(contract.from))];
       beginTrip(
         trip,
@@ -983,6 +990,28 @@ function closeMap() {
 
 // ——— Theme, visibility, the loop ———
 
+// ——— The Hall ———
+
+/** Tells the Hall what is being driven, for its Continue playing row. */
+function reportMode(request: ResumeRequest, label: string) {
+  reportPlay({ game: 'long-haul', ...request, label });
+}
+
+/** Opens the mode a link from the Hall asks for; false when there is none to open. */
+function resumeFromHall(request: ResumeRequest | null): boolean {
+  if (request?.mode === 'single') {
+    dispatch.show(record, lastDispatch);
+    show('dispatch');
+  } else if (request?.mode === 'career') {
+    openCareer();
+  } else if (request?.mode === 'daily') {
+    openDaily();
+  } else {
+    return false;
+  }
+  return true;
+}
+
 function applyTheme() {
   document.documentElement.dataset.theme = themePreference.theme;
   title.showTheme(themePreference.theme);
@@ -1017,4 +1046,5 @@ createLoop({
 }).start();
 
 show('title');
-title.playIntro();
+// Coming from the Hall's Continue playing or Today, skip the intro and go straight there.
+if (!resumeFromHall(takeResumeRequest())) title.playIntro();

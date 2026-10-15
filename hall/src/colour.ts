@@ -12,12 +12,24 @@ function hexToRgb(hex: string): [number, number, number] {
 
 /** Dark ink on bright accents, white on deep ones, so button labels stay readable. */
 export function inkOn(hex: string): string {
+  return luminance(hex) > 0.2 ? '#140a1c' : '#ffffff';
+}
+
+/** WCAG contrast between two colours, from 1 (none) to 21 (black on white). */
+export function contrastRatio(first: string, second: string): number {
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a) as [
+    number,
+    number,
+  ];
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function luminance(hex: string): number {
   const [red, green, blue] = hexToRgb(hex).map((channel) => {
     const linear = channel / 255;
     return linear <= 0.04045 ? linear / 12.92 : ((linear + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
-  const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-  return luminance > 0.2 ? '#140a1c' : '#ffffff';
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 /** Mixes a colour towards black (amount < 0) or white (amount > 0). */

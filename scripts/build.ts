@@ -1,13 +1,17 @@
 import { build, mergeConfig } from 'vite';
+import { catalogProblems } from './check-catalog';
 import { passManifestProblems } from './check-pass-manifests';
 import { discoverPages } from './pages';
 import { projectRoot, sharedViteConfig } from './vite-shared';
 
-// A broken Arcade Pass manifest would only be skipped (with a warning) by
-// the Hall at runtime; the build refuses it instead.
-const manifestProblems = await passManifestProblems(projectRoot);
-if (manifestProblems.length > 0) {
-  for (const problem of manifestProblems) console.error(problem);
+// A broken catalog entry or Arcade Pass manifest would only be skipped (with
+// a warning) by the Hall at runtime; the build refuses it instead.
+const problems = [
+  ...catalogProblems(projectRoot).map((problem) => `hall/catalog.json: ${problem}`),
+  ...(await passManifestProblems(projectRoot)),
+];
+if (problems.length > 0) {
+  for (const problem of problems) console.error(problem);
   process.exit(1);
 }
 

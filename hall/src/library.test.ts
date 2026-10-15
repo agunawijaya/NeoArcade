@@ -1,21 +1,39 @@
 import { describe, expect, it } from 'vitest';
+import type { CategoryId } from './categories';
 import type { GameEntry } from './catalog';
-import { collectGenres, selectGames, type LibraryQuery } from './library';
+import {
+  collectGenres,
+  inCategory,
+  isFiltering,
+  selectGames,
+  shelvesOf,
+  type LibraryQuery,
+} from './library';
 
-function game(slug: string, title: string, genres: string[], added: string, originalTitle = title) {
+function game(
+  slug: string,
+  title: string,
+  genres: string[],
+  added: string,
+  originalTitle = title,
+  category: CategoryId = 'arcade',
+  secondaryCategory?: CategoryId,
+) {
   return {
     slug,
     title,
     genres,
     added,
-    original: { title: originalTitle, author: 'Someone', year: 1990 },
+    category,
+    secondaryCategory,
+    origin: { title: originalTitle, author: 'Someone', year: 1990 },
   } as GameEntry;
 }
 
 const games = [
   game('skyline', 'Skyline Showdown', ['Artillery', 'Duel'], '2026-09-25', 'QBasic Gorillas'),
   game('nibbles', 'Neon Nibbles', ['Snake', 'Arcade'], '2026-10-02', 'QBasic Nibbles'),
-  game('eliza', 'Élise', ['Conversation'], '2026-09-25'),
+  game('eliza', 'Élise', ['Conversation'], '2026-09-25', 'Eliza', 'word-trivia', 'learning'),
 ];
 
 const everything: LibraryQuery = { search: '', genre: null, sort: 'title' };
@@ -62,5 +80,45 @@ describe('selectGames', () => {
     const copy = [...games];
     selectGames(games, everything);
     expect(games).toEqual(copy);
+  });
+});
+
+describe('shelves', () => {
+  it('gives each category with games a shelf, in the fixed order', () => {
+    const shelves = shelvesOf(games, 'added');
+    expect(shelves.map((shelf) => shelf.category.id)).toEqual([
+      'arcade',
+      'word-trivia',
+      'learning',
+    ]);
+    expect(shelves[0]?.games.map((entry) => entry.game.slug)).toEqual(['nibbles', 'skyline']);
+  });
+
+  it('marks a game on its secondary shelf', () => {
+    const [, primary, secondary] = shelvesOf(games, 'title');
+    expect(primary?.games).toEqual([{ game: games[2], secondary: false }]);
+    expect(secondary?.games).toEqual([{ game: games[2], secondary: true }]);
+    expect(inCategory(games, 'learning').map((entry) => entry.slug)).toEqual(['eliza']);
+  });
+
+  it('sorts by the games played most, then the newest', () => {
+    const plays = { skyline: 4, eliza: 4, nibbles: 1 };
+    expect(slugs(selectGames(games, { ...everything, sort: 'played' }, plays))).toEqual([
+      'eliza',
+      'skyline',
+      'nibbles',
+    ]);
+    expect(slugs(selectGames(games, { ...everything, sort: 'played' }))).toEqual([
+      'nibbles',
+      'eliza',
+      'skyline',
+    ]);
+  });
+
+  it('knows when a query narrows the collection', () => {
+    expect(isFiltering(everything)).toBe(false);
+    expect(isFiltering({ ...everything, search: '  ' })).toBe(false);
+    expect(isFiltering({ ...everything, search: 'neon' })).toBe(true);
+    expect(isFiltering({ ...everything, genre: 'Snake' })).toBe(true);
   });
 });

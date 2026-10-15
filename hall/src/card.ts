@@ -1,7 +1,9 @@
 import type { BadgeTally } from '@shared/pass';
 import { badgeCount } from './badge-count';
+import { categoryById, categoryStyle } from './categories';
 import { formatPlayers, type GameEntry } from './catalog';
 import { h } from './dom';
+import { categoryEmblem } from './emblems';
 import { routeToHash } from './routes';
 import { buildScreenShow, type ScreenShow } from './screen-show';
 
@@ -18,11 +20,20 @@ export interface Card {
   setBadges(tally: BadgeTally | null): void;
 }
 
-export function buildCard(game: GameEntry): Card {
+export interface CardOptions {
+  /** Where the card sits (a shelf, the results), so a game shown twice keeps unique ids. */
+  place: string;
+  /** On a game's secondary shelf, a small tag names the shelf it belongs to. */
+  visiting?: boolean;
+}
+
+export function buildCard(game: GameEntry, { place, visiting = false }: CardOptions): Card {
   const screens = buildScreenShow(game, { cycle: false });
-  const titleId = `card-${game.slug}-title`;
-  const aboutId = `card-${game.slug}-about`;
+  const titleId = `card-${place}-${game.slug}-title`;
+  const aboutId = `card-${place}-${game.slug}-about`;
+  const homeId = `card-${place}-${game.slug}-home`;
   const badges = badgeCount();
+  const home = categoryById(game.category);
 
   const link = h(
     'a',
@@ -31,10 +42,24 @@ export function buildCard(game: GameEntry): Card {
       href: routeToHash({ view: 'game', slug: game.slug }),
       style: `--accent: ${game.accent}`,
       'aria-labelledby': titleId,
-      'aria-describedby': aboutId,
+      'aria-describedby': visiting ? `${aboutId} ${homeId}` : aboutId,
       'data-slug': game.slug,
+      'data-row-item': '',
     },
-    h('span', { class: 'card__screen' }, screens.element),
+    h(
+      'span',
+      { class: 'card__screen' },
+      screens.element,
+      visiting
+        ? h(
+            'span',
+            { class: 'card__home has-category', id: homeId, style: categoryStyle(home) },
+            categoryEmblem(home),
+            h('span', { class: 'visually-hidden' }, 'Mainly '),
+            home.name,
+          )
+        : null,
+    ),
     h(
       'span',
       { class: 'card__body' },

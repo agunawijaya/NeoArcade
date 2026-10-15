@@ -44,12 +44,16 @@
         "caption": "Or settle it in broad daylight."
       }
     ],
-    "original": {
+    "origin": {
       "title": "QBasic Gorillas",
       "author": "Microsoft Corporation",
       "year": 1990,
-      "platform": "MS-DOS 5.0 (QBasic)"
+      "platform": "MS-DOS PCs with CGA, EGA or VGA graphics",
+      "language": "QBasic",
+      "machine": "dos-pc",
+      "appeared": "A sample program included with QBasic, which shipped with MS-DOS 5.0"
     },
+    "category": "arcade",
     "genres": ["Artillery", "Duel"],
     "players": {
       "min": 1,
@@ -63,7 +67,36 @@
       "about": "docs/ABOUT.md",
       "architecture": "docs/ARCHITECTURE.md"
     },
-    "added": "2026-09-25"
+    "added": "2026-09-25",
+    "daily": {
+      "name": "Daily Skyline",
+      "launch": "2026-09-29",
+      "mode": "daily",
+      "results": [
+        {
+          "when": {
+            "outcome": "hit",
+            "throws": 1
+          },
+          "text": "A hit with the first banana"
+        },
+        {
+          "when": {
+            "outcome": "hit"
+          },
+          "text": "A hit in {throws} of 10 throws"
+        },
+        {
+          "when": {
+            "outcome": "selfHit"
+          },
+          "text": "Hit your own gorilla"
+        },
+        {
+          "text": "Out of bananas"
+        }
+      ]
+    }
   },
   {
     "slug": "donkey-dash",
@@ -106,12 +139,17 @@
         "caption": "Donkey vs Driver: a friend decides where it goes."
       }
     ],
-    "original": {
+    "origin": {
       "title": "DONKEY.BAS",
-      "author": "IBM Corp.",
+      "author": "Microsoft",
+      "publisher": "IBM",
       "year": 1981,
-      "platform": "IBM PC (BASICA)"
+      "platform": "The IBM Personal Computer with the Color/Graphics Adapter",
+      "language": "IBM Advanced BASIC (BASICA)",
+      "machine": "ibm-pc",
+      "appeared": "A sample program on the PC DOS disk that came with the first IBM PC"
     },
+    "category": "arcade",
     "genres": ["Arcade", "Reflex"],
     "players": {
       "min": 1,
@@ -125,7 +163,37 @@
       "about": "docs/ABOUT.md",
       "architecture": "docs/ARCHITECTURE.md"
     },
-    "added": "2026-09-28"
+    "added": "2026-09-28",
+    "daily": {
+      "name": "Daily Road",
+      "launch": "2026-09-28",
+      "mode": "daily",
+      "results": [
+        {
+          "when": {
+            "finished": true,
+            "crashes": 0
+          },
+          "text": "Finished clean, {metres|number} m"
+        },
+        {
+          "when": {
+            "finished": true,
+            "crashes": 1
+          },
+          "text": "Finished with 1 crash"
+        },
+        {
+          "when": {
+            "finished": true
+          },
+          "text": "Finished with {crashes} crashes"
+        },
+        {
+          "text": "Crashed out at {metres|number} m"
+        }
+      ]
+    }
   },
   {
     "slug": "long-haul",
@@ -164,12 +232,21 @@
         "caption": "Or play it as it was: green text, an hour at a time."
       }
     ],
-    "original": {
+    "origin": {
       "title": "Trucker",
       "author": "Hughes Glantzberg",
-      "era": "early 1980s",
-      "platform": "IBM PC (GW-BASIC)"
+      "era": {
+        "label": "early 1980s",
+        "from": 1981,
+        "to": 1984
+      },
+      "platform": "The IBM PC",
+      "language": "GW-BASIC",
+      "machine": "ibm-pc",
+      "appeared": "One game on a menu-driven disk collection; which one is not known"
     },
+    "category": "simulation",
+    "secondaryCategory": "strategy",
     "genres": ["Simulation", "Strategy"],
     "players": {
       "min": 1,
@@ -183,6 +260,34 @@
       "about": "docs/ABOUT.md",
       "architecture": "docs/ARCHITECTURE.md"
     },
-    "added": "2026-10-04"
+    "added": "2026-10-04",
+    "daily": {
+      "name": "Daily Haul",
+      "launch": "2026-10-04",
+      "mode": "daily",
+      "results": [
+        {
+          "when": {
+            "outcome": "crashed"
+          },
+          "text": "Lost the rig"
+        },
+        {
+          "when": {
+            "outcome": "jailed"
+          },
+          "text": "Licence revoked"
+        },
+        {
+          "when": {
+            "late": true
+          },
+          "text": "Delivered late, {profitCents|money}"
+        },
+        {
+          "text": "Delivered, {profitCents|money} in {hours|hours}"
+        }
+      ]
+    }
   }
 ]

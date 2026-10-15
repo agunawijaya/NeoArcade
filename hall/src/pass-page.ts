@@ -1,5 +1,7 @@
+import { clearPlays, recentPlays } from '@shared/last-played';
 import { buildBadgeCabinet, type ArcadePass, type BadgeCabinet } from '@shared/pass';
 import type { Store } from '@shared/storage';
+import type { GameEntry } from './catalog';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
 import { buildFeed, buildGameStats, buildRewards, buildStorageNotice } from './pass-activity';
@@ -35,6 +37,7 @@ export function createPassPage(
   pass: ArcadePass,
   shelves: PassShelves,
   store: Store,
+  games: readonly GameEntry[],
   actions: PassPageActions,
 ): PassPage {
   const status = h('p', { class: 'pass__status', role: 'status' });
@@ -44,6 +47,7 @@ export function createPassPage(
   const columns = h('div', { class: 'pass__columns' });
   let cabinet: BadgeCabinet | null = null;
   let visible = false;
+  const history = buildPlayHistory(games, (message) => (status.textContent = message));
 
   const element = h(
     'section',
@@ -73,6 +77,7 @@ export function createPassPage(
     ),
     columns,
     buildSafekeeping(actions),
+    history.element,
   );
 
   const render = () => {
@@ -116,6 +121,7 @@ export function createPassPage(
       element.hidden = false;
       document.title = 'Arcade Pass · NeoArcade';
       render();
+      history.refresh();
       cabinet = buildBadgeCabinet({
         pass,
         manifests: shelves.manifests,
@@ -180,4 +186,43 @@ function buildSafekeeping(actions: PassPageActions): HTMLElement {
       button('Start over', ICONS.erase, 'safe-reset', () => actions.startOver('safe-reset')),
     ),
   );
+}
+
+/** What the Hall remembers for its "Continue playing" row, and the way to forget it. */
+function buildPlayHistory(games: readonly GameEntry[], announce: (message: string) => void) {
+  const summary = h('p', {});
+  const clear = h(
+    'button',
+    { class: 'button', type: 'button', 'data-pass-action': 'clear-history' },
+    icon(ICONS.erase),
+    'Clear history',
+  );
+  const element = h(
+    'section',
+    { class: 'pass-section pass-safe pass-history', 'aria-labelledby': 'pass-history-title' },
+    h(
+      'div',
+      { class: 'pass-safe__text' },
+      h('h2', { class: 'pass-section__title', id: 'pass-history-title' }, 'Play history'),
+      summary,
+    ),
+    h('div', { class: 'pass-safe__actions' }, clear),
+  );
+
+  const refresh = () => {
+    const plays = recentPlays().filter((play) => games.some((game) => game.slug === play.game));
+    clear.disabled = plays.length === 0;
+    summary.textContent =
+      plays.length === 0
+        ? 'Nothing to remember yet. The modes you play show up in the lobby under Continue playing, one click from where you left off.'
+        : `The lobby remembers the last ${plays.length === 1 ? 'mode' : `${plays.length} modes`} you played, so Continue playing can take you straight back, and counts your games for the ‘Most played’ order. Clearing it leaves your Pass and your daily results as they are.`;
+  };
+
+  clear.addEventListener('click', () => {
+    clearPlays();
+    refresh();
+    announce('Your play history is cleared. Continue playing fills up again as you play.');
+  });
+
+  return { element, refresh };
 }

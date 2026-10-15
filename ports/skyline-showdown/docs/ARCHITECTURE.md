@@ -771,6 +771,25 @@ aims; they are flushed when a point is scored, on the results, victory,
 daily results, solve and challenge verdict screens, and on every menu
 screen.
 
+## Continue playing and links from the Hall
+
+The Hall's Continue playing row and its Today panel (ADR 0018) lead
+straight back into a mode. `main.ts` reports a play through
+`@shared/last-played` whenever one starts, and reads the Hall's request once
+at start-up:
+
+| Started by | Mode | Item | Label | A `?play=` link opens |
+|---|---|---|---|---|
+| `startStage` | `tour` | the stage id | World Tour · Tokyo | the tour map with that stage's card, if it is unlocked |
+| `startPuzzle` | `tricks` | the puzzle id | Trick Shot · First Toss | the packs with that puzzle's card |
+| `startDailyAttempt` | `daily` | — | Daily Skyline #17 (· practice) | the daily screen |
+| `startQuickMatch` | `quick` | — | Quick Match · against the CPU | the match settings |
+
+`takeResumeRequest()` removes `?play=` from the address as it reads it, so a
+reload lands on the title as usual. A challenge link (`#c=`) wins over a
+request from the Hall. Challenges are not reported: they belong to the link
+that brought the player, not to a mode to come back to.
+
 ## "So close!"
 
 `game/so-close.ts` judges a miss the way the CPU judges its own: where the

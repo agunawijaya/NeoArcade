@@ -40,7 +40,15 @@ The code should read as if a thoughtful developer wrote it by hand:
   the three docs below, credit to the original.
 - `docs/games/<game>.md` — original behaviour notes and a diff log of changes.
 - Tests for the engine, and a few screenshots in `ports/<game>/media/`.
-- An entry in the Arcade Hall catalog and in `PORTS.md`.
+- An entry in the Arcade Hall catalog and in `PORTS.md`. The catalog entry
+  names a `category` from the Hall's fixed list (Arcade, Action, Adventure,
+  Simulation, Strategy, Puzzle, Sports, Card & Board, Word & Trivia,
+  Learning; a `secondaryCategory` only when it clearly helps), and an
+  `origin` with only the facts `ABOUT.md` supports; a game with a daily
+  challenge adds a `daily` block. See ADR 0002 and ADR 0018.
+- Continue playing: report each mode the player starts with `reportPlay()`
+  from `@shared/last-played`, and open the mode `takeResumeRequest()` asks
+  for at start-up (`?play=<mode>`), so the Hall can send players back.
 - Arcade Pass integration: a `pass.manifest.ts` with badges and cosmetics, XP
   awards and the shared unlock toast — see `docs/ARCADE-PASS.md`.
 

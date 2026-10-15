@@ -54,3 +54,44 @@ function relativeTo(direction: Direction, dx: number, dy: number): [number, numb
 function centre(box: Box) {
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
+
+export interface RowPosition {
+  row: number;
+  index: number;
+}
+
+/**
+ * Moves through rows of items that each scroll sideways, like the lobby's
+ * shelves: left and right step along the row and stop at its ends; up and
+ * down jump to the next row that has items, landing on the one whose centre
+ * is closest across, so the eye does not have to hunt. Null means there is
+ * nowhere to go in that direction.
+ */
+export function stepAcrossRows(
+  rows: readonly (readonly Box[])[],
+  from: RowPosition,
+  direction: Direction,
+): RowPosition | null {
+  const row = rows[from.row];
+  const origin = row?.[from.index];
+  if (!row || !origin) return null;
+
+  if (direction === 'left' || direction === 'right') {
+    const index = from.index + (direction === 'right' ? 1 : -1);
+    return index >= 0 && index < row.length ? { row: from.row, index } : null;
+  }
+
+  const step = direction === 'down' ? 1 : -1;
+  for (let next = from.row + step; next >= 0 && next < rows.length; next += step) {
+    const candidates = rows[next] ?? [];
+    if (candidates.length === 0) continue;
+    const x = centre(origin).x;
+    let best = 0;
+    candidates.forEach((candidate, index) => {
+      const bestBox = candidates[best] as Box;
+      if (Math.abs(centre(candidate).x - x) < Math.abs(centre(bestBox).x - x)) best = index;
+    });
+    return { row: next, index: best };
+  }
+  return null;
+}

@@ -1,6 +1,12 @@
+import { isDayKey } from '@shared/daily';
+import { isCategoryId, type CategoryId } from './categories';
+import { templateProblems, type ResultRule } from './daily-result';
+import { isMachineId, type MachineId } from './machines';
+
 /**
  * One entry of hall/catalog.json. The schema is documented in
- * docs/adr/0002-hall-catalog-and-covers.md; this module is its enforcement.
+ * docs/adr/0002-hall-catalog-and-covers.md and ADR 0018; this module is its
+ * enforcement.
  */
 /** One screenshot from the port, with a line saying what is happening in it. */
 export interface GameScreen {
@@ -20,15 +26,13 @@ export interface GameEntry {
   highlights?: string[];
   /** Screenshots shown in the Hall; without them the Hall shows the animated cover. */
   screens?: GameScreen[];
-  original: {
-    title: string;
-    author: string;
-    /** The year it appeared; leave it out and give an `era` when it cannot be confirmed. */
-    year?: number;
-    /** "early 1980s": shown in place of a year nobody can vouch for. */
-    era?: string;
-    platform?: string;
-  };
+  /** The classic it is based on, with only the facts its ABOUT page can support. */
+  origin: GameOrigin;
+  /** The shelf it lives on. */
+  category: CategoryId;
+  /** A second shelf it also appears on, when that clearly helps players find it. */
+  secondaryCategory?: CategoryId;
+  /** Finer tags for the genre filter. */
   genres: string[];
   players: { min: number; max: number };
   /** The game's colour in the Hall, as #rrggbb. */
@@ -45,6 +49,40 @@ export interface GameEntry {
   };
   /** Date the game joined the Hall, YYYY-MM-DD. */
   added: string;
+  /** The game's daily challenge, for the Hall's Today panel. */
+  daily?: GameDaily;
+}
+
+export interface GameOrigin {
+  title: string;
+  /** Who wrote it. */
+  author: string;
+  /** Who put it out, when that was someone else. */
+  publisher?: string;
+  /** The year it appeared; leave it out and give an `era` when it cannot be confirmed. */
+  year?: number;
+  /** "early 1980s", with the span of years it can stand for, drawn as a soft band. */
+  era?: { label: string; from: number; to: number };
+  /** The computer and graphics it ran on. */
+  platform: string;
+  language: string;
+  /** Which silhouette stands for it on the timeline. */
+  machine: MachineId;
+  /** Where it first reached players: a disk, a magazine, a book, a bundle. */
+  appeared?: string;
+}
+
+export interface GameDaily {
+  /** What the game calls it, e.g. "Daily Skyline". */
+  name: string;
+  /** The UTC date of daily #1, exactly as the game's own dailyChallenge() has it. */
+  launch: string;
+  /** The game's mode for it; the Hall links to the game with ?play=<mode>. */
+  mode: string;
+  /** Key of the game's daily log in its own store (the namespace is the slug). Default "daily". */
+  log?: string;
+  /** How to put a stored result in words; without them a played day just says so. */
+  results?: ResultRule[];
 }
 
 export interface ParsedCatalog {
@@ -57,6 +95,7 @@ const SLUG = /^_?[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_HIGHLIGHTS = 4;
+const MODE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function parseCatalog(raw: unknown): ParsedCatalog {
   if (!Array.isArray(raw)) {
@@ -134,15 +173,20 @@ function entryProblems(item: unknown): string[] {
     'screens must list images relative to the port, each with an optional caption',
   );
 
-  const { original, players, docs } = item;
+  const { origin, players, docs, daily } = item;
   need(
-    isRecord(original) &&
-      isText(original.title) &&
-      isText(original.author) &&
-      (original.year === undefined ? isText(original.era) : Number.isInteger(original.year)) &&
-      (original.era === undefined || isText(original.era)) &&
-      (original.platform === undefined || isText(original.platform)),
-    'original needs title, author, a whole-number year (or an era) and optionally a platform',
+    isRecord(origin) && originProblems(origin).length === 0,
+    `origin ${isRecord(origin) ? originProblems(origin).join(', ') : 'is missing'}`,
+  );
+  need(isCategoryId(item.category), "category must be one of the Hall's categories");
+  need(
+    item.secondaryCategory === undefined ||
+      (isCategoryId(item.secondaryCategory) && item.secondaryCategory !== item.category),
+    "secondaryCategory must be another of the Hall's categories",
+  );
+  need(
+    daily === undefined || (isRecord(daily) && dailyProblems(daily).length === 0),
+    `daily ${isRecord(daily) ? dailyProblems(daily).join(', ') : 'must be an object'}`,
   );
   need(
     isRecord(players) &&
@@ -163,9 +207,78 @@ function entryProblems(item: unknown): string[] {
   return problems;
 }
 
+function originProblems(origin: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  for (const field of ['title', 'author', 'platform', 'language'] as const) {
+    if (!isText(origin[field])) problems.push(`needs a ${field}`);
+  }
+  for (const field of ['publisher', 'appeared'] as const) {
+    if (origin[field] !== undefined && !isText(origin[field]))
+      problems.push(`${field} must be text`);
+  }
+  if (!isMachineId(origin.machine)) problems.push("needs a machine from the timeline's list");
+  const { year, era } = origin;
+  const eraIsValid =
+    isRecord(era) &&
+    isText(era.label) &&
+    Number.isInteger(era.from) &&
+    Number.isInteger(era.to) &&
+    (era.from as number) <= (era.to as number);
+  if ((year === undefined) === (era === undefined)) {
+    problems.push('needs either a year or an era, not both');
+  } else if (year !== undefined && !Number.isInteger(year)) {
+    problems.push('year must be a whole number');
+  } else if (era !== undefined && !eraIsValid) {
+    problems.push('era needs a label and whole years from <= to');
+  }
+  return problems;
+}
+
+function dailyProblems(daily: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  if (!isText(daily.name)) problems.push('needs a name');
+  if (!isDayKey(daily.launch)) problems.push('launch must be a YYYY-MM-DD date');
+  if (typeof daily.mode !== 'string' || !MODE.test(daily.mode)) {
+    problems.push('mode must be kebab-case');
+  }
+  if (daily.log !== undefined && !isText(daily.log)) problems.push('log must be a storage key');
+  const rules = daily.results;
+  if (rules !== undefined) {
+    const valid =
+      Array.isArray(rules) &&
+      rules.every(
+        (rule) =>
+          isRecord(rule) &&
+          isText(rule.text) &&
+          templateProblems(rule.text).length === 0 &&
+          (rule.when === undefined ||
+            (isRecord(rule.when) &&
+              Object.values(rule.when).every((value) =>
+                ['string', 'number', 'boolean'].includes(typeof value),
+              ))),
+      );
+    if (!valid) problems.push('results must be rules with a text and optional `when` fields');
+  }
+  return problems;
+}
+
 /** When the original appeared: its year, or its era when the year is not known. */
-export function originalDate(original: GameEntry['original']): string {
-  return original.era ?? String(original.year ?? '');
+export function originDate(origin: GameOrigin): string {
+  return origin.era?.label ?? String(origin.year ?? '');
+}
+
+/** The years the original may come from: one year, or its era's span. */
+export function originYears(origin: GameOrigin): { from: number; to: number } {
+  if (origin.era) return { from: origin.era.from, to: origin.era.to };
+  const year = origin.year ?? 0;
+  return { from: year, to: year };
+}
+
+/** "Microsoft Corporation", or "Microsoft for IBM" when someone else put it out. */
+export function originCredit(origin: GameOrigin): string {
+  return origin.publisher && origin.publisher !== origin.author
+    ? `${origin.author} for ${origin.publisher}`
+    : origin.author;
 }
 
 export function formatPlayers({ min, max }: GameEntry['players']): string {

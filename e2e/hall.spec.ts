@@ -5,6 +5,9 @@ interface CatalogEntry {
   slug: string;
   title: string;
   added: string;
+  category: string;
+  secondaryCategory?: string;
+  origin: { title: string };
 }
 
 const catalog = JSON.parse(readFileSync('hall/catalog.json', 'utf8')) as CatalogEntry[];
@@ -12,6 +15,11 @@ const catalog = JSON.parse(readFileSync('hall/catalog.json', 'utf8')) as Catalog
 const first = [...catalog].sort((a, b) => b.added.localeCompare(a.added))[0];
 /** Search and genre filters only appear once the collection is this big. */
 const SEARCH_FROM = 6;
+/** Each game sits on its category's shelf, and on its second one if it has one. */
+const shelfCards = catalog.reduce((sum, game) => sum + (game.secondaryCategory ? 2 : 1), 0);
+const categories = [
+  ...new Set(catalog.flatMap((game) => [game.category, game.secondaryCategory])),
+].filter((category): category is string => Boolean(category));
 
 /** Fails the test on any uncaught error or console error the page produces. */
 function watchForErrors(page: Page) {
@@ -38,7 +46,8 @@ test('the Hall opens cleanly', async ({ page }) => {
     ).toBeVisible();
   } else {
     await expect(page.locator('.spotlight h2')).toHaveText(first.title);
-    await expect(page.locator('.grid .card')).toHaveCount(catalog.length > 1 ? catalog.length : 0);
+    await expect(page.locator('.shelf')).toHaveCount(catalog.length > 1 ? categories.length : 0);
+    await expect(page.locator('.shelf .card')).toHaveCount(catalog.length > 1 ? shelfCards : 0);
   }
   expect(errors).toEqual([]);
 });
@@ -96,13 +105,95 @@ test.describe('with games in the catalog', () => {
     await expect(page).toHaveURL(/#\/$/);
   });
 
-  test('the collection is keyboard driven', async ({ page, isMobile }) => {
+  test('the shelves are keyboard driven', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Phones have no keyboard.');
-    test.skip(catalog.length < 2, 'A single game has no collection to browse.');
+    test.skip(categories.length < 2, 'One shelf has nowhere to go up or down.');
     await openHall(page);
-    await page.locator('.card').first().focus();
+    const shelves = page.locator('.shelf');
+    const first = shelves.nth(0).locator('[data-row-item]');
+    await first.first().focus();
+
+    // Along the shelf, then down to the next one, and back up.
+    await page.keyboard.press('ArrowRight');
+    await expect(first.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(shelves.nth(1).locator('[data-row-item]:focus')).toHaveCount(1);
+    await page.keyboard.press('ArrowUp');
+    await expect(shelves.nth(0).locator('[data-row-item]:focus')).toHaveCount(1);
+    // Each shelf is a single tab stop.
+    await expect(shelves.nth(0).locator('[data-row-item][tabindex="0"]')).toHaveCount(1);
+
+    await first.first().focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('dialog[open] .button--play')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(first.first()).toBeFocused();
+  });
+
+  test('a shelf opens its category page, which sorts and leads back', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(catalog.length < 2, 'A single game has no shelves.');
+    const category = catalog[0]?.category ?? '';
+    const members = catalog.filter(
+      (game) => game.category === category || game.secondaryCategory === category,
+    );
+    await openHall(page);
+    await page.locator(`.shelf[data-category="${category}"] .shelf__title-link`).click();
+    await expect(page).toHaveURL(new RegExp(`#/category/${category}$`));
+    const view = page.locator('.category-page');
+    await expect(view.locator('h1')).toBeVisible();
+    await expect(view.locator('.card')).toHaveCount(members.length);
+
+    await view.getByRole('button', { name: 'A–Z' }).click();
+    const titles = [...members].map((game) => game.title).sort((a, b) => a.localeCompare(b));
+    await expect(view.locator('.card__title')).toHaveText(titles);
+    if (!isMobile && members.length > 1) {
+      await view.locator('.card').first().focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(view.locator('.card').nth(1)).toBeFocused();
+    }
+    await expect(view.getByRole('button', { name: 'Most played' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    // A game's panel opens over the category page and closes back onto it.
+    await view.locator('.card').first().click();
+    await expect(page.locator('dialog[open]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(new RegExp(`#/category/${category}$`));
+    await expect(view).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/#\/$/);
+    await expect(page.locator('.spotlight')).toBeVisible();
+  });
+
+  test('the Origins timeline shows each original beside its remake', async ({ page }) => {
+    await openHall(page);
+    await page.getByRole('link', { name: 'Origins' }).click();
+    await expect(page).toHaveURL(/#\/timeline/);
+    const markers = page.getByRole('tab');
+    await expect(markers).toHaveCount(catalog.length);
+    await expect(page.locator('.era').first()).toBeVisible();
+
+    const selected = page.locator('.origin-marker[aria-selected="true"]');
+    await selected.click();
+    const panel = page.getByRole('tabpanel');
+    const slug = (await selected.getAttribute('data-slug')) ?? '';
+    const game = catalog.find((entry) => entry.slug === slug);
+    await expect(panel.locator('.origin-facts__title')).toHaveText(game?.origin.title ?? '');
+    await expect(panel.getByRole('link', { name: `Play ${game?.title}` })).toBeVisible();
+
+    if (catalog.length > 1) {
+      await page.keyboard.press('ArrowRight');
+      await expect(page).not.toHaveURL(new RegExp(`#/timeline/${slug}$`));
+      await expect(panel.locator('.origin-facts__title')).not.toHaveText(game?.origin.title ?? '');
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.spotlight')).toBeVisible();
   });
 
   test('search narrows the collection and can be cleared', async ({ page }) => {
@@ -151,4 +242,16 @@ test.describe('with games in the catalog', () => {
     expect(requests.length).toBeGreaterThan(0);
     for (const path of requests) expect(path.startsWith(`/${game.slug}/`)).toBe(true);
   });
+});
+
+test('the forty-game fixture stays on the dev server', async ({ page }) => {
+  const scripts: string[] = [];
+  page.on('response', async (response) => {
+    if (response.url().endsWith('.js')) scripts.push(await response.text());
+  });
+  await openHall(page, '?fixture=big');
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('.shelf .card')).toHaveCount(catalog.length > 1 ? shelfCards : 0);
+  expect(scripts.length).toBeGreaterThan(0);
+  for (const script of scripts) expect(script).not.toContain('Hammurabi Rising');
 });

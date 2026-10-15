@@ -10,6 +10,8 @@ import { animate } from './ticker';
 export interface GamepadActions {
   /** The part of the page that currently has the player's attention. */
   scope(): HTMLElement;
+  /** Lets the page move focus its own way first, e.g. along shelves; true when it did. */
+  move?(direction: Direction): boolean;
   back(): void;
   stepGenre(delta: number): void;
   start(): void;
@@ -21,6 +23,10 @@ const REPEAT_DELAY = 0.4;
 const REPEAT_INTERVAL = 0.14;
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]';
+// Where the first press lands on each page: Play in the spotlight, the picked
+// original on the timeline, or a page's first row of games.
+const STARTING_POINTS =
+  '.spotlight .button--play, .origin-marker[aria-selected="true"], [data-row-item][tabindex="0"]';
 
 export function startGamepadNavigation(actions: GamepadActions): void {
   const input = createInput<PadAction>({
@@ -42,10 +48,13 @@ export function startGamepadNavigation(actions: GamepadActions): void {
   let polling = false;
 
   const move = (direction: Direction) => {
+    if (!document.querySelector('dialog[open]') && actions.move?.(direction)) return;
     const scope = actions.scope();
-    const candidates = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(isVisible);
+    const candidates = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (element) => isVisible(element) && !element.closest('[data-pointer-only]'),
+    );
     const current = document.activeElement as HTMLElement | null;
-    const from = current && scope.contains(current) ? current : null;
+    const from = current && current !== document.body && scope.contains(current) ? current : null;
     const next = from
       ? nearestInDirection(
           from.getBoundingClientRect(),
@@ -54,7 +63,7 @@ export function startGamepadNavigation(actions: GamepadActions): void {
           ),
           direction,
         )?.element
-      : (scope.querySelector<HTMLElement>('.spotlight .button--play, .card[tabindex="0"]') ??
+      : ([...scope.querySelectorAll<HTMLElement>(STARTING_POINTS)].find(isVisible) ??
         candidates[0]);
     if (!next) return;
     next.focus();

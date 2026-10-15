@@ -293,6 +293,11 @@ sun's path, the career's seasons and the postmark on the postcards; it is a
 setting, not a claim about when Trucker was written. The title's highway
 shield reads 40, for the I-40 the middle route follows.
 
+**Links from the Hall** (prompt 008): the game tells the Hall which mode a
+trip belongs to (Single Haul, Career, Daily Haul) for its Continue playing
+row, and opens straight into that mode, skipping the title's intro, when the
+Hall links to it with `?play=`. Nothing about the drive changes.
+
 **Things not carried over**: the original's chained `RUN "b:…"` and
 `RUN "menu"` at the end (it was one program of a menu-driven disk); the
 address on the title; the seeding by time of day (the port seeds from a

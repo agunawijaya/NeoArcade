@@ -1,7 +1,9 @@
 # ADR 0002 — Hall catalog, covers, and how a port registers itself
 
 - **Status:** accepted; amended 2026-09-26 by [ADR 0005](0005-hall-shows-game-screens.md)
-  (screens, pitch and highlights; covers become the fallback)
+  (screens, pitch and highlights; covers become the fallback) and 2026-10-15 by
+  [ADR 0018](0018-hall-shelves-today-origins.md) (categories, the daily, and
+  `origin` in place of `original`)
 - **Date:** 2026-09-25
 
 ## Context
@@ -18,7 +20,8 @@ Hall has to be small, explicit and checked by tests.
 
 A JSON **array**, one object per game. It is validated by
 `hall/src/catalog.ts` at runtime (bad entries are skipped with a console
-warning) and by `hall/src/catalog.test.ts` in CI (bad entries fail the build).
+warning) and by `scripts/check-catalog.ts`, which runs first in
+`npm run build` and again in `npm test` (bad entries fail both).
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -28,12 +31,18 @@ warning) and by `hall/src/catalog.test.ts` in CI (bad entries fail the build).
 | `pitch` | string, optional | Two or three sentences on why it is worth playing, written as an invitation. Shown in the spotlight and the detail panel. |
 | `highlights` | string[], optional, at most 4 | Short reasons to play, shown as a list in the spotlight. |
 | `screens` | `{ image, caption? }[]`, optional | Screenshots, relative to the port folder (normally `media/…`), each with a short caption. The Hall shows the first on cards and cycles through all of them in the spotlight and the detail panel. Without screens, the cover is shown. |
-| `original.title` | string | The classic this is based on. |
-| `original.author` | string | Author or company. |
-| `original.year` | integer | Year of the original. May be left out when it cannot be confirmed, if `era` is given. |
-| `original.era` | string, optional | Shown in place of the year, e.g. `"early 1980s"`, when no year can be vouched for (added with Long Haul). |
-| `original.platform` | string, optional | e.g. `"MS-DOS (QBasic)"`. |
-| `genres` | string[], at least one | Drives the genre filter; the first two show on the card. |
+| `origin.title` | string | The classic this is based on. |
+| `origin.author` | string | Who wrote it, as the game's ABOUT page has it. |
+| `origin.publisher` | string, optional | Who put it out, when that was someone else (DONKEY.BAS: written at Microsoft, published by IBM). Credits read "Microsoft for IBM". |
+| `origin.year` | integer | Year of the original. Leave it out when nobody can vouch for one, and give `era` instead (never both). |
+| `origin.era` | `{ label, from, to }` | Shown in place of the year, e.g. `{ "label": "early 1980s", "from": 1981, "to": 1984 }`; the timeline draws the span as a soft band. |
+| `origin.platform` | string | The computer and graphics it ran on, e.g. `"MS-DOS PCs with CGA, EGA or VGA graphics"`. |
+| `origin.language` | string | e.g. `"QBasic"`, `"GW-BASIC"`. |
+| `origin.machine` | one of `ibm-pc`, `dos-pc`, `home-computer`, `terminal`, `windows-pc` | The silhouette that stands for it on the Origins timeline (`hall/src/machines.ts`). |
+| `origin.appeared` | string, optional | Where it first reached players: a disk, a magazine, a book, a bundle. |
+| `category` | one of the Hall's categories | The shelf it lives on: `arcade`, `action`, `adventure`, `simulation`, `strategy`, `puzzle`, `sports`, `card-board`, `word-trivia`, `learning` (`hall/src/categories.ts`). Nothing else is accepted. |
+| `secondaryCategory` | a category, optional | A second shelf, different from `category`, only when it clearly helps players find the game. |
+| `genres` | string[], at least one | Finer tags for the genre filter; the first two show on the card. |
 | `players` | `{ min, max }` integers, `1 <= min <= max` | Shown as "1–2 players". |
 | `accent` | `#rrggbb` | The game's colour in the Hall: Play button, glow under the screen, card highlights. |
 | `path` | relative URL | Where the game lives relative to the Hall in `dist/`. Always `"<slug>/"`. |
@@ -42,6 +51,7 @@ warning) and by `hall/src/catalog.test.ts` in CI (bad entries fail the build).
 | `docs.about` | path | Normally `docs/ABOUT.md`. |
 | `docs.architecture` | path, optional | Normally `docs/ARCHITECTURE.md`. Not shown to players. |
 | `added` | `YYYY-MM-DD` | Date the game joined the Hall; drives "Newest" sorting. |
+| `daily` | object, optional | The game's daily challenge, for the Hall's Today panel: `name`, `launch` (the date of daily #1, as the game's `dailyChallenge()` has it), `mode` (opened with `?play=<mode>`), `log` (its daily log's key, default `"daily"`) and `results` (rules that put a stored result into words). See [ADR 0018](0018-hall-shelves-today-origins.md). |
 
 Example:
 
@@ -53,20 +63,39 @@ Example:
   "pitch": "Two gorillas face off across the rooftops. Pick an angle, feel the wind and lob an exploding banana over the city.",
   "highlights": ["Learn it in one throw, master it in the wind", "Four worlds, each with its own gravity"],
   "screens": [{ "image": "media/aiming.jpg", "caption": "Pull back, read the wind, let it fly." }],
-  "original": { "title": "QBasic Gorillas", "author": "Microsoft Corporation", "year": 1990, "platform": "MS-DOS (QBasic)" },
+  "origin": {
+    "title": "QBasic Gorillas",
+    "author": "Microsoft Corporation",
+    "year": 1990,
+    "platform": "MS-DOS PCs with CGA, EGA or VGA graphics",
+    "language": "QBasic",
+    "machine": "dos-pc",
+    "appeared": "A sample program included with QBasic, which shipped with MS-DOS 5.0"
+  },
+  "category": "arcade",
   "genres": ["Artillery", "Duel"],
   "players": { "min": 1, "max": 2 },
   "accent": "#ff8a3d",
   "path": "skyline-showdown/",
   "cover": "skyline-showdown",
   "docs": { "howToPlay": "docs/HOW-TO-PLAY.md", "about": "docs/ABOUT.md", "architecture": "docs/ARCHITECTURE.md" },
-  "added": "2026-10-01"
+  "added": "2026-10-01",
+  "daily": {
+    "name": "Daily Skyline",
+    "launch": "2026-09-29",
+    "mode": "daily",
+    "results": [
+      { "when": { "outcome": "hit" }, "text": "A hit in {throws} of 10 throws" },
+      { "text": "Out of bananas" }
+    ]
+  }
 }
 ```
 
-The catalog test also checks, for every entry, that `ports/<slug>/index.html`,
-`hall/covers/<cover>.ts`, both player docs and every screen image exist, and
-that `path` is `"<slug>/"`.
+The catalog check also makes sure, for every entry, that
+`ports/<slug>/index.html`, `hall/covers/<cover>.ts`, both player docs and
+every screen image exist, that `path` is `"<slug>/"`, and that a daily's
+`launch` date appears in the game's source.
 
 ### 2. The cover API: `hall/covers/<cover>.ts`
 
@@ -144,7 +173,13 @@ after asking "leave the match?").
 5. Add the catalog entry to `hall/catalog.json`, with a `pitch`, a few
    `highlights` and four to six `screens` of real play (landscape,
    16:10 or close, no title screens), each with a short caption.
-6. Run `npm test` (the catalog guard), `npm run build`, `npm run test:e2e`.
+6. Pick its `category` from the fixed list (and a `secondaryCategory` only if
+   it clearly helps), and fill in `origin` with only what its ABOUT page
+   supports. A game with a daily adds a `daily` block.
+7. Report plays to the Continue playing row: call `reportPlay()` from
+   `@shared/last-played` when the player starts a mode, and open the mode
+   that `takeResumeRequest()` returns at start-up.
+8. Run `npm test` (the catalog guard), `npm run build`, `npm run test:e2e`.
 
 ## Consequences
 

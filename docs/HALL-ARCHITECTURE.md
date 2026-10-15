@@ -3,17 +3,22 @@
 The Hall is a single static page (`hall/index.html`) written in plain
 TypeScript and DOM. It reads the catalog, puts the newest game in the
 spotlight with its real screens and a few lines on why it is worth playing,
-lists the rest of the collection as cards, and renders each game's player
-docs. It is also home to the player's **Arcade Pass**: a chip in the
-masthead and a Pass page with the profile, the rank road and the badge
+then offers a **Continue playing** row, **Today in NeoArcade** (every daily
+challenge in one panel) and the collection as **shelves**, one per category,
+each opening onto a full **category page**. The **Origins timeline** places
+every original on the years and machines it came from. The Hall renders each
+game's player docs, and it is home to the player's **Arcade Pass**: a chip in
+the masthead and a Pass page with the profile, the rank road and the badge
 cabinet. It comes in a dark and a light theme.
 
 This document is the map; the contracts with ports are in
-[ADR 0002](adr/0002-hall-catalog-and-covers.md) (catalog and covers) and
-[ADR 0006](adr/0006-arcade-pass.md) (the Pass, with its integration guide in
-[ARCADE-PASS.md](ARCADE-PASS.md)), the reasons for showing screenshots
-rather than drawn cabinets in [ADR 0005](adr/0005-hall-shows-game-screens.md),
-and the tooling in [ADR 0001](adr/0001-stack.md).
+[ADR 0002](adr/0002-hall-catalog-and-covers.md) (catalog and covers),
+[ADR 0018](adr/0018-hall-shelves-today-origins.md) (categories, dailies,
+Continue playing, origins) and [ADR 0006](adr/0006-arcade-pass.md) (the Pass,
+with its integration guide in [ARCADE-PASS.md](ARCADE-PASS.md)), the reasons
+for showing screenshots rather than drawn cabinets in
+[ADR 0005](adr/0005-hall-shows-game-screens.md), and the tooling in
+[ADR 0001](adr/0001-stack.md).
 
 ## Folder tree
 
@@ -25,13 +30,18 @@ hall/
 ├── covers/               one animated cover per game, <cover-id>.ts
 ├── media/                screenshots: with-demo/ proves a full game flow, pass/ the Arcade Pass
 ├── dev/                  development only, never built
-│   ├── playwright.config.ts  Pass screenshots against the dev server
+│   ├── playwright.config.ts  dev-server screenshots (Pass and lobby)
 │   ├── pass.screens.ts   every Pass state x 3 sizes x 2 themes
+│   ├── hall.screens.ts   shelves, Today, Continue, category page, timeline x 3 sizes x 2 themes
+│   ├── big-catalog.ts    forty pretend games for ?fixture=big
 │   └── pass-lab/         the Pass Lab: a pretend game, fixtures, an art sheet
 ├── styles/
 │   ├── base.css          tokens for both themes, reset, backdrop, buttons, footer, reduced motion
 │   ├── masthead.css      neon logo (glass in daylight)
 │   ├── lobby.css         collection, toolbar, grid, empty and no-results states
+│   ├── shelves.css       category colours, sideways rows, shelves, the doorway tile, category page
+│   ├── today.css         Continue playing tiles and the Today panel
+│   ├── timeline.css      the Origins timeline, its facts card, the masthead link
 │   ├── screens.css       a game's screens, the spotlight, the cards
 │   ├── detail.css        detail dialog (centred panel, phone bottom sheet)
 │   ├── docs.css          docs bar and long-form "prose" typography
@@ -51,12 +61,26 @@ hall/
     ├── badge-count.ts    "7 / 24 badges" on cards and the spotlight
     ├── time.ts           "3 h ago" and number formatting (pure)
     ├── catalog.ts        GameEntry type, validation, formatting helpers
-    ├── library.ts        genre list, search, filter and sort (pure)
+    ├── categories.ts     the fixed category list: ids, names, accents, emblems (pure)
+    ├── machines.ts       silhouettes of the machines the originals ran on (pure)
+    ├── eras.ts           the eras behind the timeline (pure)
+    ├── daily-result.ts   a stored daily result in words, from the catalog's rules (pure)
+    ├── library.ts        genres, search, sort, shelves by category (pure)
     ├── routes.ts         hash routes <-> Route objects (pure)
-    ├── spatial-nav.ts    "nearest box in this direction" (pure)
+    ├── spatial-nav.ts    "nearest box in this direction", and stepping across rows (pure)
+    ├── timeline-layout.ts years to positions, lanes, the track's width (pure)
+    ├── today.ts          every daily's state today, from the games' logs
     ├── markdown.ts       Markdown -> HTML with repo-aware links and images
-    ├── lobby.ts          spotlight, collection, toolbar, roving focus, arrow keys
+    ├── lobby.ts          spotlight, Continue, Today, shelves or results; row navigation
     ├── spotlight.ts      the featured game: screens, pitch, highlights, Play
+    ├── continue-row.ts   Continue playing: the newest plays, each a resume link
+    ├── today-panel.ts    Today in NeoArcade: a tile per daily, the countdown
+    ├── shelves.ts        a shelf per category, each ending in a doorway
+    ├── scroll-row.ts     a row that scrolls sideways, edge fades, reveal on focus
+    ├── focus-groups.ts   one tab stop per row or grid, arrow keys inside
+    ├── category-page.ts  every game in one category, three sort orders
+    ├── timeline-page.ts  the Origins timeline and the original beside its remake
+    ├── emblems.ts        category emblems and machine silhouettes as SVG elements
     ├── card.ts           one game in the collection
     ├── screen-show.ts    a game's screenshots, cross-faded with captions; cover fallback
     ├── empty-state.ts    waiting screens running their self-test
@@ -87,11 +111,15 @@ flowchart TB
     coverFiles["covers/*.ts"]
     portDocs["ports/*/docs/*.md"]
     portMedia["ports/*/media/*"]
+    dailyLogs[("game stores: daily logs")]
+    history[("last-played history")]
   end
 
   main[main.ts]
   main --> catalog[catalog.ts]
   main --> lobby[lobby.ts]
+  main --> categoryPage[category-page.ts]
+  main --> timelinePage[timeline-page.ts]
   main --> detail[detail.ts]
   main --> docsView[docs-view.ts]
   main --> routes[routes.ts]
@@ -101,20 +129,51 @@ flowchart TB
   main --> chip[pass-chip.ts]
   main --> editor[profile-editor.ts]
   main --> backups[backup-dialogs.ts]
-  main --> shelves[pass-manifests.ts]
+  main --> shelvesOfPass[pass-manifests.ts]
 
   catalogJson --> catalog
-  lobby --> library[library.ts]
+  catalog --> categories[categories.ts]
+  catalog --> machines[machines.ts]
+  catalog --> dailyResult[daily-result.ts]
+
   lobby --> spotlight[spotlight.ts]
+  lobby --> continueRow[continue-row.ts]
+  lobby --> todayPanel[today-panel.ts]
+  lobby --> shelves[shelves.ts]
   lobby --> card[card.ts]
+  lobby --> library[library.ts]
+  lobby --> focusGroups[focus-groups.ts]
   lobby --> emptyState[empty-state.ts]
-  lobby --> spatial[spatial-nav.ts]
+  shelves --> scrollRow[scroll-row.ts]
+  continueRow --> scrollRow
+  shelves --> library
+  categoryPage --> library
+  categoryPage --> card
+  focusGroups --> spatial[spatial-nav.ts]
+  lobby --> spatial
   gamepad --> spatial
   gamepad --> input["@shared/input"]
+
+  todayPanel --> today[today.ts]
+  today --> dailyResult
+  today --> sharedDaily["@shared/daily"]
+  sharedDaily --> dailyLogs
+  continueRow --> lastPlayed["@shared/last-played"]
+  categoryPage --> lastPlayed
+  passPage --> lastPlayed
+  lastPlayed --> history
+
+  timelinePage --> timelineLayout[timeline-layout.ts]
+  timelinePage --> eras[eras.ts]
+  timelinePage --> emblems[emblems.ts]
+  emblems --> machines
+  emblems --> categories
+  card --> emblems
 
   spotlight --> show[screen-show.ts]
   card --> show
   detail --> show
+  timelinePage --> show
   show --> docsSource[docs-source.ts]
   show --> player[cover-player.ts]
   emptyState --> player
@@ -138,7 +197,7 @@ flowchart TB
     passArt["art: avatar, medals, ranks"]
     cabinetUi["ui: cabinet, badge close-up"]
   end
-  manifests["ports/*/pass.manifest.ts"] --> shelves
+  manifests["ports/*/pass.manifest.ts"] --> shelvesOfPass
   passPage --> passProfile[pass-profile.ts]
   passPage --> passActivity[pass-activity.ts]
   passPage --> cabinetUi
@@ -148,6 +207,74 @@ flowchart TB
   main --> passCore
   card --> badgeCount[badge-count.ts]
   spotlight --> badgeCount
+```
+
+### The catalog
+
+The contract with ports is the catalog entry (ADR 0002, ADR 0018).
+`scripts/check-catalog.ts` checks every field and every file it points at
+before the build, and in `npm test`; `catalog.ts` checks again at runtime and
+skips a bad entry with a warning.
+
+```mermaid
+classDiagram
+  class GameEntry {
+    slug
+    title
+    tagline
+    pitch?
+    highlights?
+    screens?
+    category
+    secondaryCategory?
+    genres
+    players
+    accent
+    path
+    cover
+    docs
+    added
+  }
+  class GameOrigin {
+    title
+    author
+    publisher?
+    year?
+    era?
+    platform
+    language
+    machine
+    appeared?
+  }
+  class GameDaily {
+    name
+    launch
+    mode
+    log?
+    results?
+  }
+  class ResultRule {
+    when?
+    text
+  }
+  class Category {
+    id
+    name
+    blurb
+    accent dark and light
+    emblem
+  }
+  class Machine {
+    id
+    name
+    shapes
+  }
+  GameEntry *-- GameOrigin : origin
+  GameEntry *-- "0..1" GameDaily : daily
+  GameDaily *-- "0..*" ResultRule : results
+  GameEntry --> Category : category
+  GameEntry ..> Category : secondaryCategory
+  GameOrigin --> Machine : machine
 ```
 
 ## Boot and routing
@@ -171,12 +298,13 @@ sequenceDiagram
 
   Page->>Page: data-theme from storage or the device
   Page->>Main: load module
-  Main->>Catalog: parseCatalog(catalog.json)
+  Main->>Catalog: parseCatalog(catalog.json, or the dev fixture)
   Catalog-->>Main: games + problems (warned)
   Main->>Main: openArcadePass(), loadPassShelves(games)
   Main->>Main: await Tilt Neon (max 1.5 s)
   Main->>Lobby: createLobby(games, store)
-  Lobby-->>Main: spotlight and collection, or the empty state
+  Lobby-->>Main: spotlight, Continue, Today, shelves, or the empty state
+  Main->>Main: category page, timeline, docs, detail, Pass page
   Main->>Page: backdrop image = the featured game's first screen
   Main->>Router: hashchange + first call
   Router->>Router: parseRoute(location.hash)
@@ -184,7 +312,9 @@ sequenceDiagram
 
 The URL hash is the single source of truth, so Back, reload and shared links
 all work. Closing the dialog (Esc, backdrop, ×) or pressing B on a gamepad
-only changes the hash; the router does the rest.
+only changes the hash; the router does the rest. A game's detail panel opens
+over the page it was chosen on (the lobby or a category page) and closing it
+goes back there; opened straight from an address, it opens over the lobby.
 
 ```mermaid
 stateDiagram-v2
@@ -204,6 +334,16 @@ stateDiagram-v2
   Pass --> Lobby: The Hall link, Esc, B
   Pass --> Sheet: Edit profile, Back up, Restore, Start over, a badge
   Sheet --> Pass: Esc, close, B
+  Lobby --> Category: a shelf heading or See all (#/category/id)
+  Category --> Detail: choose a card
+  Detail --> Category: Esc, close, B
+  Category --> Lobby: The Hall link, Esc, B
+  Lobby --> Timeline: Origins in the masthead (#/timeline)
+  Timeline --> Timeline: pick an original (#/timeline/slug, replaced)
+  Timeline --> Game: Play beside the original
+  Timeline --> Docs: About
+  Timeline --> Lobby: The Hall link, Esc, B
+  Lobby --> Game: a Continue tile or a daily (?play=mode)
 ```
 
 The Pass page's dialogs (edit profile, backups, start over, a badge up
@@ -212,23 +352,123 @@ returns focus to the button that opened them.
 
 ## What the Hall shows
 
-The lobby picks the newest game (`selectGames` sorted by `added`) for the
-**spotlight**: its screens large, and beside them the genres and player
-count, the title, the tagline, the `pitch`, up to four `highlights`, Play,
-How to play and About, and a credit line for the original. When the
-catalog holds more than one game, an **All games** section follows with a
-card per game; search, genre filters and sorting join it from six games
-up, where they start to help. Below six games a short line says more
-classics are on the way.
+The lobby, from the top:
+
+1. **The spotlight** picks the newest game (`selectGames` sorted by `added`):
+   its screens large, and beside them the genres and player count, the
+   title, the tagline, the `pitch`, up to four `highlights`, Play, How to
+   play and About, and a credit line for the original.
+2. **Continue playing** (`continue-row.ts`), once there is history: the
+   newest six plays from `@shared/last-played`, each a tile with the game's
+   first screen, its name, the player's words for what they were doing
+   ("World Tour · Tokyo") and when, linking straight back into that mode.
+3. **Today in NeoArcade** (`today-panel.ts`), when any game has a daily: a
+   tile per daily with today's number, a beacon (open) or a check (done),
+   the result in words, the streak, and Play today's; above them, the wait
+   until the next dailies and when that is in local time.
+4. **The collection**, once the catalog holds more than one game: a shelf
+   per category, or, while a search or a genre narrows things down, one grid
+   of results. Search, genre filters and sorting join it from six games up;
+   below six a short line says more classics are on the way.
+
+### Shelves
+
+`shelvesOf()` in `library.ts` builds one shelf per category that has games,
+in the fixed category order of `categories.ts` (ADR 0018 says why it is not
+"newest first"); games on a shelf follow the sort order, newest first by
+default. A game with a `secondaryCategory` sits on both shelves; on the
+second its card carries a small tag with its main category's emblem and
+name. Every shelf ends in a "See all" doorway, so the category page is one
+move away for keyboard and gamepad players too.
+
+```mermaid
+flowchart TB
+  spot["Spotlight: Play, How to play, About"]
+  subgraph rows["Rows: one tab stop each; arrows move inside"]
+    cont["Continue playing: tile, tile, tile …"]
+    today["Today: Daily Skyline, Daily Road, Daily Haul …"]
+    arcade["Arcade shelf: card, card, … See all"]
+    sim["Simulation shelf: card, … See all"]
+    strat["Strategy shelf: visiting card, … See all"]
+  end
+  spot -- "↓" --> cont
+  cont -- "↑" --> spot
+  cont -- "↓ to the closest across" --> today
+  today -- "↓" --> arcade
+  arcade -- "↓" --> sim
+  sim -- "↓" --> strat
+  strat -- "↑" --> sim
+  arcade -- "See all or heading" --> page["#/category/arcade: grid, A–Z, Newest, Most played"]
+```
+
+Each row is a `scroll-row.ts`: the list scrolls sideways (touch, trackpad,
+shift + wheel, or the previous and next buttons beside the heading, which
+only mice get), snaps gently to cards, and fades at an edge with more beyond
+it. When focus lands on an item, by arrow, Tab or gamepad, `revealInRow()`
+scrolls just enough to show it whole, and the page keeps its section in
+view. Cards only play anything (an animated cover, for a game without
+screenshots) while they have the pointer or focus and are on screen.
+
+### Today and Continue playing
+
+Both read what the games keep, and never write to it.
+
+```mermaid
+flowchart LR
+  subgraph Game["a game"]
+    start["the player starts a mode"] --> report["reportPlay({ game, mode, item, label })"]
+    finish["a daily run ends"] --> record["dailyLog.record(day, result)"]
+    boot["start-up"] --> take["takeResumeRequest(): ?play=mode&item=…"]
+  end
+  report --> history[("neoarcade:last-played:history, counts")]
+  record --> logs[("neoarcade:slug:daily")]
+  subgraph Hall
+    catalog["catalog daily: name, launch, mode, log, results"] --> read["readDailies()"]
+    logs --> read
+    read --> panel["Today panel"]
+    history --> row["Continue playing row"]
+    history --> most["Most played order"]
+    passPage["Pass page: Clear history"] -.-> history
+  end
+  panel -- "game/?play=daily" --> take
+  row -- "game/?play=mode&item=…" --> take
+```
+
+The lobby reads both again when the player comes back from a game (the
+`pageshow` of a page restored from the back-forward cache), when another tab
+changes them (`storage`), and when the lobby is shown after another page.
+The Today countdown ticks once a minute and redraws at the new UTC day.
+
+### Category pages
+
+`#/category/<id>` (`category-page.ts`) shows the category's emblem, name,
+game count and blurb, then a grid of every game in it, primary or
+secondary, sorted A–Z, newest first or most played (the choice is kept as
+`category-sort`). The grid is one tab stop, with arrow keys between cards.
+
+### The Origins timeline
+
+`#/timeline` (`timeline-page.ts`, reached from the masthead) lays a track
+from 1980 to a round year past the newest original. `timeline-layout.ts`
+turns years into fractions of the track, stacks markers that would touch
+into lanes, and widens each year (the track then scrolls sideways) rather
+than stack more than three deep. Under the axis run the eras of `eras.ts`;
+on it, each original's year is a dot, or a soft band for an era. The
+markers form a tab list: arrows, Tab, a click or a gamepad pick one, and the
+panel below shows the original's facts (with its machine drawn large) beside
+the remake's card with Play and About. The pick is kept in the address with
+`history.replaceState`, so Back still leaves the page.
+
+### Screens
 
 `screen-show.ts` turns a game's `screens` into a stack of `<img>` frames
 from the port's `media/` folder (bundled through `docs-source.ts`). In the
-spotlight and the detail dialog it cross-fades every six seconds with a
-slow push-in and shows each caption; dots pick a screen. Cycling pauses
-while the pointer or focus is on it, stops for good once a dot is chosen,
-waits while the tab is hidden and never starts with reduced motion. Cards
-show only the first screen. A game without screens, or whose images all
-fail to load, shows its animated cover instead.
+spotlight and the detail panel it cross-fades every six seconds with a slow
+push-in and shows each caption; dots pick a screen. Cycling pauses while the
+pointer or focus is on it, stops for good once a dot is chosen, waits while
+the tab is hidden and never starts with reduced motion. Cards, Continue
+tiles and the timeline show only the first screen. A game without screens,
+or whose images all fail to load, shows its animated cover instead.
 
 ### The Arcade Pass
 
@@ -245,9 +485,10 @@ player has come; the **badge cabinet** from `@shared/pass` (one lit shelf
 per game, medals earned or waiting as silhouettes, secrets as ???, counted
 badges with a ring, a close-up on click, "New" on badges earned since the
 last visit, a gold rim on a complete shelf); per-game stats and "Coming up"
-beside the activity feed; and "Keep your Pass safe" with back up, restore
-and start over. Everything except the cabinet is rebuilt when the Pass
-changes, including from another tab; the cabinet updates itself.
+beside the activity feed; "Keep your Pass safe" with back up, restore
+and start over; and last, **Play history**, which says what the lobby
+remembers for Continue playing and clears it. Everything except the cabinet
+and Play history is rebuilt when the Pass changes, including from another tab; the cabinet updates itself.
 
 **Edit profile** previews every choice live, the Hall theme included, and
 keeps nothing until Save. Locked parts stay in the list, greyed, with the
@@ -318,6 +559,14 @@ the same on the dev server and on any static host.
 | Game screens: frames, cross-fade, push-in, caption, dots | `src/screen-show.ts` + `styles/screens.css` |
 | Spotlight: accent glow under the screen, title, pitch, highlight diamonds | `src/spotlight.ts` + `styles/screens.css` |
 | Cards: frame, hover lift, accent shadow, focus ring | `src/card.ts` + `styles/screens.css` |
+| Category emblems (joystick, bolt, compass, dial, pennant, block, ball, die, bubble, mortarboard) and accents | `CATEGORIES` in `src/categories.ts`, drawn by `categoryEmblem()` in `src/emblems.ts` |
+| Shelves: heading, emblem tile, sideways row, edge fades, scroll buttons, See all doorway, the visiting tag | `src/shelves.ts`, `src/scroll-row.ts` + `styles/shelves.css` |
+| Category page header and grid | `src/category-page.ts` + `styles/shelves.css` |
+| Continue tiles: thumbnail, play glyph, label | `src/continue-row.ts` + `styles/today.css` |
+| Today tiles: colour stripe, beacon or check, streak flame, Play today's | `src/today-panel.ts` + `styles/today.css` |
+| Origins timeline: track, eras, axis, soft spans, markers, stems, facts card | `src/timeline-page.ts` + `styles/timeline.css` |
+| Machine silhouettes (IBM PC, MS-DOS PC, home computer, terminal, Windows PC) | `MACHINES` in `src/machines.ts` |
+| Masthead Origins link | `main.ts` + `.masthead-link` in `styles/timeline.css` |
 | Detail panel, bottom sheet, grab handle | `styles/detail.css` |
 | Docs typography, tables, framed screenshots, diagram cards | `styles/docs.css`; Mermaid theme in `src/diagrams.ts` |
 | Generic attract-mode cover | `src/fallback-cover.ts` |
@@ -331,6 +580,12 @@ the same on the dev server and on any static host.
 | Avatars (every part), badge medals and glyphs, rank emblems | `@shared/pass/art/*` (see [ARCADE-PASS.md](ARCADE-PASS.md)) |
 | Badge cabinet and close-up, unlock toasts | `@shared/pass/ui/*` |
 | Edit profile, backups, start over | `src/profile-editor.ts`, `src/backup-dialogs.ts` + `styles/sheets.css` |
+
+Each category has two accents, a bright one for the dark theme and a deep
+one for the light; elements carrying a category get both as
+`--category-dark` and `--category-light` (`categoryStyle()`), and
+`.has-category` picks the theme's as `--category`. Era bands take the Hall's
+own `--violet`, `--cyan`, `--magenta` and `--amber`.
 
 Palette tokens live at the top of `styles/base.css` (`--magenta`, `--cyan`,
 `--violet`, `--amber`, ink levels, hairlines, panels, shadows), once for the
@@ -348,18 +603,27 @@ redrawn when the theme changes.
 
 - **Pointer and touch:** everything is a real link or button.
 - **Keyboard:** Tab reaches the spotlight's Play, How to play and About, and
-  the screenshot dots. In the collection one card is in the tab order
-  (roving `tabindex`); arrow keys move between cards with
-  `nearestInDirection()`, Home/End jump, Space opens, `/` focuses search,
-  Esc clears search or closes the dialog. The footer only hints at keys
-  that do something (`has-library`, `is-searchable` on `<body>`).
-- **Gamepad:** `gamepad-nav.ts` polls only while a pad is connected. Stick or
-  d-pad moves focus to the nearest visible control, starting at the
-  spotlight's Play (inside the dialog when it is open), with key-like
-  auto-repeat; A presses, B goes back, LB/RB cycle genres, Start plays the
-  open or featured game. The footer swaps its hints when a pad is in use
-  (`html[data-input="gamepad"]`). Inside any open dialog, focus stays in the
-  dialog and B closes it.
+  the screenshot dots. Every row (Continue, Today, each shelf) and every grid
+  (search results, a category page) is one tab stop (roving `tabindex`,
+  `focus-groups.ts`): left and right move along a row, up and down move
+  between rows to the item closest across (`stepAcrossRows()`), and from the
+  first row up to the spotlight; in a grid the arrows follow
+  `nearestInDirection()`. Home/End jump, Space opens, `/` focuses search,
+  Esc clears search, closes the dialog, or leaves a category page, the
+  timeline or the Pass for the lobby. On the timeline the arrows move
+  between originals. The footer only hints at keys that do something
+  (`has-library`, `is-searchable` on `<body>`).
+- **Gamepad:** `gamepad-nav.ts` polls only while a pad is connected. In the
+  lobby the stick or d-pad moves the way the keyboard's arrows do
+  (`lobby.move()`); elsewhere it moves focus to the nearest visible control,
+  starting at the spotlight's Play, the picked original or a page's first
+  card (inside the dialog when it is open), with key-like auto-repeat. The
+  pointer-only scroll buttons are skipped. A presses, B goes back, LB/RB
+  cycle genres, Start plays the open or featured game. The footer swaps its
+  hints when a pad is in use (`html[data-input="gamepad"]`). Inside any open
+  dialog, focus stays in the dialog and B closes it.
+- **Touch:** rows and the timeline scroll with a swipe; every tile is a
+  link.
 - **The Pass:** the badge cabinet is one tab stop; arrow keys move between
   badges and across shelves, Enter opens a close-up. In Edit profile, arrow
   keys switch parts in the tab list and move around the choices. Esc closes
@@ -369,8 +633,11 @@ redrawn when the theme changes.
 
 | State | Where it lives |
 |---|---|
-| Current view, open game, open doc, the Pass | URL hash (`routes.ts`) |
-| Sort order (A–Z / Newest) | `localStorage` via `@shared/storage`, namespace `hall`, key `sort` |
+| Current view, open game, open doc, category page, the picked original, the Pass | URL hash (`routes.ts`) |
+| Sort order in the lobby (A–Z / Newest) | `localStorage` via `@shared/storage`, namespace `hall`, key `sort` |
+| Sort order on category pages (A–Z / Newest / Most played) | namespace `hall`, key `category-sort` |
+| Plays for Continue playing, starts per game for Most played | `@shared/last-played`: `neoarcade:last-played:history` and `:counts`, written by the games, cleared from the Pass page |
+| Today's dailies | read from each game's own daily log (`neoarcade:<slug>:<log>`), never written by the Hall |
 | Light or dark | namespace `hall`, key `theme` (`auto` until the player switches); read by `index.html` before paint |
 | When the Pass page was last left ("New" badges) | namespace `hall`, key `pass-seen` |
 | Name, look, XP, badges, stats, feed | the Arcade Pass, `neoarcade:pass:profile` (ADR 0006) |
@@ -381,16 +648,30 @@ redrawn when the theme changes.
 
 | Layer | Where | What |
 |---|---|---|
-| Pure logic | `hall/src/*.test.ts` (Vitest) | catalog validation (pitch, highlights, screens included), the **real catalog** guard (every screen exists), search/sort, routes (the Pass too), spatial navigation, Markdown links/images/sanitising, theme choice, relative times, badge counts, Pass shelves |
-| Shared modules | `shared/*/*.test.ts` | rng, loop, storage, input, audio, fx, hall-link, and the Pass: curve, caps, awards, badges, stats, cosmetics, storage failures, migrations, backups, manifests, art, toasts, cabinet |
+| Pure logic | `hall/src/*.test.ts` (Vitest) | catalog validation (categories, origin, daily included), the **real catalog** guard through `scripts/check-catalog.ts` (every file exists, every daily's launch date is in its game), categories (order, contrast of both accents, emblems), search, sort, shelves and most played, routes (category and timeline too), spatial navigation across rows, daily result rules, Today's numbers, results and streaks, timeline positions, lanes and widths, Markdown, theme choice, relative times, badge counts, Pass shelves |
+| Shared modules | `shared/*/*.test.ts` | rng, loop, storage, input, audio, fx, hall-link, daily, last-played (history, counts, clearing, resume links), and the Pass: curve, caps, awards, badges, stats, cosmetics, storage failures, migrations, backups, manifests, art, toasts, cabinet |
 | Manifests | `scripts/check-pass-manifests.test.ts` | every real manifest (and the Lab's) passes the build's check |
-| Browser | `e2e/hall.spec.ts`, `e2e/pass.spec.ts` (Playwright, desktop + phone) | clean boot, empty state or spotlight, screens that load, dialog + Esc, the collection by keyboard, search, docs with diagrams, Play and back, game self-containment; the chip and the Pass page, editing and keeping a look, locked parts, back up / start over / restore, a mistyped code, blocked storage, the theme switch, the Lab missing from the build |
+| Browser | `e2e/hall.spec.ts`, `e2e/today.spec.ts`, `e2e/pass.spec.ts` (Playwright, desktop + phone) | clean boot, shelves and their cards, screens that load, dialog + Esc, the shelves by keyboard (along, down, up, one tab stop), a category page (sort, a detail over it, back), the timeline (pick, arrows, Play), search, docs with diagrams, Play and back, game self-containment, the fixture missing from the build; Today on a fresh profile and with a logged result and streak, a `?play=` link opening a game's mode once, a played mode showing up in Continue playing and leading back, Clear history; the chip and the Pass page, editing a look, backups, blocked storage, the theme switch, the Lab missing from the build |
 | Screenshots | `e2e/hall.screens.ts` | lobby, focused card, detail, docs at 1440×900, 1024×768, 390×844 (dark) |
-| Pass screenshots | `hall/dev/pass.screens.ts` (`npx playwright test -c hall/dev`) | every Pass state through the Lab's fixtures, at three sizes, light and dark; `PASS_SHOTS=all` for art direction |
+| Pass screenshots | `hall/dev/pass.screens.ts` (`npx playwright test -c hall/dev pass.screens`) | every Pass state through the Lab's fixtures, at three sizes, light and dark; `PASS_SHOTS=all` for art direction |
+| Lobby screenshots | `hall/dev/hall.screens.ts` (`npx playwright test -c hall/dev hall.screens`) | shelves, Today and Continue on a fresh profile and with history, a card in focus, a category page, a detail over it, Play history, the timeline, and the forty-game fixture (shelves, search, timeline), at three sizes in both themes; `HALL_SHOTS=all` for art direction |
 
 ## How to extend
 
-- **Add a game:** follow the checklist in ADR 0002. No Hall code changes.
+- **Add a game:** follow the checklist in ADR 0002: a category, its origin
+  facts, a `daily` block if it has one, and `reportPlay()` /
+  `takeResumeRequest()` in the game. No Hall code changes.
+- **Add a category:** only by a decision recorded in an ADR. Add it to
+  `CATEGORY_IDS` and `CATEGORIES` (both accents must pass the contrast test
+  in `categories.test.ts`; draw the emblem on the 24-unit grid), then list it
+  in ADR 0002's table.
+- **Add a machine silhouette:** add its id to `MACHINE_IDS` and its shapes to
+  `MACHINES` (48 × 40, filled, holes cut with the even-odd rule), and its id
+  to ADR 0002's table.
+- **Add or move an era:** a row in `ERAS` (`eras.ts`); the bands stack into
+  lanes by themselves.
+- **Describe a daily's results better:** edit the game's `daily.results`
+  rules in `catalog.json`; formats live in `daily-result.ts`.
 - **Add a catalog field:** extend `GameEntry` and `entryProblems()` in
   `catalog.ts`, add a test, update ADR 0002, then use it in `spotlight.ts`,
   `card.ts` or `detail.ts`.

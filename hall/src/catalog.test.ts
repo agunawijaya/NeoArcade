@@ -1,18 +1,28 @@
-import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { formatPlayers, originalDate, parseCatalog, type GameEntry } from './catalog';
+import { catalogProblems } from '../../scripts/check-catalog';
+import {
+  formatPlayers,
+  originCredit,
+  originDate,
+  originYears,
+  parseCatalog,
+  type GameEntry,
+} from './catalog';
 
 const validGame: GameEntry = {
   slug: 'skyline-showdown',
   title: 'Skyline Showdown',
   tagline: 'Bananas, wind and a city at dusk.',
-  original: {
+  origin: {
     title: 'QBasic Gorillas',
     author: 'Microsoft Corporation',
     year: 1990,
-    platform: 'MS-DOS',
+    platform: 'MS-DOS PCs',
+    language: 'QBasic',
+    machine: 'dos-pc',
   },
+  category: 'arcade',
   genres: ['Artillery', 'Duel'],
   players: { min: 1, max: 2 },
   accent: '#ff8a3d',
@@ -27,16 +37,67 @@ describe('parseCatalog', () => {
     expect(parseCatalog([validGame])).toEqual({ games: [validGame], problems: [] });
   });
 
-  it('accepts an era in place of a year nobody can confirm, but not neither', () => {
-    const undated = {
-      ...validGame,
-      original: { title: 'Trucker', author: 'Hughes Glantzberg', era: 'early 1980s' },
-    };
+  it('accepts an era in place of a year nobody can confirm, but not neither or both', () => {
+    const undatedOrigin = { ...validGame.origin, year: undefined };
+    const era = { label: 'early 1980s', from: 1981, to: 1984 };
+    const undated: GameEntry = { ...validGame, origin: { ...undatedOrigin, era } };
     expect(parseCatalog([undated]).problems).toEqual([]);
-    expect(originalDate(undated.original)).toBe('early 1980s');
-    expect(originalDate(validGame.original)).toBe('1990');
-    const neither = { ...validGame, original: { title: 'Trucker', author: 'Hughes Glantzberg' } };
-    expect(parseCatalog([neither]).problems).toHaveLength(1);
+    expect(originDate(undated.origin)).toBe('early 1980s');
+    expect(originYears(undated.origin)).toEqual({ from: 1981, to: 1984 });
+    expect(originDate(validGame.origin)).toBe('1990');
+    expect(originYears(validGame.origin)).toEqual({ from: 1990, to: 1990 });
+
+    const neither = { ...validGame, origin: undatedOrigin };
+    expect(parseCatalog([neither]).problems[0]).toMatch(/either a year or an era/);
+    const both = { ...validGame, origin: { ...validGame.origin, era } };
+    expect(parseCatalog([both]).problems[0]).toMatch(/either a year or an era/);
+    const backwards = { ...validGame, origin: { ...undatedOrigin, era: { ...era, to: 1979 } } };
+    expect(parseCatalog([backwards]).problems[0]).toMatch(/era/);
+  });
+
+  it('needs the facts of the origin, with a machine from the list', () => {
+    for (const field of ['title', 'author', 'platform', 'language'] as const) {
+      const origin = { ...validGame.origin, [field]: '' };
+      expect(parseCatalog([{ ...validGame, origin }]).problems[0]).toMatch(field);
+    }
+    const origin = { ...validGame.origin, machine: 'abacus' };
+    expect(parseCatalog([{ ...validGame, origin }]).problems[0]).toMatch(/machine/);
+  });
+
+  it('credits the publisher only when it is someone else', () => {
+    expect(originCredit(validGame.origin)).toBe('Microsoft Corporation');
+    const donkey = { ...validGame.origin, author: 'Microsoft', publisher: 'IBM' };
+    expect(originCredit(donkey)).toBe('Microsoft for IBM');
+  });
+
+  it('takes categories from the fixed list only, and a secondary that differs', () => {
+    const strategy: GameEntry = { ...validGame, secondaryCategory: 'strategy' };
+    expect(parseCatalog([strategy]).problems).toEqual([]);
+    const invented = { ...validGame, category: 'shooters' };
+    expect(parseCatalog([invented]).problems[0]).toMatch(/category/);
+    expect(parseCatalog([{ ...validGame, category: undefined }]).problems[0]).toMatch(/category/);
+    const twice = { ...validGame, secondaryCategory: 'arcade' };
+    expect(parseCatalog([twice]).problems[0]).toMatch(/secondaryCategory/);
+  });
+
+  it('checks the daily challenge it declares', () => {
+    const daily = {
+      name: 'Daily Skyline',
+      launch: '2026-09-29',
+      mode: 'daily',
+      results: [{ when: { outcome: 'hit' }, text: 'Hit in {throws}' }, { text: 'Missed' }],
+    };
+    expect(parseCatalog([{ ...validGame, daily }]).problems).toEqual([]);
+    const broken = [
+      { ...daily, launch: '29/09/2026' },
+      { ...daily, mode: 'Daily Mode' },
+      { ...daily, name: '' },
+      { ...daily, results: [{ text: '{throws|furlongs}' }] },
+      { ...daily, results: [{ when: { outcome: ['hit'] }, text: 'Hit' }] },
+    ];
+    for (const entry of broken) {
+      expect(parseCatalog([{ ...validGame, daily: entry }]).problems[0]).toMatch(/daily/);
+    }
   });
 
   it('accepts an empty catalog', () => {
@@ -110,27 +171,10 @@ describe('formatting', () => {
   });
 });
 
-// Guards the real catalog: every registered game must be complete, or the Hall shows a broken card.
+// Guards the real catalog the way the build does: every registered game must
+// be complete, or the Hall shows a broken card.
 describe('hall/catalog.json', () => {
-  const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
-  const raw: unknown = JSON.parse(readFileSync(`${repoRoot}hall/catalog.json`, 'utf8'));
-  const { games, problems } = parseCatalog(raw);
-
-  it('is valid', () => {
-    expect(problems).toEqual([]);
+  it('is valid, and every file it points at exists', () => {
+    expect(catalogProblems(fileURLToPath(new URL('../../', import.meta.url)))).toEqual([]);
   });
-
-  it.each(games.map((game) => [game.slug, game] as const))(
-    '%s has a port, a cover and its docs',
-    (slug, game) => {
-      expect(existsSync(`${repoRoot}ports/${slug}/index.html`)).toBe(true);
-      expect(existsSync(`${repoRoot}hall/covers/${game.cover}.ts`)).toBe(true);
-      expect(existsSync(`${repoRoot}ports/${slug}/${game.docs.howToPlay}`)).toBe(true);
-      expect(existsSync(`${repoRoot}ports/${slug}/${game.docs.about}`)).toBe(true);
-      expect(game.path).toBe(`${slug}/`);
-      for (const screen of game.screens ?? []) {
-        expect(existsSync(`${repoRoot}ports/${slug}/${screen.image}`), screen.image).toBe(true);
-      }
-    },
-  );
 });

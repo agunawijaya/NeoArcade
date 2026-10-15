@@ -1,6 +1,6 @@
 import type { BadgeTally } from '@shared/pass';
 import { badgeCount } from './badge-count';
-import { formatPlayers, originalDate, type GameEntry } from './catalog';
+import { formatPlayers, originCredit, originDate, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { mediaUrl } from './docs-source';
 import { h, icon } from './dom';
@@ -35,7 +35,7 @@ export function buildSpotlight(game: GameEntry): Spotlight {
   );
   launchOnClick(playLink);
 
-  const { original } = game;
+  const { origin } = game;
   const firstScreen = game.screens?.[0];
   const badges = badgeCount();
   const badgesLink = h(
@@ -92,7 +92,7 @@ export function buildSpotlight(game: GameEntry): Spotlight {
       h(
         'p',
         { class: 'spotlight__origin' },
-        `Inspired by ${original.title} · ${original.author} · ${originalDate(original)}`,
+        `Inspired by ${origin.title} · ${originCredit(origin)} · ${originDate(origin)}`,
       ),
       badgesLink,
     ),

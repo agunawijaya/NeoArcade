@@ -7,7 +7,16 @@ Every port keeps the soul of the original (rules, feel, surprises) and gets a
 brand-new look. Graphics are drawn by code (Canvas / SVG / WebGL), not by
 copying old sprites.
 
-![The Arcade Hall with Skyline Showdown in the spotlight](hall/media/lobby-desktop.jpg)
+![The Arcade Hall: Continue playing, Today in NeoArcade and the category shelves](hall/media/lobby-history-desktop-dark.jpg)
+
+The lobby keeps the newest game in the spotlight, then picks up where you
+left off: **Continue playing** takes you straight back into the mode you were
+in, **Today in NeoArcade** shows every daily challenge with your result and
+streak, and the collection sits on **shelves**, one per category, each with a
+page of its own. The **Origins** timeline places every original on the year
+and the machine it came from, beside the game it became.
+
+![The Origins timeline: each original on its machine, over the eras of home computing](hall/media/timeline-desktop-dark.jpg)
 
 Every game also feeds the **Arcade Pass**: one profile across the whole
 collection, kept in your browser and nowhere else. Games award XP for what
@@ -35,7 +44,7 @@ npm run dev        # the Hall at http://localhost:5173/hall/ (/ redirects there)
 | `npm test` | Unit tests (Vitest). |
 | `npm run test:e2e` | Builds, then runs Playwright smoke tests on desktop and phone profiles. |
 | `npm run screenshots` | Playwright screenshots of the Hall into `hall/media/`. |
-| `npx playwright test -c hall/dev` | Screenshots of every Arcade Pass state into `hall/media/pass/`, through the Pass Lab on the dev server. |
+| `npx playwright test -c hall/dev` | Screenshots on the dev server: every Arcade Pass state into `hall/media/pass/` (through the Pass Lab), and the lobby's shelves, Today, Continue playing, a category page and the timeline into `hall/media/`. |
 | `npm run docs:check` | Renders every Mermaid diagram in the docs to prove it works. |
 | `npm run lint` | ESLint and Prettier checks (`npm run format` fixes formatting). |
 
@@ -49,7 +58,9 @@ next to it.
 While `npm run dev` is running, the **Pass Lab** at
 http://localhost:5173/hall/dev/pass-lab/ is a pretend game for trying the
 Arcade Pass: award XP, unlock badges, show toasts, load ready-made profiles.
-It exists only on the dev server.
+It exists only on the dev server, as does http://localhost:5173/hall/?fixture=big,
+which fills the Hall with forty pretend games to see the shelves, Today and
+the timeline at the size the collection is heading for.
 
 ## Layout
 
@@ -58,13 +69,13 @@ It exists only on the dev server.
 | `sources/` | Original source code, one folder per game. Read-only reference. |
 | `ports/` | The web ports, one folder per game (`ports/<slug>/`). |
 | `hall/` | The Arcade Hall — the lobby where players pick a game and see their Pass ([architecture](docs/HALL-ARCHITECTURE.md)). |
-| `hall/dev/` | Development tools that are never built: the Pass Lab and its screenshot run. |
+| `hall/dev/` | Development tools that are never built: the Pass Lab, the forty-game fixture and the screenshot runs. |
 | `hall/covers/` | One animated, code-drawn cover per game. |
-| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button, the Arcade Pass, daily challenges ([index](shared/README.md)). |
+| `shared/` | Small reusable pieces: input, synthesized audio, seeded RNG, game loop, storage, post-FX, the Hall button, the Arcade Pass, daily challenges, the play history ([index](shared/README.md)). |
 | `scripts/` | Build and docs tooling. |
 | `e2e/` | Playwright smoke tests and screenshot runs. |
 | `prompts/` | Build prompts written by the architect, run by Claude Code. |
-| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md), [the Arcade Pass](docs/adr/0006-arcade-pass.md), [daily challenges](docs/adr/0009-daily-challenges.md)). |
+| `docs/adr/` | Architecture decisions ([stack](docs/adr/0001-stack.md), [catalog and covers](docs/adr/0002-hall-catalog-and-covers.md), [game screens in the Hall](docs/adr/0005-hall-shows-game-screens.md), [the Arcade Pass](docs/adr/0006-arcade-pass.md), [daily challenges](docs/adr/0009-daily-challenges.md), [shelves, Today, Continue playing and Origins](docs/adr/0018-hall-shelves-today-origins.md)). |
 | `docs/ARCADE-PASS.md` | How a game joins the Arcade Pass: manifest, XP, badges, toasts, checklist. |
 | `docs/games/` | Per-game notes: what the original does, what changed in the port. |
 | `PORTS.md` | Progress tracker for every game. |
@@ -96,14 +107,24 @@ It exists only on the dev server.
 4. Register it in `hall/catalog.json` with a short `pitch`, a few
    `highlights` and captioned `screens` (every field is described in
    [ADR 0002](docs/adr/0002-hall-catalog-and-covers.md)). The Hall shows the
-   screenshots; the cover is the fallback.
-5. Join the Arcade Pass: declare badges, cosmetics and stats in
+   screenshots; the cover is the fallback. Give it a `category` from the
+   Hall's fixed list (its shelf; a `secondaryCategory` puts it on a second
+   one) and an `origin`: the original's title, author, year (or an era such
+   as "early 1980s" with its span), platform, language and the machine the
+   Origins timeline draws, all as its ABOUT page states them. A game with a
+   daily challenge adds a `daily` block so it shows up under Today
+   ([ADR 0018](docs/adr/0018-hall-shelves-today-origins.md)).
+5. Let players come back to it: call `reportPlay()` from
+   `@shared/last-played` when a mode starts, and open the mode that
+   `takeResumeRequest()` returns at start-up. That is what the Hall's
+   Continue playing row and Today panel link to.
+6. Join the Arcade Pass: declare badges, cosmetics and stats in
    `ports/<slug>/pass.manifest.ts`, call `connectPass(manifest)` and mount
    the unlock toasts ([guide](docs/ARCADE-PASS.md)).
-6. Run `npm test`: a test checks that every catalog entry has its port,
-   cover and docs, and that every Pass manifest is valid. Then
-   `npm run build` (which checks the manifests again), `npm run test:e2e`
-   and `npm run docs:check`.
+7. Run `npm test`: it checks every catalog entry (its category, origin and
+   daily, its port, cover, docs and screenshots) and every Pass manifest.
+   Then `npm run build` (which checks both again), `npm run test:e2e` and
+   `npm run docs:check`.
 
 ## How work happens
 

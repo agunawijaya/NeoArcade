@@ -13,6 +13,7 @@ Each module's `index.ts` has a usage example at the top.
 | `fx/` | `createPostFx(canvas, options)` — WebGL bloom, grading, vignette, CRT and a four-colour palette (`CGA_PALETTE`); falls back to Canvas 2D without WebGL. |
 | `daily/` | `dailyChallenge({ game, launch })` and `createDailyLog(store)` — one seed per UTC day, numbered from launch; first-run-counts logs, streaks, a month grid, and sharing a result by share sheet or clipboard ([ADR 0009](../docs/adr/0009-daily-challenges.md)). |
 | `hall-link/` | `mountHallButton()` — the consistent "back to the Hall" button. |
+| `last-played/` | `reportPlay()` and `takeResumeRequest()` — what the player last did in each game, for the Hall's Continue playing row, and the `?play=<mode>` links that lead back into a mode ([ADR 0018](../docs/adr/0018-hall-shelves-today-origins.md)). |
 | `pass/` | `connectPass(manifest)` and `mountUnlockToasts()` — the Arcade Pass: XP, levels, badges and the unlock toast, plus the badge cabinet and the code-drawn avatars, medals and rank emblems ([guide](../docs/ARCADE-PASS.md)). |
 | `fonts/` | `tilt-neon.css` — the Hall's neon display font (SIL OFL 1.1). |
 

@@ -415,3 +415,20 @@ pad's B dismisses one before going back.
 - **Cosmetics**: five rig paints, unlocked by level 3 or by a badge; the
   settings screen checks `pass.isUnlocked` and the rig falls back to classic
   red if a chosen paint is locked. They change nothing but the colours.
+
+## Continue playing and links from the Hall
+
+The Hall's Continue playing row and its Today panel (ADR 0018) lead
+straight back into a mode. `main.ts` reports a play through
+`@shared/last-played` when a trip takes the road, and reads the Hall's
+request once at start-up:
+
+| Started by | Mode | Label | A `?play=` link opens |
+|---|---|---|---|
+| `startSingleHaul` | `single` | Single Haul · Los Angeles → New York | the dispatch office |
+| a career load leaving | `career` | Career · the contract's title | the career board |
+| a Daily Haul leaving | `daily` | Daily Haul #12 · Memphis → Atlanta | the Daily Haul screen |
+
+A request from the Hall skips the title's intro. `takeResumeRequest()`
+removes `?play=` from the address as it reads it, so a reload lands on the
+title as usual.

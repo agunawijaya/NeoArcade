@@ -1,5 +1,5 @@
 import type { BadgeTally } from '@shared/pass';
-import { formatPlayers, originalDate, type GameEntry } from './catalog';
+import { formatPlayers, originCredit, originDate, type GameEntry } from './catalog';
 import { inkOn } from './colour';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
@@ -56,10 +56,8 @@ export function createDetailPanel(
     );
     launchOnClick(playLink);
 
-    const { original } = game;
-    const origin = [original.author, originalDate(original), original.platform]
-      .filter(Boolean)
-      .join(' · ');
+    const { origin } = game;
+    const originLine = [originCredit(origin), originDate(origin), origin.language].join(' · ');
     const badges = badgesFor(game.slug);
 
     dialog.style.setProperty('--accent', game.accent);
@@ -80,7 +78,7 @@ export function createDetailPanel(
           h(
             'dl',
             { class: 'detail__facts' },
-            fact('Inspired by', h('span', {}, h('strong', {}, original.title), h('br'), origin)),
+            fact('Inspired by', h('span', {}, h('strong', {}, origin.title), h('br'), originLine)),
             fact('Players', formatPlayers(game.players)),
             fact('Added', addedDate.format(new Date(game.added))),
             badges

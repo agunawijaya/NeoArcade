@@ -4,6 +4,7 @@ import './styles/modes.css';
 
 import { createAudio } from '@shared/audio';
 import { hallUrl, mountHallButton } from '@shared/hall-link';
+import { reportPlay, takeResumeRequest, type ResumeRequest } from '@shared/last-played';
 import { createLoop } from '@shared/loop';
 import { mountUnlockToasts, openArcadePass } from '@shared/pass';
 import { randomSeed } from '@shared/rng';
@@ -51,6 +52,7 @@ import {
   TRICKS_KEY,
   type TrickSave,
 } from './tricks/progress';
+import { PUZZLES } from './tricks/packs';
 import type { Puzzle } from './tricks/puzzle';
 import { buildBadgesScreen } from './ui/badges-screen';
 import {
@@ -492,13 +494,40 @@ function enterPlay(next: Mode) {
 
 function startQuickMatch() {
   const setup = quickMatchSetup(settings, nextSeed(), outfits(), tour.rivalsBeaten);
+  const opponent = setup.players[1];
+  const against = opponent.rival?.name ?? (opponent.cpu ? 'the CPU' : 'a friend');
+  reportMode({ mode: 'quick' }, `Quick Match · against ${against}`);
   startSession(setup, { kind: 'quick' });
 }
 
 function startStage(tourStage: TourStage) {
   if (!stageUnlocked(tour, tourStage)) return;
   const setup = tourSetup(tourStage, settings, nextSeed(), outfits()[0]);
+  reportMode({ mode: 'tour', item: tourStage.id }, `World Tour · ${tourStage.city}`);
   startSession(setup, { kind: 'tour', stage: tourStage });
+}
+
+/** Tells the Hall what is being played, for its Continue playing row. */
+function reportMode(request: ResumeRequest, label: string) {
+  reportPlay({ game: 'skyline-showdown', ...request, label });
+}
+
+/** Opens the mode a link from the Hall's Continue playing or Today asks for. */
+function resumeFromHall(request: ResumeRequest | null) {
+  if (!request) return;
+  if (request.mode === 'tour') {
+    showScreen('tour');
+    const tourStage = STAGES.find((candidate) => candidate.id === request.item);
+    if (tourStage && stageUnlocked(tour, tourStage)) {
+      stageCard.open(tourStage, tour.stages[tourStage.id], settings.aimAssist);
+    }
+  } else if (request.mode === 'tricks') {
+    showScreen('tricks');
+    const puzzle = PUZZLES.find((candidate) => candidate.id === request.item);
+    if (puzzle) puzzleCard.open(puzzle, tricks.puzzles[puzzle.id], themePreference.theme);
+  } else if (request.mode === 'daily' || request.mode === 'quick') {
+    showScreen(request.mode);
+  }
 }
 
 /** Today's scored attempt (picked up where it was left), or a practice run. */
@@ -511,6 +540,10 @@ function startDailyAttempt(scored: boolean) {
     aims.map(([angle, velocity]) => ({ angle, velocity })),
   ).state;
   const setup = dailySetup(skyline, start, scored, settings, outfits());
+  reportMode(
+    { mode: 'daily' },
+    `Daily Skyline #${skyline.day.number}${scored ? '' : ' · practice'}`,
+  );
   startSession(setup, { kind: 'daily', skyline, scored });
 }
 
@@ -563,6 +596,7 @@ function startSession(setup: MatchSetup, next: Mode) {
 }
 
 function startPuzzle(puzzle: Puzzle) {
+  reportMode({ mode: 'tricks', item: puzzle.id }, `Trick Shot · ${puzzle.name}`);
   enterPlay({ kind: 'trick', puzzle });
   shots = trickPlay.start(puzzle);
 }
@@ -858,7 +892,10 @@ createLoop({
 }).start();
 
 showScreen('title');
-openChallengeLink();
+const resumeRequest = takeResumeRequest();
+// A challenge in the address comes first; a Hall link opens its mode otherwise.
+if (location.hash.startsWith('#c=')) openChallengeLink();
+else resumeFromHall(resumeRequest);
 // A challenge link pasted into a tab that already has the game open.
 window.addEventListener('hashchange', () => {
   if (!location.hash.startsWith('#c=')) return;

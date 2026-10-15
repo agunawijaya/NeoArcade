@@ -13,12 +13,12 @@ build gets copied here first.
 
 | ID | Area | Item | Origin | Priority | Size | Status | Prompt |
 |---|---|---|---|---|---|---|---|
-| HALL-01 | Hall | Categories as shelves (Arcade, Adventure, Simulation, Puzzle…) | Owner | High | M | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
+| HALL-01 | Hall | Categories as shelves (Arcade, Adventure, Simulation, Puzzle…) | Owner | High | M | Done | [008](prompts/008-hall-shelves-today-timeline.md) |
 | DD-01 | Donkey Dash | Rival Driver mode: two cars, three lanes, blocking and trapping | Owner | High | L | Done | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
 | DD-02 | Donkey Dash | Shifting road: lanes slide sideways, forcing moves (always on) | Owner | High | M | Done | [007](prompts/007-donkey-dash-rival-and-shifting-road.md) |
-| HALL-02 | Hall | "Today in NeoArcade": all daily challenges in one place | Architect | Medium | S | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
-| HALL-03 | Hall | "Continue playing" row and recently played | Architect | Medium | S | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
-| HALL-04 | Hall | Origins timeline: browse games by the year of the original | Architect | Low | M | Prompted | [008](prompts/008-hall-shelves-today-timeline.md) |
+| HALL-02 | Hall | "Today in NeoArcade": all daily challenges in one place | Architect | Medium | S | Done | [008](prompts/008-hall-shelves-today-timeline.md) |
+| HALL-03 | Hall | "Continue playing" row and recently played | Architect | Medium | S | Done | [008](prompts/008-hall-shelves-today-timeline.md) |
+| HALL-04 | Hall | Origins timeline: browse games by the year of the original | Architect | Low | M | Done | [008](prompts/008-hall-shelves-today-timeline.md) |
 | PASS-01 | Arcade Pass | Weekly cross-game challenges | Architect | Medium | M | Approved | – |
 | X-01 | All games | Shared global settings and one consistent pause menu | Architect | Medium | M | Approved | – |
 | X-02 | All games | Install as an app and play offline (PWA) | Architect | Medium | S | Approved | – |
