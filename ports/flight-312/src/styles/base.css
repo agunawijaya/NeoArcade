@@ -1,0 +1,98 @@
+:root {
+  color-scheme: dark;
+  --ink: #e9edf2;
+  --ink-soft: #b7c0cc;
+  --ink-faint: #7f8a98;
+  --paper: #0b1220;
+  --line: rgba(255, 255, 255, 0.14);
+  /* --accent is the amber of the HUD and the buttons in either theme; --accent-ink is amber text on a menu. */
+  --accent: #f2b13c;
+  --accent-ink: #f2b13c;
+  --card: #121b2b;
+  --card-tint: rgba(255, 255, 255, 0.04);
+  --field: #0e1626;
+  --sky-top: #0b1220;
+  --sky-middle: #101a2b;
+  --sky-bottom: #1a2232;
+  --good: #7be495;
+  --warn: #ffc04d;
+  --bad: #ff7a66;
+  --display:
+    'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif;
+  --body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+/* Menus follow the device, or the choice in Settings; the cockpit and the HUD keep their own colours. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --ink: #1b2430;
+    --ink-soft: #46515f;
+    --ink-faint: #6b7684;
+    --paper: #f2f0ea;
+    --line: rgba(20, 30, 45, 0.16);
+    --accent-ink: #9a5800;
+    --card: #ffffff;
+    --card-tint: rgba(20, 30, 45, 0.03);
+    --field: #ffffff;
+    --sky-top: #eef1f5;
+    --sky-middle: #e6eaf0;
+    --sky-bottom: #dde3ea;
+    --good: #1d7a3e;
+    --warn: #8a5a00;
+    --bad: #b3261e;
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --ink: #1b2430;
+  --ink-soft: #46515f;
+  --ink-faint: #6b7684;
+  --paper: #f2f0ea;
+  --line: rgba(20, 30, 45, 0.16);
+  --accent-ink: #9a5800;
+  --card: #ffffff;
+  --card-tint: rgba(20, 30, 45, 0.03);
+  --field: #ffffff;
+  --sky-top: #eef1f5;
+  --sky-middle: #e6eaf0;
+  --sky-bottom: #dde3ea;
+  --good: #1d7a3e;
+  --warn: #8a5a00;
+  --bad: #b3261e;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  overflow: hidden;
+}
+
+.game {
+  position: fixed;
+  inset: 0;
+  outline: none;
+}
+
+.world-lab {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}

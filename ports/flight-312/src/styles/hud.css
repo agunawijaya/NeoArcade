@@ -1,0 +1,310 @@
+/* The flight: the world and cockpit canvases, and the HUD over them. */
+
+.world,
+.cockpit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cockpit {
+  touch-action: none;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--body);
+  color: #e9edf2;
+}
+
+.hud button,
+.hud input {
+  pointer-events: auto;
+}
+
+.hud-subtitles {
+  position: absolute;
+  left: 50%;
+  top: 7%;
+  transform: translateX(-50%);
+  width: min(760px, 70vw);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-line {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(6, 10, 16, 0.72);
+  color: #f2f2ec;
+  font-size: clamp(13px, 1.4vw, 16px);
+  line-height: 1.35;
+}
+
+.hud-line strong {
+  color: var(--accent);
+}
+
+.hud-line-firstOfficer strong,
+.hud-line-captain strong {
+  color: #8fd3ff;
+}
+
+.hud-line.old {
+  opacity: 0.45;
+}
+
+.hud-choices {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(600px, 70vw);
+}
+
+.hud-choices-title {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 1px 2px #000;
+}
+
+.hud-choice {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(242, 177, 60, 0.45);
+  background: rgba(10, 14, 22, 0.8);
+  color: #f2f2ec;
+  font: 500 14px var(--body);
+  cursor: pointer;
+}
+
+.hud-choice kbd {
+  font: 700 12px var(--mono);
+  color: #1b1406;
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.hud-choice:hover,
+.hud-choice:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.hud-choices-time {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--left, 1));
+}
+
+.hud-hint,
+.hud-notice {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 8px;
+  max-width: min(640px, 86vw);
+  color: #f2f2ec;
+  opacity: 0;
+  font-size: 15px;
+}
+
+.hud-hint-go {
+  margin-left: 8px;
+  font: 700 12px var(--body);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--accent);
+  color: #1b1406;
+  cursor: pointer;
+}
+
+.hud-hint {
+  top: 38vh;
+  background: rgba(19, 60, 96, 0.9);
+  border: 1px solid #5fb2ff;
+}
+
+.hud-notice {
+  top: 32vh;
+  background: rgba(70, 40, 6, 0.9);
+  border: 1px solid var(--accent);
+}
+
+.hud-hint.shown,
+.hud-notice.shown {
+  opacity: 1;
+}
+
+.hud-status {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: rgba(6, 10, 16, 0.6);
+  color: #d9dde3;
+  font: 600 13px var(--mono);
+  white-space: nowrap;
+}
+
+.hud-views {
+  position: absolute;
+  left: 8px;
+  top: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-view,
+.hud-tool {
+  font: 600 12px var(--body);
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(6, 10, 16, 0.55);
+  color: #d9dde3;
+  cursor: pointer;
+}
+
+.hud-view.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hud-tools {
+  position: absolute;
+  right: 8px;
+  top: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.touch-controls {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0;
+}
+
+.touch-thrust-wrap {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #d9dde3;
+  font: 700 11px var(--body);
+  pointer-events: auto;
+}
+
+.touch-thrust {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  height: 34vh;
+  width: 36px;
+}
+
+.touch-buttons {
+  position: absolute;
+  left: 50%;
+  bottom: 56vh;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.touch-button {
+  font: 700 11px var(--body);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(6, 10, 16, 0.6);
+  color: #f2f2ec;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud-hint,
+  .hud-notice,
+  .hud-line {
+    transition: opacity 300ms ease;
+  }
+}
+
+/* The full-screen panels carry their own levers and switches. */
+.hud[data-view='pedestal'] .touch-buttons,
+.hud[data-view='overhead'] .touch-buttons,
+.hud[data-view='engineer'] .touch-buttons {
+  display: none;
+}
+
+/*
+ * A phone on its side: the view list folds into one button that steps to
+ * the next view, the touch buttons ride along the top of the windscreen and
+ * the radio lines sit just under them.
+ */
+@media (max-height: 520px) {
+  .hud-views .hud-view:not(.active) {
+    display: none;
+  }
+
+  .hud-views .hud-view.active::after {
+    content: ' ▸';
+  }
+
+  .touch-controls {
+    inset: 0;
+    height: auto;
+  }
+
+  .touch-buttons {
+    top: 40px;
+    bottom: auto;
+    gap: 4px;
+  }
+
+  .touch-button {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  .hud-subtitles {
+    top: 78px;
+  }
+
+  .hud-choices {
+    top: 30vh;
+  }
+
+  .hud-hint {
+    top: 54vh;
+  }
+
+  .hud-notice {
+    top: 46vh;
+  }
+}

@@ -27,7 +27,7 @@ build gets copied here first.
 | QA-03 | Quality | Performance budget per game, checked in CI | Architect | Medium | S | Approved | – |
 | OPS-01 | Repo | GitHub remote, CI (lint, tests, build, Playwright) on every push | Architect | High | S | Approved | – |
 | OPS-02 | Repo | Hosting, public or private, licence choice | Architect | High | S | Approved | – |
-| FL-01 | Flight 312 | New port of JETSET: flight model (4 realism levels), 3D world, classic jumbo cockpit | Owner | High | L+ | Prompted | [009](prompts/009-flight-312-core.md) |
+| FL-01 | Flight 312 | New port of JETSET: flight model (4 realism levels), 3D world, classic jumbo cockpit | Owner | High | L+ | Done | [009](prompts/009-flight-312-core.md) |
 | FL-02 | Flight 312 | Glass cockpit, flight school, Daily Approach, landing replays | Owner | High | L | Prompted | [010](prompts/010-flight-312-glass-and-academy.md) |
 | FL-03 | Flight 312 | ATC voice option B: pre-rendered phrase clips through a full Web Audio radio filter | Owner | Low | M | Idea | – |
 
