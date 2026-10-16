@@ -105,6 +105,37 @@ const rocks: EmblemDrawer = (pen) => {
   pen.path('M44 14h8M48 10v8', { stroke: 'accent', width: 3 });
 };
 
+const lightBar: EmblemDrawer = (pen) => {
+  pen.path('M10 46q2-14 14-16h16q12 2 14 16z');
+  pen.rect(18, 22, 28, 8, { radius: 3 });
+  pen.circle(24, 26, 4, { fill: 'accent' }).circle(40, 26, 4, { fill: 'shine' });
+  pen.path('M14 16l4 4M50 16l-4 4M32 10v6', { stroke: 'accent', width: 3 });
+};
+
+const clipboard: EmblemDrawer = (pen) => {
+  pen.rect(14, 12, 36, 44, { radius: 4 });
+  pen.rect(24, 8, 16, 8, { radius: 2, fill: 'accent' });
+  pen.path('M22 36l7 7 14-16', { stroke: 'face', width: 4 });
+};
+
+const courthouse: EmblemDrawer = (pen) => {
+  pen.polygon([
+    [8, 24],
+    [32, 10],
+    [56, 24],
+  ]);
+  pen.rect(10, 48, 44, 6);
+  pen.path('M16 28v18M27 28v18M37 28v18M48 28v18', { stroke: 'ink', width: 5 });
+  pen.circle(32, 19, 3, { fill: 'accent' });
+};
+
+const caughtDetector: EmblemDrawer = (pen) => {
+  pen.rect(10, 22, 34, 20, { radius: 4 });
+  pen.rect(14, 26, 10, 6, { fill: 'accent' });
+  pen.path('M44 18l12 12M56 18L44 30', { stroke: 'accent', width: 4 });
+  pen.path('M16 48h22', { stroke: 'ink', width: 4 });
+};
+
 export default definePassManifest({
   game: 'long-haul',
   badges: [
@@ -241,6 +272,31 @@ export default definePassManifest({
       emblem: glyphs.clock,
     },
     {
+      id: 'pulled-over',
+      name: 'Pulled Over',
+      description:
+        'Lights in the mirror, a campaign hat at the window. Licence and logbook, please.',
+      hint: 'Get pulled over by the highway patrol.',
+      tier: 'bronze',
+      emblem: lightBar,
+    },
+    {
+      id: 'clean-record',
+      name: 'Clean Record',
+      description: 'A whole load delivered and not one trooper had a word to say.',
+      hint: 'Deliver a load without being pulled over.',
+      tier: 'bronze',
+      emblem: clipboard,
+    },
+    {
+      id: 'frequent-visitor',
+      name: 'Frequent Visitor',
+      description: 'Three hearings in one career. The bailiff saves you a seat.',
+      hint: 'Sit through three hearings in a career.',
+      tier: 'silver',
+      emblem: courthouse,
+    },
+    {
       id: 'clean-run',
       name: 'Clean Run',
       description: 'Coast to coast without a ticket or a blowout. Textbook.',
@@ -317,6 +373,13 @@ export default definePassManifest({
       description: 'You are bankrupt !!! Your rig has been repossessed. It happens to the best.',
       tier: 'secret',
       emblem: glyphs.key,
+    },
+    {
+      id: 'detector-detected',
+      name: 'Detector Detected',
+      description: 'The trooper found the box on the dash, and the box went on the ticket.',
+      tier: 'secret',
+      emblem: caughtDetector,
     },
     {
       id: 'sound-asleep',

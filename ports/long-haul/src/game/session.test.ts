@@ -2,7 +2,7 @@ import { createStore } from '@shared/storage';
 import { describe, expect, it } from 'vitest';
 import { testTrip } from '../engine/test-trips';
 import type { Landmark } from '../render/landmarks';
-import { RIG_PAINTS } from '../render/rig';
+import { RIG_PAINTS } from '../render/vehicles/rig/model';
 import { defaultSettings } from '../settings';
 import { CbRadio } from './cb-radio';
 import { TripSession } from './session';
@@ -19,6 +19,7 @@ function drivingOnPastStops(onAsk: (session: TripSession) => void): TripSession 
     paint: RIG_PAINTS.classic,
     cb: new CbRadio(createStore('long-haul-test', null)),
     reducedMotion: () => true,
+    stops: { mode: () => 'card', seen: () => false, markSeen: () => {} },
     hooks: {
       card: (_copy, _beat, done) => done(),
       quick: () => {},

@@ -5,7 +5,15 @@ import type { ConditionId } from '../engine/conditions';
 import { css, lit, litRgb, mix, rgb, shade, type Lighting } from './colour';
 import { paintFarLayer, type FarLayer } from './horizon';
 import { LANDSCAPES } from './landscapes';
-import { paintRigSide, type RigPaint } from './rig';
+import { environmentFor, sunAcross, type Environment } from './vehicles/light';
+import {
+  RIG_LIGHTS_OFF,
+  rigModel,
+  type RigLights,
+  type RigModel,
+  type RigPaint,
+} from './vehicles/rig/model';
+import { RigSideView } from './vehicles/rig/side';
 import { lightingFor, paintSky } from './sky';
 import { daylight } from './sun';
 import { paintPrecipitation } from './weather-fx';
@@ -30,8 +38,8 @@ export interface DinerFrame {
   sunArc: number;
   condition: ConditionId;
   snow: boolean;
-  paint: RigPaint;
-  cargo: CargoId;
+  /** Your own rig, at the pump. */
+  rig: RigModel;
 }
 
 const PARKED: readonly RigPaint[] = [
@@ -79,7 +87,7 @@ export function paintDiner(
 
   paintLot(ctx, W, light, frame.snow, landscape.groundFar);
   paintLightPoles(ctx, [cx - 360, cx + 330], light, night);
-  paintParkedRigs(ctx, cx, W, light, night, frame);
+  paintParkedRigs(ctx, cx, W, night, frame);
   paintDinerBuilding(ctx, cx - 20, light, night, frame);
   paintPoleSign(ctx, cx + 300, light, night, frame);
   paintFuelIsland(ctx, cx - 250, light, night, frame);
@@ -166,54 +174,100 @@ function paintLightPoles(
   }
 }
 
+/** Rigs drawn on the lot, each kept painted between frames. */
+const lotRigs = Array.from({ length: 5 }, () => new RigSideView());
+const PARKED_CARGO: readonly CargoId[] = ['freight', 'mail', 'oranges'];
+
+function parkedLights(night: number, aboard: boolean): RigLights {
+  return {
+    ...RIG_LIGHTS_OFF,
+    markers: night > 0.35,
+    driver: aboard,
+    bunk: !aboard && night > 0.35,
+  };
+}
+
+function lotEnvironment(frame: DinerFrame): Environment {
+  return environmentFor({
+    sunAltitude: frame.sunAltitude,
+    condition: frame.condition,
+    sun: sunAcross(frame.sunArc, frame.sunAltitude, [-0.17, 0, -0.98]),
+    ground: frame.snow ? '#c9ced4' : '#5a5d61',
+    horizon: LANDSCAPES[frame.region].groundFar,
+  });
+}
+
+function paintParked(
+  ctx: CanvasRenderingContext2D,
+  view: RigSideView,
+  model: RigModel,
+  left: number,
+  road: number,
+  length: number,
+  lights: RigLights,
+  frame: DinerFrame,
+) {
+  view.draw(ctx, {
+    model,
+    lights,
+    env: lotEnvironment(frame),
+    left,
+    road,
+    length,
+    turn: 0,
+    steer: 0,
+    tractorLift: 0,
+    trailerLift: 0,
+    throttle: 0,
+    climb: 0,
+    time: frame.time,
+    reducedMotion: true,
+  });
+}
+
 function paintParkedRigs(
   ctx: CanvasRenderingContext2D,
   cx: number,
   W: number,
-  light: Lighting,
   night: number,
   frame: DinerFrame,
 ) {
-  const cargoes: readonly CargoId[] = ['freight', 'mail', 'oranges'];
   // A row along the back of the lot, beyond the diner's right end.
   for (let index = 0; index < 3; index++) {
     const x = cx + 210 + index * 150;
     if (x > W + 20) break;
-    paintRigSide(ctx, x, 205, 140, {
-      paint: PARKED[index] ?? frame.paint,
-      cargo: cargoes[index] ?? 'freight',
-      light,
-      wheel: index,
-      bob: 0,
-      night,
-      smoke: 0,
-      time: frame.time,
-      braking: false,
-      police: false,
-      reducedMotion: true,
-      parked: true,
+    const model = rigModel({
+      paint: PARKED[index] ?? frame.rig.paint,
+      cargo: PARKED_CARGO[index] ?? 'freight',
+      dirt: 0.3,
     });
+    paintParked(
+      ctx,
+      lotRigs[index] as RigSideView,
+      model,
+      x,
+      205,
+      140,
+      parkedLights(night, false),
+      frame,
+    );
   }
   // And one on the far left, waiting its turn.
   if (cx - 470 > -140) {
-    paintRigSide(ctx, cx - 600, 205, 140, {
-      paint: PARKED[2] ?? frame.paint,
-      cargo: 'freight',
-      light,
-      wheel: 2,
-      bob: 0,
-      night,
-      smoke: 0,
-      time: frame.time,
-      braking: false,
-      police: false,
-      reducedMotion: true,
-      parked: true,
-    });
+    const model = rigModel({ paint: PARKED[2] ?? frame.rig.paint, cargo: 'freight', dirt: 0.2 });
+    paintParked(
+      ctx,
+      lotRigs[3] as RigSideView,
+      model,
+      cx - 600,
+      205,
+      140,
+      parkedLights(night, false),
+      frame,
+    );
   }
 }
 
-/** A railcar diner: a barrel roof, stainless fluting, an enamel band, a vestibule with the door. */
 function paintDinerBuilding(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -452,20 +506,16 @@ function paintFuelIsland(
   ctx.fillRect(left + 16, 112, 6, 100);
   ctx.fillRect(right - 22, 112, 6, 100);
 
-  paintRigSide(ctx, centre - 150, 222, 250, {
-    paint: frame.paint,
-    cargo: frame.cargo,
-    light,
-    wheel: 0,
-    bob: 0,
-    night,
-    smoke: 0.15,
-    time: frame.time,
-    braking: false,
-    police: false,
-    reducedMotion: frame.reducedMotion,
-    parked: true,
-  });
+  paintParked(
+    ctx,
+    lotRigs[4] as RigSideView,
+    frame.rig,
+    centre - 150,
+    222,
+    250,
+    parkedLights(night, true),
+    frame,
+  );
 
   // The canopy, lit underneath at night.
   ctx.fillStyle = lit('#e9e5dc', light, 0.08);

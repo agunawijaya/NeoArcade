@@ -83,6 +83,39 @@ describe('the Arcade Pass report', () => {
     );
   });
 
+  it('knows a stop by the highway patrol, a clean record and a fine for the detector', () => {
+    const clean = deliveredTrip(100);
+    const cleanFound = findings({ mode: 'career', trip: clean, dishes: false, bankrupt: false });
+    const ticketed = clean.events.some((event) => event.type === 'pulled-over');
+    expect(cleanFound.unlock.includes('clean-record')).toBe(!ticketed);
+    expect(cleanFound.unlock.includes('pulled-over')).toBe(ticketed);
+
+    const stopped = testTrip();
+    stopped.events.push({
+      type: 'pulled-over',
+      offence: 1,
+      waitHours: 1,
+      baseCents: 1500,
+      perMphCents: 400,
+      overBy: 14,
+      cents: 7100,
+      byRadar: true,
+      detectorCents: 7500,
+      hr: 9,
+      mile: 400,
+    });
+    const found = findings({ mode: 'single', trip: stopped, dishes: false, bankrupt: false });
+    expect(found.unlock).toEqual(expect.arrayContaining(['pulled-over', 'detector-detected']));
+    expect(found.unlock).not.toContain('clean-record');
+
+    const jailed = testTrip();
+    jailed.status = 'jailed';
+    jailed.events.push({ type: 'jailed', offence: 4, waitHours: 4, hr: 40, mile: 1500 });
+    expect(
+      findings({ mode: 'single', trip: jailed, dishes: false, bankrupt: false }).unlock,
+    ).toContain('pulled-over');
+  });
+
   it('reports to a Pass: stats, badges and XP', () => {
     const arcade = createArcadePass({
       backend: null,

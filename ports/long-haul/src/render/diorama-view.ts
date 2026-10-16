@@ -1,14 +1,22 @@
 import { createRng } from '@shared/rng';
 import type { RegionId } from '../data/regions';
-import { css, lit, litRgb, mix, rgb } from './colour';
+import { css, lit, litRgb, mix, rgb, type Lighting } from './colour';
 import { paintFarLayer, type FarLayer } from './horizon';
 import { paintLandmark, type Landmark } from './landmarks';
 import { LANDSCAPES, type Landscape, type NearKind } from './landscapes';
-import { paintRigSide } from './rig';
 import { HEIGHTS, PAINTERS, type SceneEnv, type SceneryKind } from './scenery';
-import type { DriveScene } from './scene';
+import { rigLightsFor, type DriveScene, type PatrolScene } from './scene';
 import { lightingFor, paintSky } from './sky';
 import { daylight } from './sun';
+import type { Vec3 } from './vehicles/geometry';
+import { environmentFor, sunAcross, type Environment } from './vehicles/light';
+import { drawOfficerSide } from './vehicles/officer';
+import { RIG } from './vehicles/rig/model';
+import { RigSideView } from './vehicles/rig/side';
+import { BEACONS } from './vehicles/sedan/body';
+import { barFlash, washWith } from './vehicles/sedan/lightbar';
+import { PATROL, SEDAN } from './vehicles/sedan/model';
+import { SedanSideView } from './vehicles/sedan/sedan';
 import { paintFatigue, paintPrecipitation } from './weather-fx';
 
 /**
@@ -40,16 +48,39 @@ const BANDS = [
 
 const FIELD_KINDS: ReadonlySet<SceneryKind> = new Set(['corn', 'wheat', 'cotton']);
 
+/** Landscapes where the road climbs: the exhaust runs darker there. */
+const CLIMBS: ReadonlySet<RegionId> = new Set([
+  'rockies',
+  'sierra',
+  'appalachian',
+  'ponderosa',
+  'northwest',
+  'turnpike',
+]);
+/**
+ * The sun's lean across the road. Painted in the sky it stands in front of
+ * the camera, but a low sun that only ever lit the far side would leave the
+ * rig in its own shadow all golden hour; like any illustrator, the diorama
+ * lets it reach round to the side we see.
+ */
+const SUNWARD: readonly [number, number, number] = [-0.1, 0, 0.75];
+
 export class DioramaView {
   private readonly tiles = BANDS.map(() => new Map<number, Tile>());
+  private readonly rig = new RigSideView();
+  private readonly cruiser = new SedanSideView();
   private farLayers = new Map<RegionId, FarLayer[]>();
 
   draw(ctx: CanvasRenderingContext2D, width: number, height: number, scene: DriveScene) {
     const light = lightingFor(scene.sunAltitude, scene.condition);
     const night = 1 - daylight(scene.sunAltitude);
-    const horizon = Math.round(height * 0.5);
-    const roadTop = Math.round(height * 0.745);
-    const roadBottom = Math.round(height * 0.9);
+    // On a short screen the dashboard sits along the bottom, so the road rides higher.
+    const compact = height < 520;
+    const horizon = Math.round(height * (compact ? 0.44 : 0.5));
+    const roadTop = Math.round(height * (compact ? 0.64 : 0.745));
+    const roadBottom = Math.round(height * (compact ? 0.79 : 0.9));
+    // A paved shoulder beyond the edge line, where a rig pulls over.
+    const shoulder = Math.round(roadBottom + (roadBottom - roadTop) * 0.34);
     const unit = height / 100;
     const landscape = LANDSCAPES[scene.region];
     const before = LANDSCAPES[scene.previousRegion];
@@ -115,7 +146,7 @@ export class DioramaView {
 
     // Clear of the dashboard readings on the left and the throttle on the right.
     const rigLength = Math.min(width * 0.42, height * 0.8);
-    const rigX = width * 0.21;
+    const rigX = width * (compact ? 0.21 : 0.235);
     const cabX = rigX + rigLength * 0.97;
     this.paintLandmarks(
       ctx,
@@ -129,23 +160,16 @@ export class DioramaView {
       night,
       'behind',
     );
-    this.paintRoad(ctx, width, roadTop, roadBottom, scene, landscape, light);
+    this.paintRoad(ctx, width, roadTop, roadBottom, shoulder, scene, landscape, light);
     this.paintNear(ctx, width, roadTop, roadBottom, scene, landscape, unit, env(0));
 
-    const bob = scene.stopped || scene.reducedMotion ? 0 : Math.sin(scene.time * 9) * unit * 0.12;
-    paintRigSide(ctx, rigX, roadTop + (roadBottom - roadTop) * 0.62, rigLength, {
-      paint: scene.paint,
-      cargo: scene.cargo,
-      light,
-      wheel: scene.scroll / (rigLength * 0.034),
-      bob,
+    this.paintTraffic(
+      ctx,
+      scene,
+      { roadTop, roadBottom, shoulder, rigX, rigLength },
+      landscape,
       night,
-      smoke: scene.stopped ? 0.2 : 0.6,
-      time: scene.time,
-      braking: scene.braking,
-      police: scene.police,
-      reducedMotion: scene.reducedMotion,
-    });
+    );
     this.paintLandmarks(
       ctx,
       scene.landmarks,
@@ -158,7 +182,7 @@ export class DioramaView {
       night,
       'front',
     );
-    this.paintForeground(ctx, width, height, roadBottom, scene, landscape, light, unit);
+    this.paintForeground(ctx, width, height, shoulder, scene, landscape, light, unit);
 
     paintPrecipitation(ctx, {
       width,
@@ -170,6 +194,205 @@ export class DioramaView {
       reducedMotion: scene.reducedMotion,
     });
     paintFatigue(ctx, width, height, scene.fatigue, scene.time, scene.reducedMotion);
+  }
+
+  /**
+   * The rig and, when there is one, the patrol car: each in its lane, the
+   * one further across the road drawn first and a little smaller.
+   */
+  private paintTraffic(
+    ctx: CanvasRenderingContext2D,
+    scene: DriveScene,
+    road: {
+      roadTop: number;
+      roadBottom: number;
+      shoulder: number;
+      rigX: number;
+      rigLength: number;
+    },
+    landscape: Landscape,
+    night: number,
+  ) {
+    const wet = scene.condition === 'wet' || scene.condition === 'rain';
+    const env = environmentFor({
+      sunAltitude: scene.sunAltitude,
+      condition: scene.condition,
+      sun: sunAcross(scene.sunArc, scene.sunAltitude, SUNWARD),
+      ground: wet ? '#2e3136' : scene.snow ? '#8d939a' : '#4a4d52',
+      horizon: landscape.groundFar,
+    });
+    const band = road.roadBottom - road.roadTop;
+    const ourLane = road.roadTop + band * 0.62;
+    // Across the road: the passing lane (1), ours (0), the shoulder (−1).
+    const laneY = (lane: number) =>
+      lane >= 0
+        ? ourLane - band * 0.42 * lane
+        : ourLane + (road.roadBottom + (road.shoulder - road.roadBottom) * 0.6 - ourLane) * -lane;
+    const depthScale = (y: number) => 1 + ((y - ourLane) / band) * 0.1;
+    const patrol = scene.patrol;
+    const rigY = laneY(patrol?.rigLane ?? 0);
+    // Pulling onto the shoulder slides the rig's painting down rather than repainting it.
+    const drawRig = () => {
+      ctx.save();
+      ctx.translate(0, rigY - ourLane);
+      this.paintRig(ctx, scene, road.rigX, ourLane, road.rigLength, env, night);
+      ctx.restore();
+    };
+    if (!patrol) {
+      drawRig();
+      return;
+    }
+    const carY = laneY(patrol.lane);
+    const rigCamera = this.rig.camera({ left: road.rigX, road: rigY, length: road.rigLength });
+    const bumper = rigCamera.project([RIG.bumper, 0, 0]).x;
+    const scale = rigCamera.pixelsAt([0, 0, 0]) * (depthScale(carY) / depthScale(rigY));
+    const left = bumper + (patrol.gap - SEDAN.length) * scale;
+    const drawCar = () => {
+      this.paintCruiser(ctx, scene, patrol, left, carY, scale, env);
+      if (patrol.lights.spot && patrol.gap > 0)
+        this.paintSpotlight(
+          ctx,
+          left + 11.4 * scale,
+          carY - 3.6 * scale,
+          rigCamera.project([56, 7.5, 4]),
+          env.night,
+        );
+    };
+    if (patrol.lane > patrol.rigLane) {
+      drawCar();
+      drawRig();
+    } else {
+      drawRig();
+      drawCar();
+    }
+    const officer = patrol.officer;
+    if (!officer) return;
+    // He walks the shoulder on the near side, so he is drawn over both.
+    const feet: Vec3 = [RIG.bumper + officer.along, 0, RIG.trailer.halfWidth + officer.out];
+    const at = rigCamera.project(feet);
+    drawOfficerSide(ctx, at.x, at.y, rigCamera.pixelsAt(feet), officer, {
+      light: litByTheCruiser(env.lighting, env.night),
+      night: env.night,
+      time: scene.reducedMotion ? 0 : scene.time,
+    });
+  }
+
+  private paintCruiser(
+    ctx: CanvasRenderingContext2D,
+    scene: DriveScene,
+    patrol: PatrolScene,
+    left: number,
+    road: number,
+    scale: number,
+    env: Environment,
+  ) {
+    this.cruiser.draw(ctx, {
+      model: PATROL,
+      state: {
+        lights: patrol.lights,
+        turn: patrol.rolled / SEDAN.tyreRadius,
+        steer: 0,
+        sway: 0,
+        door: patrol.door,
+      },
+      env,
+      time: scene.time,
+      reducedMotion: scene.reducedMotion,
+      left,
+      road,
+      scale,
+      lift: 0,
+    });
+    if (env.night > 0.3) {
+      // The rig's headlights on the cruiser's back.
+      const glare = ctx.createRadialGradient(
+        left,
+        road - scale * 2,
+        0,
+        left,
+        road - scale * 2,
+        scale * 14,
+      );
+      glare.addColorStop(0, `rgba(255, 236, 200, ${0.3 * env.night})`);
+      glare.addColorStop(1, 'rgba(255, 236, 200, 0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = glare;
+      ctx.fillRect(left - scale * 14, road - scale * 16, scale * 28, scale * 28);
+      ctx.restore();
+    }
+    if (!patrol.lights.bar) return;
+    // The beacons light the road round the car, the rig beside it, and after dark the whole scene.
+    const flash = barFlash(scene.time, scene.reducedMotion);
+    const x = left + BEACONS.blue[0] * scale;
+    washWith(ctx, x, road, scale * 60, flash, 0.25 + env.night * 0.9, 0.12);
+    washWith(ctx, x, road - BEACONS.blue[1] * scale, scale * 42, flash, 0.12 + env.night * 0.6);
+    if (env.night > 0.3)
+      washWith(ctx, x - scale * 30, road - scale * 8, scale * 110, flash, env.night * 0.35, 0.7);
+  }
+
+  /** The officer's spotlight turned back on the rig's door: a pale beam and a bright patch. */
+  private paintSpotlight(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    target: { x: number; y: number },
+    night: number,
+  ) {
+    if (night < 0.3) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const beam = ctx.createLinearGradient(x, y, target.x, target.y);
+    beam.addColorStop(0, `rgba(255, 248, 225, ${0.16 * night})`);
+    beam.addColorStop(1, `rgba(255, 248, 225, ${0.02 * night})`);
+    ctx.fillStyle = beam;
+    const spread = Math.hypot(target.x - x, target.y - y) * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(target.x, target.y - spread);
+    ctx.lineTo(target.x, target.y + spread);
+    ctx.closePath();
+    ctx.fill();
+    const patch = ctx.createRadialGradient(target.x, target.y, 0, target.x, target.y, spread * 1.4);
+    patch.addColorStop(0, `rgba(255, 250, 235, ${0.38 * night})`);
+    patch.addColorStop(1, 'rgba(255, 250, 235, 0)');
+    ctx.fillStyle = patch;
+    ctx.fillRect(target.x - spread * 1.4, target.y - spread * 1.4, spread * 2.8, spread * 2.8);
+    ctx.restore();
+  }
+
+  private paintRig(
+    ctx: CanvasRenderingContext2D,
+    scene: DriveScene,
+    left: number,
+    road: number,
+    length: number,
+    env: Environment,
+    night: number,
+  ) {
+    const scale = this.rig.camera({ left, road, length }).pixelsAt([0, 0, 0]);
+    const rough = scene.condition === 'blizzard' || scene.condition === 'light-snow' ? 1.6 : 1;
+    // The tractor rides its springs; the trailer follows a beat later over the same bumps.
+    const ride = (t: number) => (Math.sin(t * 9) * 0.07 + Math.sin(t * 3.3) * 0.03) * rough;
+    const moving = !scene.stopped && !scene.reducedMotion;
+    // The trailer rocking on its springs as the brakes take hold.
+    const settle = scene.reducedMotion ? 0 : (scene.patrol?.settle ?? 0);
+    this.rig.draw(ctx, {
+      model: scene.rig,
+      lights: rigLightsFor(scene, night),
+      env,
+      left,
+      road,
+      length,
+      turn: scene.scroll / (RIG.tyreRadius * scale),
+      steer: 0,
+      tractorLift: (moving ? ride(scene.time) : 0) + settle * 0.4,
+      trailerLift: (moving ? ride(scene.time - 0.12) * 0.9 : 0) + settle,
+      throttle: scene.stopped ? 0 : Math.min(1, scene.speed / 70),
+      climb: CLIMBS.has(scene.region) ? 0.7 : 0,
+      time: scene.time,
+      reducedMotion: scene.reducedMotion,
+    });
   }
 
   private farFor(region: RegionId, landscape: Landscape): FarLayer[] {
@@ -316,6 +539,7 @@ export class DioramaView {
     width: number,
     roadTop: number,
     roadBottom: number,
+    shoulder: number,
     scene: DriveScene,
     landscape: Landscape,
     light: ReturnType<typeof lightingFor>,
@@ -324,6 +548,17 @@ export class DioramaView {
     const snowRoad = scene.condition === 'blizzard' || scene.condition === 'light-snow';
     ctx.fillStyle = lit(landscape.shoulder, light, 0.05);
     ctx.fillRect(0, roadTop - 4, width, 5);
+    // The near shoulder: paler asphalt, with a rumble strip beside the edge line.
+    const verge = ctx.createLinearGradient(0, roadBottom, 0, shoulder);
+    const pale = rgb(wet ? '#3c3f44' : snowRoad ? '#a9aeb4' : '#5f6267');
+    verge.addColorStop(0, css(litRgb(mix(pale, rgb(landscape.shoulder), 0.3), light)));
+    verge.addColorStop(1, css(litRgb(mix(pale, rgb(landscape.shoulder), 0.6), light)));
+    ctx.fillStyle = verge;
+    ctx.fillRect(0, roadBottom, width, shoulder - roadBottom);
+    ctx.fillStyle = lit('#2e3034', light);
+    const rumble = Math.max(2, (shoulder - roadBottom) * 0.1);
+    for (let x = -(scene.scroll % 9); x < width; x += 9)
+      ctx.fillRect(x, roadBottom + rumble, 4, rumble);
     const asphalt = ctx.createLinearGradient(0, roadTop, 0, roadBottom);
     const base = wet ? '#2e3136' : snowRoad ? '#8d939a' : '#4a4d52';
     asphalt.addColorStop(0, lit(base, light));
@@ -538,4 +773,9 @@ export class DioramaView {
       ctx.fill();
     }
   }
+}
+
+/** After dark the trooper stands in the cruiser's headlights and spotlight, never lost in the black. */
+function litByTheCruiser(light: Lighting, night: number): Lighting {
+  return { ...light, day: Math.max(light.day, 0.3 + night * 0.15) };
 }

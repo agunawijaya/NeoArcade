@@ -12,7 +12,7 @@ the original green-screen prompts for anyone who misses them.
 
 *Inspired by Trucker by Hughes Glantzberg.*
 
-![The rig crossing the red mesas, a truck stop sign ahead](media/side-view.jpg)
+![The rig among the red mesas, a truck stop sign ahead](media/side-view.jpg)
 
 ## Run it
 
@@ -35,7 +35,9 @@ npx playwright test -c ports/long-haul --project=screens
 
 The playtest drives whole trips through the real page and checks that every
 logbook adds up; `screens` renders every screen at four sizes in both themes
-for art direction.
+for art direction, and a police stop step by step (`police.screens.ts`). With
+the dev server running, `dev/vehicles/` is the vehicle lab and `dev/art/`
+the painters' bench.
 
 Balance: `npx tsx ports/long-haul/scripts/balance.ts` (thousands of Single
 Hauls per driver, route and cargo) and `scripts/career-sim.ts` (whole

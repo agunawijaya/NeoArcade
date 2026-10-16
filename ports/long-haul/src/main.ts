@@ -1,6 +1,7 @@
 import './styles/base.css';
 import './styles/screens.css';
 import './styles/drive.css';
+import './styles/police.css';
 
 import { createAudio } from '@shared/audio';
 import {
@@ -65,8 +66,8 @@ import { reportTrip, type CosmeticId, type TripMode } from './game/pass-report';
 import { PostcardBook } from './game/postcards';
 import { TripSession, type SessionHooks } from './game/session';
 import { boundsOf } from './map/route-geometry';
-import { RIG_PAINTS, type RigPaintId } from './render/rig';
-import { defaultSettings, sanitiseSettings, type Settings } from './settings';
+import { RIG_PAINTS, type RigPaintId } from './render/vehicles/rig/model';
+import { defaultSettings, policeStopMode, sanitiseSettings, type Settings } from './settings';
 import { ThemePreference } from './theme';
 import { AlbumScreen } from './ui/album-screen';
 import { CareerScreen } from './ui/career-screen';
@@ -135,6 +136,8 @@ let record: HaulRecord = {
 };
 let lastDispatch: DispatchChoice | null = store.get<DispatchChoice | null>('single-last', null);
 let career: Career | null = sanitiseCareer(store.get<unknown>('career', null));
+/** Whether a police stop has been sat through: after that, stops can be skipped. */
+let stopsSeen = store.get<boolean>('stops-seen', false) === true;
 let session: TripSession | null = null;
 let run: Run | null = null;
 let screen: Screen = 'title';
@@ -142,8 +145,8 @@ let plannerBack: () => void = () => show('title');
 
 // ——— Sound and paint ———
 
-function sound(name: SoundName) {
-  for (const { sound: patch, delay } of soundFor(name)) audio.play(patch, { delay });
+function sound(name: SoundName, velocity?: number) {
+  for (const { sound: patch, delay } of soundFor(name)) audio.play(patch, { delay, velocity });
 }
 
 const PAINTS: readonly {
@@ -263,6 +266,7 @@ const careerScreen = new CareerScreen({
     openCareer();
   },
   back: () => show('title'),
+  paint: () => rigPaint(),
 });
 const dailyScreen = new DailyScreen({
   units: () => settings.units,
@@ -585,6 +589,9 @@ function checkCareerBadges(current: Career) {
   if (current.reputation >= 85) pass.unlock('legend-of-the-docks');
   if (current.cashCents >= 2_500_000) pass.unlock('fat-wallet');
   if (current.odometer >= MILLION) pass.unlock('million-mile-club');
+  // Every ticket ends in a hearing before the judge in the next town.
+  const hearings = current.trips.reduce((sum, trip) => sum + trip.tickets, 0);
+  if (hearings >= 3) pass.unlock('frequent-visitor');
 }
 
 // ——— Daily Haul ———
@@ -671,6 +678,14 @@ function beginTrip(trip: Trip, departure: number, odometer: number, season: Seas
     cb: radio,
     reducedMotion,
     hooks: sessionHooks(),
+    stops: {
+      mode: () => policeStopMode(settings.policeStops, stopsSeen, reducedMotion()),
+      seen: () => stopsSeen,
+      markSeen: () => {
+        stopsSeen = true;
+        store.set('stops-seen', true);
+      },
+    },
   });
   drive.attach(session);
   show('drive');
@@ -932,8 +947,9 @@ function concludeDaily(trip: Trip, day: DailyDay, haul: DailyHaul, practice: boo
 }
 
 function finishTrip(trip: Trip) {
+  const rig = session?.scene().rig;
   const conclusion = conclude(trip);
-  ledger.show({ ...conclusion, trip, units: settings.units, pace: reducedMotion() ? 0 : 2.4 });
+  ledger.show({ ...conclusion, trip, units: settings.units, pace: reducedMotion() ? 0 : 2.4, rig });
   session = null;
   drive.detach();
   show('ledger');

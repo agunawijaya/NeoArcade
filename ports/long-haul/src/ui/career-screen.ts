@@ -32,6 +32,8 @@ import { TYRE_CHOICES, type TyreChoice } from './dispatch-screen';
 import { button, fill, h, icon } from './dom';
 import { distance, money, pounds } from './format';
 import { ICONS } from './icons';
+import { rigPortrait } from './rig-portrait';
+import { rigModel, type RigPaint } from '../render/vehicles/rig/model';
 
 /**
  * The career office at whichever hub the last load ended: the bank balance,
@@ -48,6 +50,8 @@ export interface CareerScreenOptions {
   buy: (id: UpgradeId) => void;
   retire: () => void;
   back: () => void;
+  /** The rig's paint, for the picture in the garage. */
+  paint: () => RigPaint;
 }
 
 const SEASON_NAMES = {
@@ -321,6 +325,16 @@ export class CareerScreen {
       'div',
       { class: 'panel career__garage' },
       h('h2', { class: 'panel__title' }, 'Garage'),
+      rigPortrait(
+        rigModel({ paint: this.options.paint(), cargo: 'oranges', rig: careerRig(career) }),
+        {
+          width: 520,
+          height: 200,
+          sunAltitude: 24,
+          label: 'Your rig, with the parts it carries',
+          className: 'career__rig',
+        },
+      ),
       h(
         'div',
         { class: 'career__upgrades' },

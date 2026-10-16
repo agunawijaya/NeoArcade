@@ -5,6 +5,7 @@ import { speedCap } from '../engine/rules';
 import { stopMile } from '../engine/trip';
 import type { Diner } from '../data/diners';
 import type { CbMessage } from '../game/cb-radio';
+import type { StopCue } from '../game/police-stop';
 import type { EventArt, EventCopy } from '../game/event-copy';
 import { tripLayers } from '../game/map-layers';
 import type { Beat } from '../game/playback';
@@ -32,6 +33,7 @@ import {
 } from './format';
 import { ICONS } from './icons';
 import { MapCanvas } from './map-canvas';
+import { PoliceOverlay } from './police-overlay';
 import { RouteStrip } from './route-strip';
 
 /**
@@ -48,11 +50,41 @@ export interface DriveScreenOptions {
   pause: () => void;
   openMap: () => void;
   openStop: (visit: StopVisit, diner: Diner, done: () => void) => void;
-  sound: (name: DriveSound) => void;
+  /** Plays a sound; `velocity` (0–1) scales how loud. */
+  sound: (name: DriveSound, velocity?: number) => void;
 }
 
 export type DriveSound =
-  `card:${EventArt}` | 'quick' | 'cb' | 'stop-offer' | 'passed' | 'horn' | 'detector';
+  | `card:${EventArt}`
+  | 'quick'
+  | 'cb'
+  | 'stop-offer'
+  | 'passed'
+  | 'horn'
+  | 'detector'
+  | 'stamp'
+  | 'siren-wail'
+  | 'siren-yelp'
+  | 'air-brake'
+  | 'car-door'
+  | 'step'
+  | 'pen'
+  | 'bell'
+  | 'signal'
+  | 'cell-door';
+
+const CUE_SOUNDS: Readonly<Record<StopCue, DriveSound>> = {
+  'air-brake': 'air-brake',
+  door: 'car-door',
+  step: 'step',
+  pen: 'pen',
+  bell: 'bell',
+  signal: 'signal',
+  'cell-door': 'cell-door',
+};
+
+/** Seconds between one turn of the siren and the next. */
+const SIREN_PERIOD = { wail: 1.5, yelp: 0.34 } as const;
 
 type Action =
   'faster' | 'slower' | 'pause' | 'map' | 'view' | 'warp' | 'pull-in' | 'confirm' | 'horn' | 'log';
@@ -118,6 +150,7 @@ export class DriveScreen {
   private readonly card: HTMLElement;
   private readonly legPanel: HTMLElement;
   private readonly askStop: HTMLElement;
+  private readonly police: PoliceOverlay;
   private readonly input: Input<Action>;
   private session: TripSession | null = null;
   private cardArt: { canvas: HTMLCanvasElement; art: EventCopy['art'] } | null = null;
@@ -127,6 +160,7 @@ export class DriveScreen {
   private time = 0;
   private atlasAge = 0;
   private pulse: { mile: number; age: number } | null = null;
+  private sirenAt = 0;
   private readonly held: Record<'faster' | 'slower', number> = { faster: 0, slower: 0 };
 
   constructor(private readonly options: DriveScreenOptions) {
@@ -269,6 +303,13 @@ export class DriveScreen {
       'aria-label': 'Truck stop',
       hidden: true,
     });
+    this.police = new PoliceOverlay({
+      proceed: () => this.session?.proceedStop(),
+      skip: () => this.session?.skipStop(),
+      stamp: () => options.sound('stamp'),
+      reducedMotion: options.reducedMotion,
+      units: () => options.settings().units,
+    });
 
     this.element = h(
       'section',
@@ -285,6 +326,7 @@ export class DriveScreen {
       this.cbLog,
       this.legPanel,
       this.askStop,
+      this.police.element,
       this.card,
     );
 
@@ -315,6 +357,7 @@ export class DriveScreen {
   detach() {
     this.session = null;
     this.hideAll();
+    this.police.update(null, this.time);
   }
 
   private hideAll() {
@@ -336,11 +379,19 @@ export class DriveScreen {
     this.time += dt;
     this.handleInput();
     session.update(dt);
+    this.police.update(session.policeStop, this.time);
+    this.playStop();
     const settings = this.options.settings();
     const scene = session.scene();
     this.stage.setNight(1 - daylight(scene.sunAltitude));
     this.element.dataset.view = settings.view;
     this.element.dataset.rhythm = settings.rhythm;
+    // Pulled over for the patrol, the map steps aside so the cruiser ahead can be seen.
+    this.element.classList.toggle('is-pulled-over', (scene.patrol?.rigLane ?? 0) < -0.5);
+    this.element.classList.toggle('is-patrol', scene.patrol !== null);
+    this.element.classList.toggle('is-police', session.policeStop !== null);
+    // Stopped on the shoulder, the lever (at zero) steps aside for the trooper.
+    this.element.classList.toggle('is-parked', session.policeStop !== null && scene.speed < 0.5);
     if (settings.view === 'cab') {
       this.atlasAge += dt;
       if (this.atlasAge > 0.15) {
@@ -371,7 +422,11 @@ export class DriveScreen {
           this.cardArt.art,
           this.cardArt.canvas.width,
           this.cardArt.canvas.height,
-          this.time,
+          {
+            time: this.time,
+            rig: scene.rig,
+            reducedMotion: false,
+          },
         );
     }
     this.updateHud(scene.speed, settings);
@@ -388,6 +443,23 @@ export class DriveScreen {
       this.cbBubble.hidden = true;
       this.cbHideAt = 0;
     }
+  }
+
+  /** The stop's sounds: its one-off cues, and the siren going round while it calls for one. */
+  private playStop() {
+    const stop = this.session?.policeStop;
+    if (!stop) {
+      this.sirenAt = 0;
+      return;
+    }
+    for (const cue of stop.takeCues()) this.options.sound(CUE_SOUNDS[cue]);
+    const siren = stop.siren;
+    if (!siren || this.time < this.sirenAt) return;
+    // Louder as the patrol car closes in behind and comes alongside.
+    const gap = Math.abs(stop.pose().gap);
+    const near = Math.max(0.25, Math.min(1, 1 - (gap - 20) / 200));
+    this.options.sound(siren === 'wail' ? 'siren-wail' : 'siren-yelp', near);
+    this.sirenAt = this.time + SIREN_PERIOD[siren];
   }
 
   private mapLayers() {
@@ -445,10 +517,17 @@ export class DriveScreen {
     this.hudLimit.textContent = String(speedValue(trip.limit, settings.units));
     const cap = speedCap(trip.limit);
     this.throttle.max = String(cap);
-    if (Number(this.throttle.value) !== session.setSpeed)
-      this.throttle.value = String(session.setSpeed);
-    this.throttleValue.textContent = speedText(session.setSpeed, settings.units);
-    this.throttleBox.classList.toggle('is-over', session.setSpeed > trip.limit);
+    // Pulled over, the lever is out of the driver's hands and follows the rig down to a stop.
+    const locked = session.phase === 'police';
+    const shown = locked ? Math.round(scene.speed) : session.setSpeed;
+    this.throttle.min = locked ? '0' : '20';
+    this.throttle.disabled = locked;
+    if (Number(this.throttle.value) !== shown) this.throttle.value = String(shown);
+    this.throttleValue.textContent = speedText(shown, settings.units);
+    this.throttleBox.classList.toggle('is-over', !locked && session.setSpeed > trip.limit);
+    this.throttleBox.classList.toggle('is-locked', locked);
+    for (const nudge of this.throttleBox.querySelectorAll<HTMLButtonElement>('.throttle__nudge'))
+      nudge.disabled = locked;
   }
 
   private handleInput() {
@@ -459,6 +538,18 @@ export class DriveScreen {
       return;
     }
     if (!this.legPanel.hidden || !this.askStop.hidden) return;
+    const stop = this.session?.policeStop;
+    if (stop) {
+      // Pulled over, the rig is not the driver's to drive: only looking about and pausing.
+      if (input.wasPressed('confirm')) {
+        if (stop.waiting) this.session?.proceedStop();
+        else this.session?.skipStop();
+      }
+      if (input.wasPressed('pause')) this.options.pause();
+      if (input.wasPressed('map')) this.options.openMap();
+      if (input.wasPressed('view')) this.toggleView();
+      return;
+    }
     if (input.wasPressed('pause')) this.options.pause();
     if (input.wasPressed('map')) this.options.openMap();
     if (input.wasPressed('view')) this.toggleView();
@@ -514,8 +605,12 @@ export class DriveScreen {
     this.element.dataset.rhythmName = RHYTHM_NAMES[settings.rhythm];
   }
 
-  /** Clicking the atlas on the dash opens the full map. */
+  /** Clicking the atlas on the dash opens the full map; during a police stop, a tap skips ahead. */
   private onStageClick(event: MouseEvent) {
+    if (this.session?.policeStop) {
+      if (!this.session.policeStop.waiting) this.session.skipStop();
+      return;
+    }
     if (this.options.settings().view !== 'cab') return;
     const bounds = this.stage.surface.getBoundingClientRect();
     const layout = this.cab.layout(bounds.width, bounds.height);
@@ -537,7 +632,13 @@ export class DriveScreen {
       'aria-hidden': 'true',
     }) as HTMLCanvasElement;
     const ctx = art.getContext('2d');
-    if (ctx) paintEventArt(ctx, copy.art, 480, 270, this.time);
+    const rig = this.session?.scene().rig;
+    if (ctx && rig)
+      paintEventArt(ctx, copy.art, 480, 270, {
+        time: this.time,
+        rig,
+        reducedMotion: this.options.reducedMotion(),
+      });
     this.cardArt = { canvas: art, art: copy.art };
     const continueButton = button(
       'Continue',

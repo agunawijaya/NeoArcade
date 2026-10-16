@@ -19,6 +19,8 @@ trip; a fourth offence costs you your licence.
 | **Faster / slower** | ↑ / ↓ (or W / S); hold to keep going | The throttle lever, or its + and − | D-pad up / down, or the triggers |
 | **Pull in at the next truck stop** | T | The *Pull in* button on the stop sign | X |
 | **Continue after an event** | Enter or Space on the button | Click or tap the button | A |
+| **Skip ahead in a police stop** (after your first) | Enter on *Skip* | *Skip*, or tap the road | A |
+| **Sign the ticket** | Enter or Space on the button | *Sign and drive on* | A |
 | **The full map** | M (again or Esc to close) | The map button, or tap the mini-map or the atlas on the dash | Back / View |
 | **Switch view** (side / cab) | V | The *Cab* / *Side view* button | Y |
 | **Time warp** (1×, 2×, 4×) | F | The *1×* button | Right bumper |
@@ -54,8 +56,9 @@ On the map, drag (or use the arrow keys) to pan, and scroll, pinch or press
    and if the driver is tired and it is evening, sleep eight hours in the
    bunk. If you would rather not stop, drive on; but the game will stop and
    ask if the tank is low, you are tired, or the spare is gone.
-9. Read the **event cards** as they come: a blowout, a patrol car, a scale,
-   a work zone. Press Continue (or A) to drive on.
+9. Read the **event cards** as they come: a blowout, a scale, a work zone.
+   Press Continue (or A) to drive on. If you speed and a patrol car catches
+   you, you will be **pulled over** on the road: see below.
 10. At the dock, the **logbook** shows your trip, the receipts add up, and the
     original's stamp gives its verdict.
 
@@ -106,6 +109,54 @@ Normal difficulty.
 Pass a town for the first time and its postcard goes in your album; cross
 into a state and you get its welcome card. Open a card to read the back.
 
+## Being pulled over
+
+Drive too fast past a patrol and you will know it before the game says a
+word. The whole stop plays out on the road, in whichever view you are
+using, and nothing in it changes what you pay or how long it takes: that
+was settled the moment the trooper saw you.
+
+1. **Lights in the mirror.** Red and blue in the mirrors, washing over the
+   left of the cab, and the siren getting louder.
+2. **The overtake.** The patrol car pulls out to pass and holds alongside
+   for a moment. In the cab you see it out of your side window, the trooper
+   at the wheel; then it pulls ahead and signals right.
+3. **Pulling over.** You take the shoulder behind it. The air brakes hiss,
+   the trailer rocks on its springs, the hazards come on. The throttle is
+   out of your hands now: the lever slides down to zero on its own.
+4. **The trooper.** The door opens and he walks back along the shoulder, a
+   flashlight in his hand after dark, and comes up to the passenger window.
+   He will tell you why he stopped you, what your record says and where the
+   judge sits; you get a word in too.
+
+   ![The trooper at the passenger window at night, the patrol car's lights ahead](../media/police-stop.jpg)
+
+5. **The ticket.** A citation with the offence, how you were caught (by
+   radar or by pacing), your speed against the limit, the base fine, so
+   much for every mile an hour over, the radar detector fine if you have
+   one, the total, his signature and the court's stamp. Press *Sign and
+   drive on*.
+
+   ![A citation: the offence, speed and limit, the fine worked out, the trooper's signature and the court's stamp](../media/ticket.jpg)
+
+6. **The hearing.** The courthouse in the next town, its clock running
+   through the hours you wait for the justice of the peace, and the fine
+   confirmed.
+7. **Back on the road.** The patrol car pulls away first with its lights off;
+   you signal, merge, and the clock picks up where it stopped.
+
+A **fourth offence** goes differently: the trooper asks you to step down
+from the cab, and the stop ends at the county jail with your licence
+stamped *REVOKED*. That is the end of the trip, as it was in the original.
+
+A radar trap that **does not** catch you is a short scene of its own: the
+patrol car comes up behind, blips its lights and drives on by. Nothing
+stops.
+
+The stop runs at normal speed whatever the time warp. After you have sat
+through one, **Skip** (Enter, a tap on the road, or A) jumps to the ticket,
+and again to the end. Pause, the map and the view switch work as usual.
+
 ## Settings
 
 | Setting | What it does |
@@ -114,6 +165,7 @@ into a state and you get its welcome card. Open a card to read the back.
 | **View** | *Side view* (the diorama) or *Cab*. You can switch at any time with V. |
 | **Real-time speed** | 1×, 2× or 4×: how fast the hours go by in real time. |
 | **Stop the clock for** | *Serious events* (crashes, police, blowouts, scales, running dry) or *every event*. |
+| **Police stops** | How a stop is shown. *Full*: every step, from the lights in the mirror to the hearing. *Short*: the patrol car passes, you pull over and the ticket comes through the window. *Card only*: the event card, as in earlier versions. *Auto* (the default) plays Full the first time and Short after that, or Short from the start if your device asks for reduced motion. Only the scene changes; the fine and the hours are the same either way. |
 | **Difficulty** | See below. A trip keeps the difficulty it started with. |
 | **Units** | Miles or kilometres, for display. |
 | **Theme** | Follow the device, day or night. |
@@ -190,6 +242,11 @@ into a state and you get its welcome card. Open a card to read the back.
   are rarely wrong.
 - **Slow down for the R on the strip.** A radar reading three over the limit
   is a ticket.
+- **A radar detector is a gamble.** It warns you of traps, but if you are
+  pulled over anyway the trooper finds it, and that fine goes on the ticket
+  too.
+- **Count your offences.** The trooper reads your record at the window. The
+  third is your last warning: the fourth ends the trip in the county jail.
 
 ## FAQ
 
@@ -211,6 +268,14 @@ deadline colour already counts that wait.
 dock. Careers, records, postcards and daily results are saved between trips.
 
 **Does the paint on my rig change anything?** No. Paints are cosmetic.
+
+**Does a police stop cost more if I watch the whole scene?** No. The fine,
+the hours at the hearing and your record are decided when the patrol
+catches you; *Full*, *Short* and *Card only* only change what you see.
+
+**Why does the trooper come to the passenger side?** It keeps him off the
+traffic side of the road, and in the side view it puts him where you can
+see him.
 
 **Why do I keep crashing at 70 mph?** The crash risk grows with the square of
 your speed, times your fatigue and the weather. At 70 in the rain while

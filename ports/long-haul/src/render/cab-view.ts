@@ -1,4 +1,5 @@
 import { createRng } from '@shared/rng';
+import { CabVehicles, type CabWorld, type Rect } from './cab-vehicles';
 import { css, lit, litRgb, mix, rgb, type Lighting } from './colour';
 import { paintFarLayer, type FarLayer } from './horizon';
 import type { Landmark } from './landmarks';
@@ -7,6 +8,8 @@ import { HEIGHTS, PAINTERS, type SceneEnv, type SceneryKind } from './scenery';
 import type { DriveScene } from './scene';
 import { lightingFor, paintSky } from './sky';
 import { daylight } from './sun';
+import { environmentFor, sunAcross } from './vehicles/light';
+import { barFlash, washWith } from './vehicles/sedan/lightbar';
 import { paintFatigue, paintPrecipitation } from './weather-fx';
 
 /**
@@ -42,9 +45,13 @@ interface RoadsideProp {
   variant: number;
 }
 
+/** Ahead of the camera, into the picture: where a sun painted in the sky stands. */
+const AHEAD: readonly [number, number, number] = [1, 0, 0];
+
 export class CabView {
   private readonly propCache = new Map<number, RoadsideProp[]>();
   private farLayers = new Map<string, FarLayer[]>();
+  private readonly vehicles = new CabVehicles();
 
   layout(width: number, height: number): CabLayout {
     const compact = height < 520;
@@ -78,12 +85,13 @@ export class CabView {
     const layout = this.layout(width, height);
     const light = lightingFor(scene.sunAltitude, scene.condition);
     const night = 1 - daylight(scene.sunAltitude);
+    const world = this.world(layout, scene, night);
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, width, layout.dashTop);
     ctx.clip();
-    this.paintOutside(ctx, layout, scene, light, night);
+    this.paintOutside(ctx, layout, scene, light, night, world);
     paintPrecipitation(ctx, {
       width,
       height: layout.dashTop,
@@ -97,9 +105,33 @@ export class CabView {
     ctx.restore();
 
     this.paintFrame(ctx, layout, scene, light, night);
-    this.paintMirrors(ctx, layout, scene, light, night);
+    this.paintSideWindows(ctx, layout, scene, world, light);
+    this.paintMirrors(ctx, layout, scene, world);
     this.paintDash(ctx, layout, scene, night, atlas);
     paintFatigue(ctx, width, height, scene.fatigue, scene.time, scene.reducedMotion);
+  }
+
+  /** The world the cab's vehicles stand in: the road's camera, the light, where the rig is. */
+  private world(layout: CabLayout, scene: DriveScene, night: number): CabWorld {
+    const landscape = LANDSCAPES[scene.region];
+    const wet = scene.condition === 'wet' || scene.condition === 'rain';
+    return {
+      scene,
+      env: environmentFor({
+        sunAltitude: scene.sunAltitude,
+        condition: scene.condition,
+        sun: sunAcross(scene.sunArc, scene.sunAltitude, AHEAD),
+        ground: wet ? '#2c2f34' : scene.snow ? '#8f959c' : '#46494e',
+        horizon: landscape.groundFar,
+      }),
+      night,
+      vanishX: layout.vanishX,
+      horizon: layout.horizon,
+      focal: (layout.dashTop - layout.horizon) * 3.2,
+      dashTop: layout.dashTop,
+      width: layout.width,
+      shift: -(scene.patrol?.rigLane ?? 0) * 8.8,
+    };
   }
 
   // ——— Through the windscreen ———
@@ -110,6 +142,7 @@ export class CabView {
     scene: DriveScene,
     light: Lighting,
     night: number,
+    world: CabWorld,
   ) {
     const { width, horizon, dashTop, vanishX } = layout;
     paintSky(
@@ -154,16 +187,18 @@ export class CabView {
     ctx.fillRect(0, horizon, width, dashTop - horizon);
 
     const z0 = scene.scroll * Z_PER_SCROLL;
-    const focal = (dashTop - horizon) * 3.2;
+    const focal = world.focal;
+    // Pulled onto the shoulder, the eyes move right of their lane and the road with them.
+    const across = 0.5 + world.shift / 12;
     const project = (x: number, z: number) => {
       const s = focal / Math.max(0.5, z);
-      return { x: vanishX + (x - 0.5) * s, y: horizon + EYE_HEIGHT * s, s };
+      return { x: vanishX + (x - across) * s, y: horizon + EYE_HEIGHT * s, s };
     };
 
     this.paintRoad(ctx, layout, scene, light, night, z0, project);
     this.paintRoadside(ctx, layout, scene, light, z0, project);
     this.paintLandmarksAhead(ctx, layout, scene, light, night, project);
-    this.paintTraffic(ctx, layout, scene, light, night, z0, project);
+    this.vehicles.drawTraffic(ctx, world, z0);
     if (night > 0.3) this.paintBeams(ctx, layout, night, project);
     if (light.veil > 0) {
       const veil = ctx.createLinearGradient(0, horizon - 40, 0, dashTop);
@@ -172,6 +207,9 @@ export class CabView {
       ctx.fillStyle = veil;
       ctx.fillRect(0, 0, width, dashTop);
     }
+    const bounce = scene.stopped || scene.reducedMotion ? 0 : Math.sin(scene.time * 9) * 0.6;
+    this.vehicles.drawOfficer(ctx, world);
+    this.vehicles.drawHood(ctx, world, bounce);
   }
 
   private farFor(region: DriveScene['region']): FarLayer[] {
@@ -385,60 +423,6 @@ export class CabView {
     }
   }
 
-  private paintTraffic(
-    ctx: CanvasRenderingContext2D,
-    _layout: CabLayout,
-    scene: DriveScene,
-    light: Lighting,
-    night: number,
-    z0: number,
-    project: (x: number, z: number) => { x: number; y: number; s: number },
-  ) {
-    // A few cars on the other carriageway coming the other way, headlights at night.
-    const spacing = 60;
-    const flow = scene.reducedMotion ? 0 : scene.time * 28;
-    for (let index = 0; index < 4; index++) {
-      const z =
-        ((((index * spacing - z0 * 0.5 - flow) % (spacing * 4)) + spacing * 4) % (spacing * 4)) + 6;
-      if (z > DRAW_DISTANCE) continue;
-      const p = project(-4.4, z);
-      const w = p.s * 0.75;
-      if (night > 0.35) {
-        ctx.fillStyle = `rgba(255, 244, 210, ${0.9 * night})`;
-        ctx.beginPath();
-        ctx.arc(p.x - w * 0.35, p.y - p.s * 0.25, Math.max(1, p.s * 0.08), 0, Math.PI * 2);
-        ctx.arc(p.x + w * 0.35, p.y - p.s * 0.25, Math.max(1, p.s * 0.08), 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = lit(
-          ['#8a2f2f', '#2f5a8a', '#d8d4c8', '#3b3b3b'][index] ?? '#777777',
-          light,
-          z / DRAW_DISTANCE,
-        );
-        ctx.fillRect(p.x - w / 2, p.y - p.s * 0.55, w, p.s * 0.5);
-      }
-    }
-    // Tail lights of a truck far ahead in our lane.
-    const leadZ = 120 + Math.sin(scene.time * 0.15) * 20;
-    const lead = project(0.5, leadZ);
-    const leadW = lead.s * 0.8;
-    ctx.fillStyle = lit('#c9ccd0', light, 0.6);
-    ctx.fillRect(lead.x - leadW / 2, lead.y - lead.s * 1.15, leadW, lead.s * 1.1);
-    ctx.fillStyle = night > 0.35 ? '#ff3b30' : lit('#8f2a24', light, 0.6);
-    ctx.fillRect(
-      lead.x - leadW / 2,
-      lead.y - lead.s * 0.3,
-      Math.max(1, lead.s * 0.1),
-      Math.max(1, lead.s * 0.08),
-    );
-    ctx.fillRect(
-      lead.x + leadW / 2 - Math.max(1, lead.s * 0.1),
-      lead.y - lead.s * 0.3,
-      Math.max(1, lead.s * 0.1),
-      Math.max(1, lead.s * 0.08),
-    );
-  }
-
   private paintBeams(
     ctx: CanvasRenderingContext2D,
     layout: CabLayout,
@@ -569,69 +553,153 @@ export class CabView {
     // Centre divider of a split windscreen.
     ctx.fillStyle = interior;
     ctx.fillRect(width * 0.497, 0, Math.max(3, width * 0.006), dashTop);
-    if (scene.police && !scene.reducedMotion) {
-      const flash = Math.floor(scene.time * 6) % 2 === 0 ? '255, 40, 40' : '40, 110, 255';
-      ctx.fillStyle = `rgba(${flash}, 0.08)`;
-      ctx.fillRect(0, 0, width, dashTop);
+    if (scene.patrol?.lights.bar) {
+      // The beacons wash across the inside of the glass from wherever the car is.
+      const behind = scene.patrol.gap < 0;
+      washWith(
+        ctx,
+        behind ? width * 0.05 : width * 0.6,
+        dashTop * 0.45,
+        width * 0.6,
+        barFlash(scene.time, scene.reducedMotion),
+        0.08 + night * 0.25,
+        0.7,
+      );
     }
   }
 
+  /**
+   * Glances out of the side windows, slid in over the windscreen's corners
+   * while something is happening there: the patrol car passing on the
+   * driver's side, the trooper at the passenger's window.
+   */
+  private paintSideWindows(
+    ctx: CanvasRenderingContext2D,
+    layout: CabLayout,
+    scene: DriveScene,
+    world: CabWorld,
+    light: Lighting,
+  ) {
+    const patrol = scene.patrol;
+    if (!patrol) return;
+    const ramp = (value: number, from: number, to: number) =>
+      Math.max(0, Math.min(1, (value - from) / (to - from)));
+    const alongside =
+      ramp(patrol.lane, 0.3, 0.6) * ramp(patrol.gap, -26, -14) * (1 - ramp(patrol.gap, 16, 28));
+    const atWindow = patrol.officer?.atWindow ?? 0;
+    for (const [side, amount] of [
+      [-1, alongside],
+      [1, atWindow],
+    ] as const) {
+      if (amount <= 0) continue;
+      const glass = this.sideWindow(layout, side);
+      const eased = amount * amount * (3 - 2 * amount);
+      ctx.save();
+      ctx.globalAlpha = eased;
+      ctx.translate(side * (1 - eased) * glass.width * 0.35, 0);
+      const shape = sideWindowPath(glass, side);
+      ctx.save();
+      ctx.clip(shape);
+      this.vehicles.drawSideWindow(ctx, world, side, glass, scene.scroll * Z_PER_SCROLL);
+      paintSideGlass(ctx, glass, light.day);
+      ctx.restore();
+      const interior =
+        world.night > 0.5 ? '#14161b' : css(mix(rgb('#2a2c31'), rgb('#3a3d44'), light.day));
+      ctx.strokeStyle = interior;
+      ctx.lineWidth = Math.max(6, glass.width * 0.07);
+      ctx.lineJoin = 'round';
+      ctx.stroke(shape);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke(shape);
+      ctx.restore();
+    }
+  }
+
+  private sideWindow(layout: CabLayout, side: -1 | 1): Rect {
+    const { width, dashTop } = layout;
+    const glassWidth = Math.min(width * 0.27, dashTop * 0.82);
+    const glassHeight = Math.min(dashTop * 0.56, glassWidth * 0.76);
+    return {
+      x: side < 0 ? width * 0.105 : width * 0.895 - glassWidth,
+      y: dashTop * 0.3,
+      width: glassWidth,
+      height: glassHeight,
+    };
+  }
+
+  /** The two West Coast mirrors on their arms, each showing the road behind. */
   private paintMirrors(
     ctx: CanvasRenderingContext2D,
     layout: CabLayout,
     scene: DriveScene,
-    light: Lighting,
-    night: number,
+    world: CabWorld,
   ) {
     const { width, dashTop } = layout;
-    const mirrorW = Math.max(46, width * 0.06);
-    const mirrorH = mirrorW * 1.7;
+    const glassWidth = Math.max(54, width * 0.074);
+    const glassHeight = Math.min(dashTop * 0.66, glassWidth * 2.1);
     for (const side of [-1, 1] as const) {
-      const x = side < 0 ? width * 0.012 : width * 0.988 - mirrorW;
-      const y = dashTop * 0.32;
-      ctx.fillStyle = '#1b1c1f';
-      ctx.beginPath();
-      ctx.roundRect(x - 3, y - 3, mirrorW + 6, mirrorH + 6, 6);
-      ctx.fill();
-      const glass = ctx.createLinearGradient(0, y, 0, y + mirrorH);
-      const sky = lit('#9fc0d8', light);
-      glass.addColorStop(0, sky);
-      glass.addColorStop(0.45, sky);
-      glass.addColorStop(0.46, lit(LANDSCAPES[scene.region].ground, light));
-      glass.addColorStop(1, lit('#4a4d52', light));
-      ctx.fillStyle = glass;
-      ctx.beginPath();
-      ctx.roundRect(x, y, mirrorW, mirrorH, 4);
-      ctx.fill();
-      // The trailer's flank, receding.
-      ctx.fillStyle = lit('#dfe2e5', light);
-      ctx.beginPath();
-      const edge = side < 0 ? x + mirrorW : x;
-      ctx.moveTo(edge, y + mirrorH * 0.18);
-      ctx.lineTo(edge + side * mirrorW * 0.55, y + mirrorH * 0.38);
-      ctx.lineTo(edge + side * mirrorW * 0.55, y + mirrorH * 0.6);
-      ctx.lineTo(edge, y + mirrorH * 0.88);
-      ctx.closePath();
-      ctx.fill();
-      if (scene.police) {
-        const phase = scene.reducedMotion ? 0 : Math.floor(scene.time * 6 + (side > 0 ? 1 : 0)) % 2;
-        ctx.fillStyle = phase === 0 ? 'rgba(255, 40, 40, 0.85)' : 'rgba(40, 110, 255, 0.85)';
-        ctx.beginPath();
-        ctx.arc(
-          x + mirrorW * (side < 0 ? 0.3 : 0.7),
-          y + mirrorH * 0.5,
-          mirrorW * 0.14,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      } else if (night > 0.4) {
-        ctx.fillStyle = 'rgba(255, 240, 200, 0.6)';
-        ctx.beginPath();
-        ctx.arc(x + mirrorW * 0.5, y + mirrorH * 0.52, mirrorW * 0.05, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      const glass: Rect = {
+        x: side < 0 ? width * 0.014 : width * 0.986 - glassWidth,
+        y: dashTop * 0.24,
+        width: glassWidth,
+        height: glassHeight,
+      };
+      this.paintMirrorArms(ctx, glass, side, layout, world.night);
+      this.vehicles.drawMirror(ctx, world, side, glass, scene.scroll * Z_PER_SCROLL);
+      this.paintMirrorFrame(ctx, glass, world.night);
     }
+  }
+
+  /** The chrome arms from the door to the mirror head, off the edge of the picture. */
+  private paintMirrorArms(
+    ctx: CanvasRenderingContext2D,
+    glass: Rect,
+    side: -1 | 1,
+    layout: CabLayout,
+    night: number,
+  ) {
+    const door = side < 0 ? 0 : layout.width;
+    const near = side < 0 ? glass.x + glass.width * 0.2 : glass.x + glass.width * 0.8;
+    const arm = night > 0.5 ? '#3a3e44' : '#b9c0c7';
+    ctx.strokeStyle = arm;
+    ctx.lineWidth = Math.max(2, glass.width * 0.06);
+    ctx.lineCap = 'round';
+    for (const at of [0.12, 0.88]) {
+      ctx.beginPath();
+      ctx.moveTo(door, glass.y + glass.height * at + glass.height * 0.04);
+      ctx.lineTo(near, glass.y + glass.height * at);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
+  /** The mirror head's polished rim, thick at the bottom where the light catches it. */
+  private paintMirrorFrame(ctx: CanvasRenderingContext2D, glass: Rect, night: number) {
+    const rim = Math.max(3, glass.width * 0.07);
+    const chrome = ctx.createLinearGradient(0, glass.y - rim, 0, glass.y + glass.height + rim);
+    const bright = night > 0.5 ? '#4c525a' : '#eef1f4';
+    const dark = night > 0.5 ? '#16181c' : '#5d646c';
+    chrome.addColorStop(0, bright);
+    chrome.addColorStop(0.45, dark);
+    chrome.addColorStop(0.55, bright);
+    chrome.addColorStop(1, dark);
+    ctx.strokeStyle = chrome;
+    ctx.lineWidth = rim;
+    ctx.beginPath();
+    ctx.roundRect(
+      glass.x - rim / 2,
+      glass.y - rim / 2,
+      glass.width + rim,
+      glass.height + rim,
+      rim * 1.4,
+    );
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(glass.x, glass.y, glass.width, glass.height, Math.min(6, glass.width * 0.08));
+    ctx.stroke();
   }
 
   private paintDash(
@@ -1164,4 +1232,35 @@ function paintCabLandmark(
     default:
       return;
   }
+}
+
+/** A cab door's glass: square at the back, its front edge raked to follow the windscreen. */
+function sideWindowPath(glass: Rect, side: -1 | 1): Path2D {
+  const { x, y, width, height } = glass;
+  // Looking out of the left door the cab's front is to the right of the picture, and the other way round.
+  const front = (along: number) => (side < 0 ? x + width * along : x + width * (1 - along));
+  const path = new Path2D();
+  path.moveTo(front(0), y + height);
+  path.lineTo(front(0), y + height * 0.06);
+  path.lineTo(front(0.7), y);
+  path.lineTo(front(1), y + height * 0.42);
+  path.lineTo(front(1), y + height);
+  path.closePath();
+  return path;
+}
+
+/** The door glass itself: a soft diagonal sheen across it. */
+function paintSideGlass(ctx: CanvasRenderingContext2D, glass: Rect, day: number) {
+  const sheen = ctx.createLinearGradient(
+    glass.x,
+    glass.y,
+    glass.x + glass.width,
+    glass.y + glass.height,
+  );
+  const strength = 0.05 + day * 0.06;
+  sheen.addColorStop(0.18, 'rgba(210, 230, 248, 0)');
+  sheen.addColorStop(0.28, `rgba(210, 230, 248, ${strength})`);
+  sheen.addColorStop(0.42, 'rgba(210, 230, 248, 0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(glass.x, glass.y, glass.width, glass.height);
 }

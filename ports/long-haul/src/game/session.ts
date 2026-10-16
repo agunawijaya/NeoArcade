@@ -4,6 +4,7 @@ import { dinerFor, type Diner } from '../data/diners';
 import { placeById, STATE_NAMES } from '../data/places';
 import type { RegionId } from '../data/regions';
 import { FATIGUE, type ConditionId, type FatigueId } from '../engine/conditions';
+import type { EventOf } from '../engine/events';
 import { conditionSeverity } from '../engine/living-weather';
 import { eventsAhead, nextDieselPrice, radarWithin, type Ahead } from '../engine/foresight';
 import { clampSpeed, driveHour, type HourResult } from '../engine/hour';
@@ -12,14 +13,15 @@ import { pointAlong } from '../engine/position';
 import type { RouteStop } from '../engine/route';
 import { RULES, speedCap } from '../engine/rules';
 import { openStop, type StopVisit } from '../engine/stop';
-import { currentRoad, stopMile, totalMiles, weekHours, type Trip } from '../engine/trip';
+import { currentRoad, nextStop, stopMile, totalMiles, weekHours, type Trip } from '../engine/trip';
 import type { Landmark } from '../render/landmarks';
-import type { RigPaint } from '../render/rig';
+import { rigModel, type RigModel, type RigPaint } from '../render/vehicles/rig/model';
 import type { DashReadings, DriveScene } from '../render/scene';
-import { sunAltitude, sunArc } from '../render/sun';
+import { daylight, sunAltitude, sunArc } from '../render/sun';
 import type { Settings } from '../settings';
 import type { CbMessage, CbRadio } from './cb-radio';
 import { copyFor, type EventCopy } from './event-copy';
+import { PoliceStop, RadarPass, type StopFacts, type StopMode } from './police-stop';
 import { planHour, type Beat, type HourPlay } from './playback';
 
 /**
@@ -29,7 +31,8 @@ import { planHour, type Beat, type HourPlay } from './playback';
  * when driving leg by leg, and builds the scene the views draw. It knows
  * nothing about the DOM: the drive screen listens to its hooks.
  */
-export type SessionPhase = 'rolling' | 'card' | 'offer' | 'stop' | 'planning' | 'paused' | 'done';
+export type SessionPhase =
+  'rolling' | 'card' | 'police' | 'offer' | 'stop' | 'planning' | 'paused' | 'done';
 
 export interface StopOffer {
   name: string;
@@ -83,6 +86,17 @@ export interface SessionHooks {
   ended(trip: Trip): void;
 }
 
+/**
+ * How police stops are shown: the whole scene, the short one, or the event
+ * card, and whether the player has sat through one yet (after which a stop
+ * may be skipped).
+ */
+export interface StopPolicy {
+  mode(): StopMode | 'card';
+  seen(): boolean;
+  markSeen(): void;
+}
+
 export interface SessionOptions {
   trip: Trip;
   settings: () => Settings;
@@ -95,7 +109,21 @@ export interface SessionOptions {
   cb: CbRadio;
   reducedMotion: () => boolean;
   hooks: SessionHooks;
+  stops: StopPolicy;
 }
+
+/**
+ * Road grime per mile driven, by the weather: spray off a wet road and salt
+ * on a snowy one dirty a rig several times faster than dust.
+ */
+const GRIME_PER_MILE: Readonly<Record<ConditionId, number>> = {
+  clear: 1 / 2400,
+  wet: 1 / 900,
+  rain: 1 / 700,
+  fog: 1 / 1800,
+  'light-snow': 1 / 600,
+  blizzard: 1 / 450,
+};
 
 /** Real seconds per in-game hour, before the warp. */
 const REALTIME_HOUR = 3;
@@ -132,12 +160,19 @@ export class TripSession {
   private hourSpeed = 0;
   private fromElapsed = 0;
   private toElapsed = 0;
-  private police = 0;
+  private stop: PoliceStop | null = null;
+  private radarPass: RadarPass | null = null;
+  /** Road rolled by during a stop, and where the scroll stood when it began. */
+  private stopScroll = 0;
+  private stopFrom = 0;
   private detector: DashReadings['detector'] = 'off';
   private passedThisHour = false;
   private justHappened: string[] = [];
   private lastCb: CbMessage | null = null;
   private brakeUntil = 0;
+  /** Road grime on the rig, 0 … 1; the truck stop's squeegee takes half of it off. */
+  private dirt = 0.04;
+  private look: RigModel | null = null;
 
   constructor(private readonly options: SessionOptions) {
     const { trip } = options;
@@ -200,8 +235,15 @@ export class TripSession {
   update(dt: number) {
     this.time += dt;
     if (this.regionBlend < 1) this.regionBlend = Math.min(1, this.regionBlend + dt / 1.6);
-    if (this.police > 0 && this.phase === 'rolling') this.police = Math.max(0, this.police - dt);
+    if (this.phase === 'police') {
+      this.updateStop(dt);
+      return;
+    }
     if (this.phase !== 'rolling' || !this.play) return;
+    if (this.radarPass) {
+      this.radarPass.update(dt);
+      if (this.radarPass.done) this.radarPass = null;
+    }
     const settings = this.options.settings();
     const hourSeconds = (settings.rhythm === 'legs' ? LEG_HOUR : REALTIME_HOUR) / settings.warp;
     const target = Math.min(1, this.t + dt / hourSeconds);
@@ -245,8 +287,13 @@ export class TripSession {
       this.options.cb.settle(this.trip);
       return false;
     }
-    if (event.type === 'pulled-over') this.police = 4;
-    if (event.type === 'radar' && event.ticketed) this.police = 4;
+    const stops = this.options.stops.mode();
+    if ((event.type === 'pulled-over' || event.type === 'jailed') && stops !== 'card') {
+      this.beginStop(event, stops);
+      return true;
+    }
+    if (event.type === 'radar' && !event.ticketed && stops !== 'card')
+      this.radarPass = new RadarPass(this.isNight(), Math.max(20, this.hourSpeed));
     const copy = copyFor(event, this.options.settings().units);
     if (!copy || beat.weight === 'quiet') return false;
     if (beat.weight === 'quick') {
@@ -259,6 +306,75 @@ export class TripSession {
       if (this.phase === 'card') this.phase = 'rolling';
     });
     return true;
+  }
+
+  /** The stop being played out, for the screen to draw its ticket and its words. */
+  get policeStop(): PoliceStop | null {
+    return this.stop;
+  }
+
+  /** The player has read the ticket or the licence. */
+  proceedStop() {
+    this.stop?.proceed();
+  }
+
+  skipStop() {
+    this.stop?.skip();
+  }
+
+  private beginStop(event: EventOf<'pulled-over'> | EventOf<'jailed'>, mode: StopMode) {
+    const { trip } = this;
+    const speed = Math.max(20, this.hourSpeed);
+    const radar = this.play?.result.events.find((each) => each.type === 'radar' && each.ticketed);
+    const clockHours = trip.startClock + this.displayHr;
+    const facts: StopFacts = {
+      event,
+      speed,
+      limit: event.type === 'pulled-over' ? speed - event.overBy : trip.limit,
+      reading:
+        event.type === 'pulled-over' && event.byRadar && radar?.type === 'radar'
+          ? radar.reading
+          : null,
+      hour: Math.floor(((clockHours % 24) + 24) % 24),
+      night: this.isNight(),
+      town: hearingTown(trip),
+      clock: shortClockName(Math.floor(clockHours)).toUpperCase(),
+      flavour: flavourOf(trip.seed, trip.hourCount, event.offence),
+      cruise: speed,
+    };
+    this.stop = new PoliceStop(facts, mode, this.options.stops.seen());
+    this.radarPass = null;
+    this.stopScroll = 0;
+    this.stopFrom = this.scroll;
+    this.phase = 'police';
+  }
+
+  /** The stop runs at its own pace, whatever the warp; the road rolls by as the rig slows and stops. */
+  private updateStop(dt: number) {
+    const stop = this.stop;
+    if (!stop) return;
+    stop.update(dt);
+    const rolled =
+      Math.min(MAX_SCROLL_PER_SECOND, (PIXELS_PER_MILE * stop.rigSpeed()) / REALTIME_HOUR) * dt;
+    this.scroll += rolled;
+    this.stopScroll += rolled;
+    if (!stop.done) return;
+    // Pick the hour up where the stop left the road: its signs move on by the same amount.
+    this.hourStartScroll += this.stopScroll;
+    for (const landmark of this.landmarks)
+      if (landmark.u > this.stopFrom) landmark.u += this.stopScroll;
+    this.stop = null;
+    this.options.stops.markSeen();
+    this.phase = 'rolling';
+    // A fourth offence ends the trip there and then: no more of the hour to drive.
+    if (stop.facts.event.type === 'jailed') {
+      this.moveTo(1);
+      this.finishHour();
+    }
+  }
+
+  private isNight(): boolean {
+    return daylight(this.scene().sunAltitude) < 0.55;
   }
 
   private finishHour() {
@@ -330,6 +446,7 @@ export class TripSession {
     this.phase = 'stop';
     this.brakeUntil = this.time + 1.5;
     this.options.hooks.atStop(visit, diner, () => {
+      this.dirt /= 2;
       this.hourCondition = trip.condition;
       this.hourFatigue = trip.fatigue;
       this.fromElapsed = trip.hr - trip.zoneShift;
@@ -376,6 +493,10 @@ export class TripSession {
     const zoneBefore = trip.zoneShift;
     const result = driveHour(trip, this.throttle);
     this.hourSpeed = result.speed;
+    this.dirt = Math.min(
+      1,
+      this.dirt + (result.toMile - result.fromMile) * GRIME_PER_MILE[this.hourCondition],
+    );
     const settings = this.options.settings();
     this.play = planHour(trip, result, settings.eventPause === 'all');
     this.fromElapsed = result.fromHr - zoneBefore;
@@ -542,14 +663,14 @@ export class TripSession {
     const { trip } = this;
     const mile = this.displayMile;
     const point = pointAlong(trip.route, mile, (index) => stopMile(trip, index));
-    const elapsed =
-      this.fromElapsed +
-      (this.toElapsed - this.fromElapsed) *
-        (this.phase === 'rolling' || this.phase === 'card' ? this.t : 1);
-    const utc = this.options.departureUtc + elapsed * 3_600_000;
     const rolling = this.phase === 'rolling';
-    const condition = rolling || this.phase === 'card' ? this.hourCondition : trip.condition;
-    const fatigue = rolling || this.phase === 'card' ? this.hourFatigue : trip.fatigue;
+    // A card or a stop interrupts the hour: the light and the weather stay where it was.
+    const midHour = rolling || this.phase === 'card' || this.phase === 'police';
+    const elapsed = this.fromElapsed + (this.toElapsed - this.fromElapsed) * (midHour ? this.t : 1);
+    const utc = this.options.departureUtc + elapsed * 3_600_000;
+    const condition = midHour ? this.hourCondition : trip.condition;
+    const fatigue = midHour ? this.hourFatigue : trip.fatigue;
+    const speed = rolling ? this.hourSpeed : (this.stop?.rigSpeed() ?? 0);
     const season = this.options.season;
     const snowyLandscape =
       season === 'winter' &&
@@ -568,26 +689,26 @@ export class TripSession {
       ].includes(this.regionNow);
     const hr = this.displayHr;
     const clockHours = trip.startClock + hr;
+    const altitude = sunAltitude(point.lat, point.lon, utc);
     return {
       time: this.time,
       scroll: this.scroll,
-      speed: rolling ? this.hourSpeed : 0,
+      speed,
       region: this.regionNow,
       previousRegion: this.regionBefore,
       regionBlend: this.regionBlend,
       season,
       snow: snowyLandscape || condition === 'light-snow' || condition === 'blizzard',
       condition,
-      sunAltitude: sunAltitude(point.lat, point.lon, utc),
+      sunAltitude: altitude,
       sunArc: sunArc(point.lat, point.lon, utc),
       fatigue: FATIGUE[fatigue].severity,
-      cargo: trip.cargo,
-      paint: this.options.paint,
+      rig: this.rigLook(),
       landmarks: this.landmarks,
       city: this.cityNearness(mile),
-      police: this.police > 0,
+      patrol: this.stop?.pose() ?? this.radarPass?.pose() ?? null,
       braking: this.time < this.brakeUntil,
-      stopped: !rolling,
+      stopped: speed < 0.5,
       reducedMotion: this.options.reducedMotion(),
       dash: {
         fuel: trip.fuel,
@@ -604,6 +725,19 @@ export class TripSession {
         detector: this.detector,
       },
     };
+  }
+
+  /** The rig's model, rebuilt only when its grime has visibly changed. */
+  private rigLook(): RigModel {
+    const dirt = Math.round(this.dirt * 20) / 20;
+    if (!this.look || this.look.dirt !== dirt)
+      this.look = rigModel({
+        paint: this.options.paint,
+        cargo: this.trip.cargo,
+        rig: this.trip.rig,
+        dirt,
+      });
+    return this.look;
   }
 
   /** Known events at the next few stops, for the route strip's icons. */
@@ -643,4 +777,21 @@ export function describeStopEvents(stop: RouteStop, oranges: boolean): string[] 
         return oranges ? [`Reefer trouble: ${Math.round(event.chance * 100)} %`] : [];
     }
   });
+}
+
+/** The next town down the road with a courthouse: not a state line or a lonely site. */
+function hearingTown(trip: Trip): string {
+  for (let index = trip.next; index < trip.route.stops.length; index++) {
+    const stop = trip.route.stops[index];
+    const place = stop ? placeById(stop.place) : null;
+    if (place && place.kind !== 'line' && place.kind !== 'site') return place.name;
+  }
+  return placeById(nextStop(trip).place).name;
+}
+
+/** A number from the trip's seed, hour and offence that dresses a stop, never drawn from the engine's dice. */
+function flavourOf(seed: number, hour: number, offence: number): number {
+  let h = (seed ^ Math.imul(hour + 1, 0x9e3779b1) ^ Math.imul(offence + 3, 0x85ebca6b)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+  return (h ^ (h >>> 13)) >>> 0;
 }

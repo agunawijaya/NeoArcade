@@ -221,12 +221,76 @@ on it (ADR 0016):
 
 **Two views** of the same road, switchable at any time: the side diorama
 (32 landscapes drawn in code, from the Mojave to Manhattan) and the cab,
-with the dashboard, the CB set and a folded atlas clipped to the dash. In
-the diorama the rig is an early-eighties long-nose conventional drawn to
-true proportions (a low hood, the cab well under the trailer's roof, a swept
-steer fender, a chrome saddle tank and stack, a West Coast mirror with a CB
-whip, the driver at the wheel), and a sign that an hour ends beside, such as
-a truck stop passed up, slides away behind the trailer instead of vanishing.
+with the dashboard, the CB set and a folded atlas clipped to the dash. A
+sign that an hour ends beside, such as a truck stop passed up, slides away
+behind the trailer instead of vanishing.
+
+**The vehicles** (prompt 014). The rig and the patrol car are each one model
+built in code from 3D parts and drawn through whichever camera a picture
+needs: side on in the diorama, our own hood over the dash, the road behind
+in the West Coast mirrors, out of the side windows, and posed three-quarter
+views on the event cards, in the garage and on the logbook. No sprites, no
+traced photos, no makes or model names. Deliberate choices:
+
+- **The rig shows the trip and the career.** A refrigerated load gets the
+  reefer unit and its lettering; freight and mail ride in a dry van. The
+  long saddle tanks, the taller sleeper cab, the reliable reefer and the
+  radar detector on the dash appear when the career has bought them. Road
+  grime builds up with the miles, faster in rain and snow, and halves at
+  every truck stop.
+- **Light that flatters.** At golden hour the diorama lets the low sun reach
+  round to the side of the rig we see (`SUNWARD`), as an illustrator would,
+  instead of leaving it in its own shadow; the scenery keeps the real sun.
+- **The hood is seen from a little lower than the road** (7.7 feet instead of
+  9), so more of it shows over the dash; its lines still meet the road's
+  vanishing point. The mirrors show our own trailer, wheels and stack, the
+  way a driver sees them.
+- **Life**: wheels turn with the road, the tractor and trailer ride their
+  springs a beat apart, the exhaust darkens on a climb, the wipers run and
+  the wet road mirrors the lamps in the rain, lamps glow and bloom at night,
+  brake lights show when slowing, and the beacons flash under three times a
+  second (steady with reduced motion).
+
+**The police stop** (prompt 014). The original prints "Smokey is behind you
+with his lights on. Pull over!" and the fine; the port plays the stop out on
+the road in both views. The engine settles everything first, exactly as
+before (the fine, the hours before the judge, the record, jail on the
+fourth offence); the scene only stages it and never draws on the engine's
+random numbers, and every engine test and Daily Haul fingerprint is
+unchanged. Choices made for it:
+
+- **A setting, *Police stops*:** *Full* (lights behind, the overtake, pulling
+  over, the trooper at the window, the ticket, the hearing in town, back on
+  the road), *Short* (the overtake, pulling over, the ticket), or *Card
+  only* (the original's card, as before). *Auto*, the default, plays Full
+  the first time and Short after that, or Short from the start with reduced
+  motion. After the first stop a Skip jumps to the ticket and then to the end.
+- **It runs at its own pace**, 1× whatever the time warp or rhythm, and the
+  clock resumes where it stopped; the road it rolls by while braking and
+  pulling away is added to the hour's scroll, so nothing jumps.
+- **The patrol car holds alongside** for a moment before passing, so it can
+  be seen out of the cab's side window with the trooper at the wheel.
+- **The trooper walks up the passenger side**, off the traffic side of the
+  road, which also puts him in front of the camera in the side view. His
+  words, his name and badge number, and the ticket's number are written for
+  the port and picked from the trip's seed and hour; the patrol is an
+  invented *Interstate Patrol* with an invented shield, never a real agency.
+- **The hearing is held in the next town with a courthouse**, skipping state
+  lines and lonely sites, and its clock runs through the hours the engine
+  set for the wait.
+- **A fourth offence ends the trip at once**: the county jail, the licence
+  stamped REVOKED, then the logbook. The original also stopped there; the
+  rest of that hour is not driven on screen, and the trip's record is the
+  engine's.
+- **A radar trap that lets the rig go** is a short drive-by: the patrol car
+  comes up, blips its lights and passes. Nothing stops.
+- **The throttle is out of the player's hands** during a stop: the lever
+  slides down to zero with the rig, steps aside while it stands on the
+  shoulder (so it never covers the trooper) and comes back as it pulls away.
+  Pause, the map and the view switch still work.
+- **New badges**: Pulled Over, Clean Record (a delivery without a stop),
+  Frequent Visitor (three hearings in a career) and the secret Detector
+  Detected (fined for the radar detector), all from the trip's record.
 
 **Truck stops** become places: a named diner with a special and a pie of the
 day, the pump, the tyre shop, a **cup of coffee** (50 ¢, two hours fewer

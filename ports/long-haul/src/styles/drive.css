@@ -933,3 +933,27 @@
     font-size: 0.8rem;
   }
 }
+
+/* Pulled over for the patrol: the mini-map makes room for the cruiser ahead. */
+.drive .minimap {
+  transition: opacity 0.4s ease;
+}
+
+.drive.is-pulled-over .minimap {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.drive.is-pulled-over .stop-banner,
+.drive.is-police .stop-banner {
+  display: none;
+}
+
+.drive .throttle {
+  transition: opacity 0.4s ease;
+}
+
+/* With the patrol on the scene, the CB's chatter steps out of the mirror. */
+.drive.is-patrol .cb-bubble {
+  opacity: 0;
+}

@@ -11,7 +11,7 @@ not see the pick-up in the fog; sleep too much and the oranges start to go.
 a time, one decision after another, until the warehouse doors open or the
 road ends you first.
 
-![The rig crossing the red mesas of Arizona, with a truck stop sign ahead](../media/side-view.jpg)
+![The rig among the red mesas at four in the afternoon, a truck stop sign ahead](../media/side-view.jpg)
 
 ## The original
 
@@ -74,12 +74,22 @@ plays the trip as green text on black, prompts and all.
 are crossing, drawn entirely in code: Joshua trees in the Mojave, red mesas
 in Arizona, the high plains, the Ozarks, cornfields, the Rockies, the tunnels
 of Appalachia, the Turnpike, and Manhattan lit up at night, under a sky that
-follows the real sun. The cab view puts you behind the split windscreen,
+follows the real sun. The rig itself is built in code like a scale model,
+chrome that catches the sky, glass you can see the driver through, grime
+that builds up over the miles, and it is the same rig whether you see it
+side on, over its own long hood, or in the mirrors. The cab view puts you behind the split windscreen,
 with the speedometer, the fuel gauge, a CB set and a road atlas clipped to
 the dash. Weather is on the glass, the wipers work, frost creeps in, and when
 the driver gets tired the edges of the world start to close in.
 
 ![The view from the cab: the road ahead, the gauges and the atlas on the dash](../media/cab.jpg)
+
+**Lights in the mirror.** Push your luck and you will see it before you
+are told: red and blue in the mirrors, the siren, a black-and-white pulling
+out to pass and waving you onto the shoulder. The trooper walks back with
+his ticket book, leans in at the window and reads you your record; then
+it is the courthouse in the next town, or, on the fourth offence, the
+county jail.
 
 **Always know where you are.** A route strip across the top shows every
 waypoint, the next truck stop, the miles to go, your ETA and whether you
@@ -107,9 +117,9 @@ with a catch), seasons, and a reputation that opens up the long, well-paid
 runs. *Daily Haul* is one load a day, the same for everyone in the world, with
 a streak and a line to share.
 
-**The Arcade Pass.** Twenty-seven badges, from *Coast to Coast* to the
-*Million-Mile Club*, a few secret ones for the moments the original
-would have laughed at, and five rig paints to unlock.
+**The Arcade Pass.** Thirty-one badges, from *Coast to Coast* to the
+*Million-Mile Club* and *Frequent Visitor*, a few secret ones for the
+moments the original would have laughed at, and five rig paints to unlock.
 
 ## Why play it today
 

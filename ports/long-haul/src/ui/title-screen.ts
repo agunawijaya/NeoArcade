@@ -1,6 +1,6 @@
 import type { RegionId } from '../data/regions';
 import { DioramaView } from '../render/diorama-view';
-import { RIG_PAINTS, type RigPaint } from '../render/rig';
+import { RIG_PAINTS, rigModel, type RigPaint } from '../render/vehicles/rig/model';
 import type { DriveScene } from '../render/scene';
 import { button, h, icon } from './dom';
 import { ICONS } from './icons';
@@ -213,11 +213,10 @@ export class TitleScreen {
       sunAltitude: altitude,
       sunArc: Math.max(0, Math.min(1, dayClock * 1.6)),
       fatigue: 0,
-      cargo: 'oranges',
-      paint: this.options.paint() ?? RIG_PAINTS.classic,
+      rig: rigModel({ paint: this.options.paint() ?? RIG_PAINTS.classic, cargo: 'oranges' }),
       landmarks: [],
       city: region === 'manhattan' ? 1 : 0,
-      police: false,
+      patrol: null,
       braking: false,
       stopped: false,
       reducedMotion: this.options.reducedMotion(),

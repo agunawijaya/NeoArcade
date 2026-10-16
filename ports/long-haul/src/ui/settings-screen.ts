@@ -1,8 +1,11 @@
 import type { AudioEngine } from '@shared/audio';
 import { DIFFICULTIES, DIFFICULTY_IDS } from '../engine/difficulty';
-import { RIG_PAINTS, type RigPaintId } from '../render/rig';
+import { RIG_PAINTS, type RigPaintId } from '../render/vehicles/rig/model';
 import {
   DRIVE_VIEWS,
+  POLICE_STOP_HELP,
+  POLICE_STOP_NAMES,
+  POLICE_STOPS,
   RHYTHMS,
   RHYTHM_NAMES,
   UNIT_CHOICES,
@@ -159,6 +162,14 @@ export class SettingsScreen {
             (value) => (value === 'major' ? 'Serious events' : 'Every event'),
             (eventPause) => save({ eventPause }),
           ),
+          segmented(
+            'Police stops',
+            POLICE_STOPS,
+            settings.policeStops,
+            (value) => POLICE_STOP_NAMES[value],
+            (policeStops) => save({ policeStops }),
+          ),
+          h('p', { class: 'muted' }, POLICE_STOP_HELP[settings.policeStops]),
         ),
         h(
           'div',

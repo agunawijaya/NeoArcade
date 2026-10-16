@@ -1,0 +1,42 @@
+:root {
+  color-scheme: dark;
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+  background: #15171c;
+  color: #d9dde3;
+}
+body {
+  margin: 0;
+}
+#lab {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.lab__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.lab__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--cell, 860px), 1fr));
+  gap: 10px;
+}
+.lab__cell {
+  margin: 0;
+  background: #0d0f13;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.lab__cell canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.lab__cell figcaption {
+  padding: 4px 8px 6px;
+  color: #9aa3ad;
+}

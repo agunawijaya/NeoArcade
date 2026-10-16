@@ -1524,3 +1524,25 @@
 [data-theme='light'] [data-key='trail-fast'] .map-overlay__key {
   background: #8e3fbf;
 }
+
+/* The rig's picture on the garage wall and pinned to the logbook. */
+.career__rig {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 520 / 200;
+  border-radius: var(--radius-small);
+  margin: 4px 0 12px;
+}
+
+.logbook__photo {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  aspect-ratio: 300 / 120;
+  margin: 0 0 12px auto;
+  border: 6px solid #fbf8ef;
+  border-bottom-width: 14px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.25);
+  transform: rotate(1.6deg);
+}

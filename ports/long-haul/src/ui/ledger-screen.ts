@@ -6,6 +6,8 @@ import type { Expense, ExpenseKind, Trip } from '../engine/trip';
 import type { Units } from '../settings';
 import { button, fill, h } from './dom';
 import { distance, money, pounds } from './format';
+import { rigPortrait } from './rig-portrait';
+import type { RigModel } from '../render/vehicles/rig/model';
 
 /**
  * Arrival, or the end of the road: a logbook page for the trip and a stack
@@ -30,6 +32,8 @@ export interface LedgerModel {
   units: Units;
   /** Seconds before the stamp lands; 0 shows everything at once. */
   pace: number;
+  /** The rig, for the snapshot pinned to a delivered load's log. */
+  rig?: RigModel;
 }
 
 const EXPENSE_NAMES: Readonly<Record<ExpenseKind, string>> = {
@@ -157,6 +161,15 @@ export class LedgerScreen {
           'article',
           { class: 'paper logbook' },
           h('h2', { class: 'logbook__title' }, 'Driver’s log'),
+          model.rig && settlement
+            ? rigPortrait(model.rig, {
+                width: 300,
+                height: 120,
+                sunAltitude: 9,
+                label: 'A snapshot of the rig at the dock',
+                className: 'logbook__photo',
+              })
+            : null,
           log,
         ),
         h(

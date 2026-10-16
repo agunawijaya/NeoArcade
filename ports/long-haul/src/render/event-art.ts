@@ -1,13 +1,28 @@
 import type { EventArt } from '../game/event-copy';
+import { placedCamera, type Camera } from './vehicles/camera';
+import { posterLight, poseCamera, RigPortrait, SedanPortrait, WHOLE_SEDAN } from './vehicles/hero';
+import { RIG_LIGHTS_OFF, type RigModel } from './vehicles/rig/model';
+import { barFlash, washWith } from './vehicles/sedan/lightbar';
+import { PATROL, SEDAN_LIGHTS_OFF } from './vehicles/sedan/model';
+import { wheelPart } from './vehicles/wheels';
+import { drawPart } from './vehicles/parts';
 
 /**
- * The pictures on the event cards: bold, flat, a little like a road safety
- * poster. Each is drawn on a 480 × 270 board and scaled to the card.
+ * The pictures on the event cards: bold and simple, a little like a road
+ * safety poster, with the rig and the patrol car drawn from the same models
+ * as the road, in the rig's own paint. Each is drawn on a 480 × 270 board
+ * and scaled to the card.
  */
 const W = 480;
 const H = 270;
 
-type Draw = (ctx: CanvasRenderingContext2D, time: number) => void;
+interface ArtFrame {
+  time: number;
+  rig: RigModel;
+  reducedMotion: boolean;
+}
+
+type Draw = (ctx: CanvasRenderingContext2D, frame: ArtFrame) => void;
 
 const INK = '#1d1a16';
 const ROAD = '#3f4247';
@@ -28,6 +43,12 @@ function road(ctx: CanvasRenderingContext2D, y = 200) {
   for (let x = 10; x < W; x += 70) ctx.fillRect(x, y + (H - y) * 0.45, 38, 5);
 }
 
+/** The vehicles on the cards, kept painted between frames. */
+const portraits = {
+  rig: new RigPortrait(),
+  cruiser: new SedanPortrait(),
+};
+
 function wheel(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   ctx.fillStyle = INK;
   ctx.beginPath();
@@ -39,62 +60,127 @@ function wheel(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   ctx.fill();
 }
 
-function rigNose(
+/**
+ * The road under a posed vehicle, in the same projection: asphalt from
+ * `near` to `far` across, with a shoulder line, so the vehicle stands on it.
+ */
+function groundPlane(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  s: number,
-  colour = '#b8312a',
+  camera: Camera,
+  colour: string,
+  from: number,
+  to: number,
 ) {
-  // The front of the rig, side on, facing right.
-  ctx.fillStyle = '#d7dadd';
-  ctx.fillRect(x - 160 * s, y - 92 * s, 150 * s, 66 * s);
+  const corners = [
+    camera.project([from, 0, -14]),
+    camera.project([to, 0, -14]),
+    camera.project([to, 0, 16]),
+    camera.project([from, 0, 16]),
+  ];
   ctx.fillStyle = colour;
   ctx.beginPath();
-  ctx.roundRect(x, y - 96 * s, 46 * s, 70 * s, 6 * s);
+  corners.forEach((corner, index) =>
+    index === 0 ? ctx.moveTo(corner.x, corner.y) : ctx.lineTo(corner.x, corner.y),
+  );
+  ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = 'rgba(240, 230, 200, 0.75)';
+  ctx.lineWidth = 2;
+  const a = camera.project([from, 0, 6.5]);
+  const b = camera.project([to, 0, 6.5]);
   ctx.beginPath();
-  ctx.moveTo(x + 44 * s, y - 64 * s);
-  ctx.lineTo(x + 110 * s, y - 58 * s);
-  ctx.lineTo(x + 112 * s, y - 26 * s);
-  ctx.lineTo(x + 44 * s, y - 26 * s);
-  ctx.fill();
-  ctx.fillStyle = '#9fc3d9';
-  ctx.fillRect(x + 20 * s, y - 88 * s, 22 * s, 22 * s);
-  ctx.fillStyle = '#e5e7ea';
-  ctx.fillRect(x + 108 * s, y - 60 * s, 6 * s, 34 * s);
-  wheel(ctx, x + 88 * s, y - 14 * s, 14 * s);
-  wheel(ctx, x - 10 * s, y - 14 * s, 14 * s);
-  wheel(ctx, x - 130 * s, y - 14 * s, 14 * s);
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
 }
 
-function police(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, time: number) {
-  ctx.fillStyle = '#e9e6dc';
-  ctx.beginPath();
-  ctx.roundRect(x - 70 * s, y - 40 * s, 140 * s, 28 * s, 8 * s);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(x - 36 * s, y - 62 * s, 70 * s, 26 * s, 8 * s);
-  ctx.fill();
-  ctx.fillStyle = '#20314f';
-  ctx.fillRect(x - 70 * s, y - 28 * s, 140 * s, 10 * s);
-  ctx.fillStyle = '#9fc3d9';
-  ctx.fillRect(x - 28 * s, y - 58 * s, 26 * s, 18 * s);
-  ctx.fillRect(x + 4 * s, y - 58 * s, 26 * s, 18 * s);
-  const flash = Math.floor(time * 4) % 2 === 0;
-  ctx.fillStyle = flash ? '#ff2a2a' : '#5a1010';
-  ctx.fillRect(x - 22 * s, y - 70 * s, 20 * s, 9 * s);
-  ctx.fillStyle = flash ? '#163a7a' : '#2f7bff';
-  ctx.fillRect(x + 2 * s, y - 70 * s, 20 * s, 9 * s);
-  wheel(ctx, x - 42 * s, y - 10 * s, 12 * s);
-  wheel(ctx, x + 42 * s, y - 10 * s, 12 * s);
-  if (flash) {
-    const glow = ctx.createRadialGradient(x, y - 66 * s, 0, x, y - 66 * s, 120 * s);
-    glow.addColorStop(0, 'rgba(255, 40, 40, 0.35)');
-    glow.addColorStop(1, 'rgba(255, 40, 40, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(x - 120 * s, y - 180 * s, 240 * s, 220 * s);
-  }
+/** The rig, three-quarters from the front, filling a rectangle of the board. */
+function rigPortrait(
+  ctx: CanvasRenderingContext2D,
+  frame: ArtFrame,
+  key: string,
+  rect: { x: number; y: number; width: number; height: number },
+  sunAltitude: number,
+  azimuth = 34,
+) {
+  const camera = poseCamera({
+    azimuth,
+    elevation: 9,
+    min: [0, 0, -4.8],
+    max: [65.6, 13.6, 4.8],
+    rect,
+  });
+  const night = sunAltitude < -4;
+  groundPlane(ctx, camera, night ? '#23262c' : ROAD, -40, 110);
+  portraits.rig.draw(
+    ctx,
+    frame.rig,
+    { ...RIG_LIGHTS_OFF, head: night, markers: night },
+    posterLight(sunAltitude),
+    camera,
+    key,
+  );
+}
+
+/** Pulled over at night: the rig on the shoulder, the cruiser ahead of it, the light bar going. */
+function pulledOver(ctx: CanvasRenderingContext2D, frame: ArtFrame) {
+  const env = posterLight(-18);
+  const camera = poseCamera({
+    azimuth: 46,
+    elevation: 8,
+    min: [0, 0, -4.8],
+    max: [92, 13.6, 7],
+    rect: { x: 6, y: 38, width: 468, height: 196 },
+  });
+  groundPlane(ctx, camera, '#1c1f26', -40, 130);
+  const blink = frame.reducedMotion || Math.floor(frame.time * 3) % 2 === 0;
+  portraits.rig.draw(
+    ctx,
+    frame.rig,
+    { ...RIG_LIGHTS_OFF, head: true, markers: true, left: blink, right: blink, cab: 0.4 },
+    env,
+    camera,
+    'police',
+  );
+  const car = placedCamera(camera, [72, 0, 2.6]);
+  portraits.cruiser.draw(
+    ctx,
+    PATROL,
+    {
+      lights: { ...SEDAN_LIGHTS_OFF, head: true, markers: true, bar: true, spot: true },
+      turn: 0,
+      steer: 0,
+      sway: 0,
+    },
+    env,
+    car,
+    'police',
+    frame.time,
+    frame.reducedMotion,
+  );
+  const roof = car.project([7.5, 5, 0]);
+  washWith(ctx, roof.x, roof.y + 20, 230, barFlash(frame.time, frame.reducedMotion), 0.85, 0.6);
+}
+
+/** The cruiser parked by the road, nose out, its radar on the traffic. */
+function radarCar(ctx: CanvasRenderingContext2D, frame: ArtFrame) {
+  const camera = poseCamera({
+    azimuth: 24,
+    elevation: 8,
+    ...WHOLE_SEDAN,
+    rect: { x: 228, y: 112, width: 236, height: 118 },
+  });
+  groundPlane(ctx, camera, ROAD, -30, 60);
+  portraits.cruiser.draw(
+    ctx,
+    PATROL,
+    { lights: SEDAN_LIGHTS_OFF, turn: 0, steer: 0, sway: 0 },
+    posterLight(38),
+    camera,
+    'radar',
+    frame.time,
+    frame.reducedMotion,
+  );
 }
 
 function label(
@@ -141,28 +227,28 @@ function signPost(
 }
 
 const ART: Readonly<Record<EventArt, Draw>> = {
-  police(ctx, time) {
-    sky(ctx, '#20263f', '#5a4a6e');
-    road(ctx);
-    rigNose(ctx, 250, 215, 0.95);
-    police(ctx, 80, 228, 0.85, time);
-    label(ctx, 'PULL OVER', 380, 50, 34, '#ffd23a');
+  police(ctx, frame) {
+    sky(ctx, '#0b1128', '#3a2f55');
+    ctx.fillStyle = '#12151c';
+    ctx.fillRect(0, 150, W, H - 150);
+    pulledOver(ctx, frame);
+    label(ctx, 'PULL OVER', 396, 30, 30, '#ffd23a');
   },
-  radar(ctx, time) {
+  radar(ctx, frame) {
     sky(ctx, '#8fc4e8', '#e6d9b8');
-    road(ctx);
     ctx.fillStyle = '#5f6266';
-    ctx.fillRect(120, 70, 8, 130);
-    ctx.fillRect(300, 70, 8, 130);
+    ctx.fillRect(60, 70, 8, 130);
+    ctx.fillRect(220, 70, 8, 130);
     ctx.fillStyle = '#f2ead8';
-    ctx.fillRect(90, 40, 250, 90);
-    label(ctx, 'SPEED CHECKED', 215, 72, 30, '#b3261e');
-    label(ctx, 'BY RADAR', 215, 106, 26);
-    police(ctx, 220, 222, 0.7, time);
+    ctx.fillRect(30, 40, 230, 90);
+    label(ctx, 'SPEED CHECKED', 145, 72, 28, '#b3261e');
+    label(ctx, 'BY RADAR', 145, 106, 24);
+    radarCar(ctx, frame);
   },
-  scale(ctx) {
+  scale(ctx, frame) {
     sky(ctx, '#9bc9e6', '#efe3c4');
-    road(ctx, 215);
+    ctx.fillStyle = '#b9b29a';
+    ctx.fillRect(0, 196, W, H - 196);
     ctx.fillStyle = '#d9d1c1';
     ctx.fillRect(30, 110, 150, 100);
     ctx.fillStyle = '#5a5048';
@@ -174,9 +260,7 @@ const ART: Readonly<Record<EventArt, Draw>> = {
     ctx.fillStyle = '#1b1b1b';
     ctx.fillRect(60, 135, 90, 34);
     label(ctx, '61,040', 105, 152, 26, '#ff4a2e');
-    ctx.fillStyle = '#7d7f84';
-    ctx.fillRect(200, 205, 270, 12);
-    rigNose(ctx, 330, 205, 0.8);
+    rigPortrait(ctx, frame, 'scale', { x: 196, y: 92, width: 280, height: 128 }, 45, 62);
     label(ctx, 'WEIGH STATION', 330, 40, 30, '#1d7a46');
   },
   construction(ctx) {
@@ -240,20 +324,31 @@ const ART: Readonly<Record<EventArt, Draw>> = {
     }
     signPost(ctx, 110, 150, 100, 80, '#f28c1a', ['ROAD', 'CLOSED']);
   },
-  reefer(ctx, time) {
+  reefer(ctx, frame) {
     sky(ctx, '#f0c58a', '#f5e6c8');
     road(ctx);
-    ctx.fillStyle = '#eef0ee';
-    ctx.fillRect(40, 80, 330, 120);
-    ctx.fillStyle = '#c9cdd1';
-    ctx.fillRect(370, 95, 50, 80);
-    ctx.fillStyle = '#5b6066';
-    for (let vent = 0; vent < 4; vent++) ctx.fillRect(380, 105 + vent * 16, 30, 8);
+    // The trailer's nose and its sick refrigeration unit, smoking.
+    const camera = poseCamera({
+      azimuth: 42,
+      elevation: 12,
+      min: [38, 5, -4.5],
+      max: [50, 14, 4.5],
+      rect: { x: 230, y: 30, width: 240, height: 200 },
+    });
+    portraits.rig.draw(
+      ctx,
+      { ...frame.rig, cargo: 'oranges' },
+      RIG_LIGHTS_OFF,
+      posterLight(14),
+      camera,
+      'reefer',
+    );
+    const unit = camera.project([46.9, 12.4, 0]);
     for (let puff = 0; puff < 4; puff++) {
-      const t = (time * 0.6 + puff / 4) % 1;
+      const t = ((frame.reducedMotion ? 0.5 : frame.time * 0.6) + puff / 4) % 1;
       ctx.fillStyle = `rgba(60, 60, 60, ${0.5 * (1 - t)})`;
       ctx.beginPath();
-      ctx.arc(400 + t * 30, 90 - t * 60, 10 + t * 18, 0, Math.PI * 2);
+      ctx.arc(unit.x + t * 30, unit.y - t * 60, 10 + t * 18, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = '#f28c28';
@@ -275,7 +370,7 @@ const ART: Readonly<Record<EventArt, Draw>> = {
     ctx.ellipse(196, 122, 4, 7, 0.3, 0, Math.PI * 2);
     ctx.fill();
   },
-  blowout(ctx) {
+  blowout(ctx, frame) {
     sky(ctx, '#a7d3ee', '#f1e6c9');
     road(ctx);
     ctx.fillStyle = '#ffd23a';
@@ -287,7 +382,24 @@ const ART: Readonly<Record<EventArt, Draw>> = {
     }
     ctx.closePath();
     ctx.fill();
-    wheel(ctx, 240, 150, 50);
+    // One of the rig's own tyres, its rim polished.
+    const camera = poseCamera({
+      azimuth: 70,
+      elevation: 6,
+      min: [-1.8, 0, 2.9],
+      max: [1.8, 3.5, 3.9],
+      rect: { x: 180, y: 92, width: 120, height: 116 },
+    });
+    drawPart(
+      ctx,
+      wheelPart(
+        { centre: [0, 1.72, 3.4], radius: 1.72, width: 0.9, rim: 'polished', side: 1 },
+        frame.reducedMotion ? 0 : frame.time * 2,
+        frame.rig.dirt,
+      ),
+      camera,
+      posterLight(40),
+    );
     ctx.fillStyle = INK;
     for (const [x, y, a] of [
       [120, 220, 0.4],
@@ -370,19 +482,18 @@ const ART: Readonly<Record<EventArt, Draw>> = {
     ctx.setLineDash([]);
     label(ctx, '+200 MI', 360, 160, 24, '#2c2418');
   },
-  crash(ctx, time) {
+  crash(ctx, frame) {
     sky(ctx, '#3a3048', '#a0607a');
-    road(ctx, 215);
+    ctx.fillStyle = '#4a3a4a';
+    ctx.fillRect(0, 200, W, H - 200);
     ctx.save();
-    ctx.translate(250, 175);
-    ctx.rotate(-0.28);
-    ctx.fillStyle = '#d7dadd';
-    ctx.fillRect(-170, -60, 170, 60);
-    ctx.fillStyle = '#b8312a';
-    ctx.fillRect(5, -70, 70, 70);
+    ctx.translate(240, 160);
+    ctx.rotate(-0.22);
+    ctx.translate(-240, -160);
+    rigPortrait(ctx, frame, 'crash', { x: 40, y: 80, width: 400, height: 150 }, 2, 28);
     ctx.restore();
     for (let star = 0; star < 6; star++) {
-      const angle = time * 2 + (star / 6) * Math.PI * 2;
+      const angle = (frame.reducedMotion ? 0 : frame.time * 2) + (star / 6) * Math.PI * 2;
       label(ctx, '✶', 250 + Math.cos(angle) * 120, 110 + Math.sin(angle) * 50, 24, '#ffd23a');
     }
     label(ctx, 'C R A S H !!', 240, 40, 42, '#ffd23a');
@@ -462,10 +573,10 @@ export function paintEventArt(
   art: EventArt,
   width: number,
   height: number,
-  time: number,
+  frame: ArtFrame,
 ) {
   ctx.save();
   ctx.scale(width / W, height / H);
-  ART[art](ctx, time);
+  ART[art](ctx, frame);
   ctx.restore();
 }

@@ -31,14 +31,16 @@ flowchart TB
   subgraph game["src/game — playing it out"]
     session["session: real time and leg by leg"]
     playback["playback: beats inside an hour"]
+    police["police-stop, stop-copy: a stop on the road"]
     copy["event-copy, CB radio, postcards"]
     report["pass-report"]
   end
   subgraph render["src/render — canvas painters"]
     diorama["diorama-view"]
-    cab["cab-view"]
+    cab["cab-view, cab-vehicles"]
+    vehicles["vehicles: rig, cruiser, trooper as 3D parts"]
     map["map-painter"]
-    art["diner, event, postcard, rig art"]
+    art["diner, event, postcard, stop art"]
   end
   subgraph ui["src/ui — screens"]
     drive["drive-screen, route strip, map canvas"]
@@ -51,6 +53,9 @@ flowchart TB
   data --> engine
   engine --> game
   game --> ui
+  vehicles --> diorama
+  vehicles --> cab
+  vehicles --> art
   render --> ui
   geo --> render
   data --> render
@@ -69,17 +74,20 @@ used by tests, scripts and the browser determinism check.
 ports/long-haul/
 ├── index.html                 the page; pre-paints the theme
 ├── favicon.svg                a green highway sign
-├── pass.manifest.ts           Arcade Pass: 27 badges, 5 rig paints, 6 stats
+├── pass.manifest.ts           Arcade Pass: 31 badges, 5 rig paints, 6 stats
 ├── playwright.config.ts       browser tests: smoke, phone, determinism, screens
 ├── README.md
 ├── docs/                      ABOUT, HOW-TO-PLAY, ARCHITECTURE
 ├── media/                     screenshots for the docs and the Hall
-├── dev/art/                   a dev-only bench for the painters (?region=…&view=cab)
+├── dev/art/                   a dev-only bench for the painters (?region=…&view=cab,
+│                              ?stop=officer&at=3, ?vignette=hearing&hour=21)
+├── dev/vehicles/              the vehicle lab: every model, paint, upgrade and light
 ├── e2e/
 │   ├── helpers.ts             fake clock, open the game, drive a trip to the end
 │   ├── game.spec.ts           smoke tests, also run at phone size
 │   ├── engine.determinism.ts  the engine bundled and compared with Node, per browser
 │   ├── modes.screens.ts       every screen at four sizes, day and night
+│   ├── police.screens.ts      a police stop step by step, both views, three sizes
 │   └── media.screens.ts       candidate pictures for media/
 ├── scripts/
 │   ├── build-map.ts           Natural Earth → src/map/geography.ts
@@ -136,6 +144,8 @@ ports/long-haul/
     ├── game/
     │   ├── session.ts         a trip in play: phases, beats, hooks
     │   ├── playback.ts        where each event falls inside its hour
+    │   ├── police-stop.ts     a stop on the road, step by step; the radar pass
+    │   ├── stop-copy.ts       what the trooper says, and the ticket
     │   ├── event-copy.ts      the words for every event, original lines kept
     │   ├── cb-radio.ts        channel 19: chatter and tips
     │   ├── postcards.ts       the album
@@ -152,19 +162,34 @@ ports/long-haul/
     │   ├── landscapes.ts      the 32 landscapes as layers and kinds
     │   ├── scenery.ts         ~40 painters: trees, barns, billboards, cattle…
     │   ├── landmarks.ts       signs and structures at waypoints
-    │   ├── rig.ts             the rig, side on, and its paints
     │   ├── diorama-view.ts    the side view
     │   ├── cab-view.ts        the view from the cab and the dashboard
+    │   ├── cab-vehicles.ts    the hood, the traffic, the mirrors, the side windows
+    │   ├── stop-art.ts        the courthouse and the county jail
     │   ├── weather-fx.ts      rain, snow, fog, the edges of fatigue
     │   ├── map-painter.ts     the map: states, roads, trail, weather, night
     │   ├── stage.ts           the drive canvas and its glow
     │   ├── scene.ts           what a frame of the road needs to know
     │   ├── event-art.ts       pictures for the event cards
     │   ├── diner-art.ts       the truck stop scene
-    │   └── postcard-art.ts    large-letter postcards
+    │   ├── postcard-art.ts    large-letter postcards
+    │   └── vehicles/
+    │       ├── geometry.ts    vectors, frames, outlines from lines, corners and curves
+    │       ├── camera.ts      parallel, oblique, pinhole (and mirror) and framed cameras
+    │       ├── light.ts       the environment, materials and how a surface is lit
+    │       ├── parts.ts       prisms, cylinders, panels: shading strip by strip
+    │       ├── wheels.ts      tyres and the four kinds of rim
+    │       ├── detail.ts      lettering, glass with an interior, seams, rivets, grime
+    │       ├── lamps.ts       every lamp: lens, glow and flare
+    │       ├── sprite.ts      a vehicle kept painted between frames, wheels live
+    │       ├── hero.ts        posed portraits for cards, the garage and the logbook
+    │       ├── officer.ts     the trooper: in profile, walking up, at the window
+    │       ├── rig/           model.ts, tractor.ts, trailer.ts, rig.ts, side.ts
+    │       └── sedan/         model.ts, body.ts, lightbar.ts, sedan.ts
     ├── ui/                    one file per screen, plus dom, format, icons,
-    │                          the route strip, the map canvas and menu navigation
-    └── styles/                base tokens, the screens, the drive screen
+    │                          the route strip, the map canvas, menu navigation,
+    │                          the rig portrait and the police stop overlay
+    └── styles/                base tokens, the screens, the drive screen, the stop
 ```
 
 ## The loop and the state machine
@@ -187,6 +212,8 @@ stateDiagram-v2
     [*] --> Rolling
     Rolling --> Card: a serious event
     Card --> Rolling: continue
+    Rolling --> Police: pulled over (Full or Short)
+    Police --> Rolling: back on the road
     Rolling --> Offer: a stop the trip needs
     Offer --> Stop: pull in
     Offer --> Rolling: keep driving
@@ -205,7 +232,7 @@ stateDiagram-v2
 ```
 
 Inside the drive screen, `TripSession` (`game/session.ts`) owns the phases
-`rolling`, `card`, `offer`, `stop`, `planning`, `paused` and `done`. When an
+`rolling`, `card`, `police`, `offer`, `stop`, `planning`, `paused` and `done`. When an
 hour starts it calls `driveHour`, which settles the whole hour at once, then
 `planHour` (`game/playback.ts`) places each event at its moment inside the
 hour: a waypoint at its milepost, a blowout somewhere along the way. The
@@ -265,6 +292,152 @@ finds simple paths between hubs (no hub twice, at most 1.35 × the shortest)
 and `joinLegs` turns a path into a `Route` with time zones and state lines
 filled in.
 
+## The police stop
+
+The engine settles a stop the moment it happens (`engine/police.ts`): the
+`pulled-over` event with its offence, fine, detector fine and hours before
+the judge, or `jailed` for a fourth offence. The trip's clock, money and
+record have moved on before anything is drawn. The stop on the road is
+staging only, and it reads the event, never the engine's dice.
+
+When the session reveals one of those events (`reveal` in `session.ts`) it
+asks its `StopPolicy` how to show it: the setting *Police stops*
+(Auto, Full, Short or Card only, `policeStopMode` in `settings.ts`) and
+whether the player has sat through a stop before (`stops-seen` in storage).
+*Card only* shows the event card as before. Otherwise `beginStop` gathers
+the `StopFacts` (the event, the speed and the limit, the radar's reading,
+the hour and whether it is dark, the next town with a courthouse, the
+clock for the ticket, and a `flavour` number hashed from the trip's seed,
+hour and offence) and hands them to a `PoliceStop` (`game/police-stop.ts`).
+The session's phase becomes `police` until the stop is done.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> Behind: Full
+  [*] --> Overtake: Short
+  Behind --> Overtake: 3.4 s, siren wailing
+  Overtake --> PullOver: 5 s, alongside, then ahead
+  PullOver --> Officer: Full, 5 s, air brakes
+  PullOver --> Ticket: Short
+  PullOver --> Jail: Short, fourth offence
+  Officer --> Ticket: the walk and the words
+  Officer --> Jail: fourth offence
+  Ticket --> Hearing: Full, the player signs
+  Ticket --> Leave: Short, the player signs
+  Hearing --> Leave: 6.5 s, the clock runs the wait
+  Leave --> [*]: 6.5 s, back on the road
+  Jail --> [*]: the player reads the licence
+```
+
+- **Its own clock.** A stop plays at 1× whatever the time warp or rhythm;
+  each step has a duration (`SECONDS`), the trooper's talk lasts as long as
+  his lines, and the ticket and the revoked licence wait for the player.
+- **Where everything is.** `pose()` returns a `PatrolScene` for the views:
+  the cruiser's gap and lane, its lamps, its door, the rig's lane, hazards,
+  signal, brakes and the trailer settling on its springs, and the trooper's
+  `OfficerPose` (along the rig, out on the shoulder, stride, at the window,
+  writing). `rigSpeed()` is the speed the scenery rolls at: the cruise speed,
+  braking to nothing on the shoulder, and away again.
+- **The road picks up where it stopped.** The session scrolls the road by
+  `rigSpeed()` during the stop and, when it ends, moves the hour's start and
+  its later landmarks on by the same amount, so the hour carries on from
+  the shoulder without a jump. After a jail the hour is finished at once
+  and the trip ends.
+- **Input.** While the phase is `police` the throttle is locked: the lever
+  shows the rig's own speed falling to zero (the drive screen sets its
+  minimum to 0 and disables it), and only pause, map and view change. Once a
+  stop has been seen through, Skip (a tap on the road, Enter, a pad's A)
+  jumps to the ticket or the jail, then to the end.
+- **Words and paper.** `stop-copy.ts` writes the trooper's lines (greeting by
+  the hour, licence and logbook, radar or pacing, the driver's reply, the
+  record) and the `Ticket`: number, offence, method, speed and limit, base
+  fine plus so much a mile an hour over, the detector fine, the total, the
+  trooper and badge, the court and the wait. The trooper and his wording are
+  picked with the flavour number.
+- **On screen.** `ui/police-overlay.ts` shows the step's caption and Skip,
+  the speech bubble (beside the passenger window in the cab), the citation
+  with its signature (an SVG path from the flavour number) and stamp, the
+  hearing and the jail (`render/stop-art.ts` on a canvas), and the licence
+  card stamped REVOKED.
+- **Sounds.** The stop queues cues as it passes their moments (`takeCues`:
+  air brakes, a car door, steps on gravel, a pen, the courthouse bell, the
+  turn signal, a cell door); the drive screen plays them and turns the siren
+  over (`siren`: a wail, a yelp on the overtake), louder as the cruiser
+  closes.
+- **A radar check that finds nothing** is a `RadarPass`: the cruiser comes up
+  behind, blips its lights and drives on while the hour plays.
+
+`game/police-stop.test.ts` plays each outcome through every step, checks the
+waits and the skips, and drives a whole trip three ways (Full, Short, Card
+only) to prove the trip's hours, miles, offences, money and events come out
+identical, that the throttle never moves the rig during a stop, and that
+Card only still shows the original's card.
+
+## Vehicles: one model, many pictures
+
+The rig, the patrol car and the family cars are each one parametric model
+in feet (`render/vehicles/`), drawn by small 3D parts through whatever
+camera the picture needs. Nothing is a bitmap.
+
+- **Geometry** (`geometry.ts`): an `OutlineBuilder` turns lines, rounded
+  corners, curves and arcs into a closed outline with normals and creases.
+  A **prism** extrudes an outline across the vehicle with bevelled edges and
+  tapers; a **cylinder** is a tank, a stack or a tyre; a **panel** is
+  something flat (a mud flap, a grille, a door); a **custom** part paints
+  itself (`parts.ts`).
+- **Light** (`light.ts`): an `Environment` holds the sky above and at the
+  horizon, the road's colour, the far land, the sun's direction, warmth and
+  strength, night, wet and snow. Each material (paint, chrome, glass,
+  rubber, metal, aluminium, plastic, lens) is lit strip by strip: sky and
+  bounce light, the sun, a warm rim at golden hour, moonlit edges, and for
+  chrome a reflection with a bright sky band, a dark horizon band and the
+  road below. Wet paint darkens and shines; snow settles on what faces up.
+- **Cameras** (`camera.ts`): *oblique* for the side diorama (a slight lean
+  and rise, so the near side, the roof and the tyres' faces show);
+  *pinhole* for the windscreen, the hood and the side windows, and a
+  mirrored pinhole for the West Coast mirrors; *framed* to fit a posed
+  vehicle into a rectangle for the cards, the garage and the logbook.
+- **The rig** (`rig/`): `rigModel` takes the paint, the cargo (a reefer unit
+  only on a refrigerated load), the career's upgrades (long saddle tanks,
+  the taller sleeper cab, the reliable reefer, the radar detector on the
+  dash) and road grime, which builds up with the miles and the weather and
+  halves at every truck stop. `tractor.ts` and `trailer.ts` give the
+  parts, `rig.ts` puts them together, `side.ts` draws it in the diorama
+  with its contact shadow, wet-road sheen, exhaust that darkens on a climb,
+  headlight beams, and the tractor and trailer bouncing a beat apart.
+- **The cruiser** (`sedan/`): a full-size sedan of the early eighties in
+  black and white with an invented *Interstate Patrol* shield, push bar,
+  pillar spotlights, whip aerial and a light bar whose red and blue
+  beacons sweep under three flashes a second (steady with reduced motion)
+  and wash the road, the rig and the glass in their colour. The right
+  front door opens. Family cars are the same body in civilian paint.
+- **The trooper** (`officer.ts`): campaign hat, khaki shirt, badge, ticket
+  book and, after dark, a flashlight, drawn in profile walking the shoulder,
+  from the front walking up to the cab, and close up at the passenger
+  window.
+- **Kept painted** (`sprite.ts`): a vehicle that does not turn is painted
+  once into a few depth-ordered bitmaps, with only the visible wheels drawn
+  live between them; the springs shift the bitmaps. A change of light
+  repaints at most once a second, and only one vehicle per frame
+  (`mayRelight`). The cruiser is painted at a size rounded to a few steps
+  and slid into place, so passing and changing lanes never repaints it.
+
+| Picture | Where | Camera |
+|---|---|---|
+| The side view's rig and cruiser | `diorama-view.ts` | oblique, kept painted |
+| Our hood over the dash | `cab-vehicles.ts` `drawHood` | pinhole from a little lower than the eyes |
+| Traffic through the windscreen | `cab-vehicles.ts` `drawTraffic` | pinhole; far cars as billboards |
+| The mirrors: our trailer, the stack, the cruiser behind | `cab-vehicles.ts` `drawMirror` | mirrored pinhole at each mirror |
+| The side windows: the cruiser alongside, the trooper | `cab-vehicles.ts` `drawSideWindow` | pinhole looking out of each door |
+| Event cards, the garage, the logbook photo | `event-art.ts`, `ui/rig-portrait.ts` | framed three-quarter view |
+| The truck stop's lot | `diner-art.ts` | oblique |
+
+The **vehicle lab** (`dev/vehicles/`, served by the dev server only) shows
+any model in any light: `?vehicle=rig|cruiser|sedan`, `paint`, `cargo`,
+`tanks`, `sleeper`, `reefer`, `detector`, `dirt`, `lamps`,
+`light=dawn|noon|dusk|night|rain|snow` and `cards=1` for the posed views.
+
 ## Rendering pipeline
 
 The drive screen has one canvas (`render/stage.ts`) drawn every frame from a
@@ -278,11 +451,14 @@ readings.
   stars, clouds) → far layers (`horizon.ts`: mountains, mesas, buttes,
   ridges, skylines, with haze and snowcaps) → ground → three bands of
   scenery tiles (`scenery.ts` painters chosen by `landscapes.ts`) → landmarks
-  behind the road → the road → near things → the rig (`rig.ts`) → landmarks
-  in front → foreground → precipitation and fatigue (`weather-fx.ts`).
+  behind the road → the road → near things → the rig and, during a stop,
+  the cruiser and the trooper (`vehicles/`) → landmarks in front →
+  foreground → precipitation and fatigue (`weather-fx.ts`).
 - **Cab view** (`cab-view.ts`): the same sky and far layers, then a
-  perspective road with roadside posts, signs and traffic, headlight beams,
-  rain, frost and wipers on the glass, the frame and mirrors, and the
+  perspective road with roadside posts, signs and traffic (`cab-vehicles.ts`),
+  the trooper walking up, our own hood, headlight beams, rain, frost and
+  wipers on the glass, the frame, the side-window glances during a stop, the
+  mirrors, and the
   dashboard: speedometer with odometer, fuel gauge, clock, CB set, limit
   placard, radar detector and the folded atlas, which the drive screen
   paints into an offscreen canvas with `map-painter.ts` and the cab view
@@ -301,7 +477,14 @@ There are no image files except the favicon; everything is drawn.
 
 | Thing | Code |
 |---|---|
-| The rig, its paints and liveries | `render/rig.ts` (`RIG_PAINTS`, `paintRigSide`; one function per part, see below) |
+| The rig, its paints, liveries and upgrades | `render/vehicles/rig/` (`RIG_PAINTS`, `rigModel`; one function per part) |
+| The patrol car and family cars | `render/vehicles/sedan/` (`PATROL`, `CIVILIAN_PAINTS`, `BEACONS`) |
+| The trooper | `render/vehicles/officer.ts` |
+| Materials, the light on them, chrome reflections | `render/vehicles/light.ts` |
+| Wheels and rims | `render/vehicles/wheels.ts` |
+| Lamps, beacons and their glow | `render/vehicles/lamps.ts`, `render/vehicles/sedan/lightbar.ts` |
+| The courthouse and the county jail | `render/stop-art.ts` |
+| The citation, the signature and the licence card | `ui/police-overlay.ts`, `styles/police.css` |
 | The 32 landscapes | `render/landscapes.ts` (colours, far layers, scenery mix) |
 | Trees, cacti, barns, silos, derricks, billboards, cattle… | `render/scenery.ts` (`PAINTERS`) |
 | Mountains, mesas, skylines | `render/horizon.ts` |
@@ -318,25 +501,20 @@ There are no image files except the favicon; everything is drawn.
 | UI colours and type | `src/styles/base.css` (tokens for day and night) |
 | Icons | `src/ui/icons.ts` (inline SVG paths) |
 | Sound effects and music | `src/audio/sounds.ts` (synth patches for `@shared/audio`) |
+| The stop's sounds: siren wail and yelp, air brakes, door, steps, pen, bell, signal, cell door | `src/audio/sounds.ts` (`sirenSweep`, `bell`) |
 
-**The rig** is laid out on a grid of 100 units from the trailer's back door
-to the bumper, wheels on the road at 0, and scaled to whatever length the
-caller asks for (the side view, the diner's pump, the parked rigs at the
-back of the lot). It keeps the proportions of an early-eighties long-nose
-conventional: the cab roof well under the trailer's and a long, low hood
-over a swept steer fender. `paintRigSide` draws what sits behind
-the tyres (frame rails, fifth wheel, wheel well, mud flaps), the wheels,
-then the trailer and `paintTractor`, which paints the tractor back to front,
-one function per part: air lines, sleeper, cab and hood, the swept fender,
-the paint stripe, the door with its window and driver, the saddle tank and
-steps, the air cleaner, the stack, the mirror and CB whip, the visor lamps
-and air horns, and the nose (grille, headlamp, bumper). Three gradient
-helpers give it its finish: `paintedPanel` (a sky highlight over the paint
-and shade underneath), `chrome` and `chromePipe` (polished metal on flat and
-upright parts), plus `glass` for the windows. Every colour goes through
-`lit()`, so the rig darkens and warms with the time of day like the
-scenery. A parked rig has its headlights off, no one at the wheel, a still
-antenna and, at night, a lit bunk window.
+**The rig** is an early-eighties long-nose conventional pulling a 45-foot
+reefer or dry van, 65½ feet bumper to doors, laid out in feet with x forward
+from the trailer's doors, y up and z to the right. The tractor is its hood,
+grille shell and fenders, the cab with its door, window and driver, the
+sleeper, the saddle tanks and steps, the air cleaners, twin stacks, mirrors,
+visor lamps, air horns, the fifth wheel and frame; the trailer is its box
+with corner posts and rivet lines, the livery panel, the rear doors with
+their hardware, the reefer unit, the landing gear and the tandem. Every
+colour comes from a material lit by the environment, so the rig takes the
+sky's colour at noon, gold at sunset and moonlight at night like the
+scenery around it. A parked rig has its headlights off, no one at the
+wheel and, at night, a lit bunk window.
 
 ## How settings flow
 
@@ -346,10 +524,13 @@ antenna and, at night, a lit bunk window.
 once. The session reads the rhythm, warp and event pause each frame; the
 drive screen reads the view and units; the difficulty is copied into a trip
 when it starts and stays with it. The theme lives in `theme.ts`, the sound
-mix in the arcade-wide `@shared/audio` store. Other saved state:
+mix in the arcade-wide `@shared/audio` store. *Police stops* is read when
+a stop begins, through the session's `StopPolicy`: Auto plays Full the
+first time and Short after that (`stops-seen` in storage), or Short from the
+start when the device asks for reduced motion. Other saved state:
 `single-record` and `single-last` (Single Haul), `career`, `daily` (via
 `shared/daily`), `postcards`, `cb-record` (how often each CB regular was
-right).
+right), `stops-seen`.
 
 ## Tests
 
@@ -360,11 +541,16 @@ right).
   right time zones; `career.test.ts`, `daily.test.ts`; `determinism.test.ts`
   replays seeded trips and greps the engine for forbidden maths;
   `data/data.test.ts` checks the authored data; `game/pass-report.test.ts`
-  the badges.
+  the badges; `game/police-stop.test.ts` the stop's steps, waits and skips,
+  and that showing a stop changes nothing the engine decided.
 - **Browser** (`npx playwright test -c ports/long-haul …`): `smoke` and
   `phone` play every mode from the production build; `determinism-*` runs
   the engine in Chromium, Firefox and WebKit against Node; `screens` renders
-  every screen at four sizes in both themes for art direction.
+  every screen at four sizes in both themes for art direction, and
+  `police.screens.ts` photographs a stop at every step in both views, at
+  night and at dusk, at three sizes, and a fourth offence to the jail. The
+  art bench poses any step in any light and weather
+  (`dev/art/?stop=officer&at=3&condition=rain&view=cab`).
 - **Balance**: `scripts/balance.ts` and `scripts/career-sim.ts` (results in
   the behaviour notes).
 
@@ -385,6 +571,16 @@ right).
 - **A new upgrade**: `UPGRADES` and `rigWith` in `engine/career.ts`.
 - **A new badge**: the manifest, then a rule in `game/pass-report.ts` (with a
   test), or a call in `main.ts` for career and daily badges.
+- **A new upgrade's look**: a field on `RigModel` (`rig/model.ts`), set from
+  the career rig in `rigModel`, and the parts that change in `tractor.ts` or
+  `trailer.ts`; check it in the vehicle lab.
+- **A new paint or livery**: an entry in `RIG_PAINTS`; the trailer's lettering
+  is `livery` in `trailer.ts`.
+- **What the trooper says**: `stopLines` in `game/stop-copy.ts`; pick variants
+  with `pick(…, facts.flavour, salt)` so they never touch the engine's luck.
+- **Slower or quicker stops**: `SECONDS`, `WALK_SECONDS` and `LINE_SECONDS`
+  in `game/police-stop.ts`; the poses read progress through a step, so they
+  stretch with it.
 
 ## Arcade Pass
 
@@ -403,13 +599,20 @@ pad's B dismisses one before going back.
   Rain, G O O D W O R K, Right on Time (counted), Clean Run, Early Bird,
   Blizzard Survivor, Daily Driver, Bottomless Cup and Smokey's Best Friend
   (counted), Iron Bladder (600 miles between stops), Night Owl (every hour
-  from midnight to 5 AM on the move), Rock Slide Napper, and the secrets
-  DUMMY !!, Washing Dishes, Repossessed and Sound Asleep.
+  from midnight to 5 AM on the move), Rock Slide Napper, Pulled Over (any
+  ticket or a jailing), Clean Record (a delivery without one), and the
+  secrets DUMMY !!, Washing Dishes, Repossessed, Sound Asleep and Detector
+  Detected (a ticket with the detector fine on it). They come from the
+  trip's record, so a stop shown as a card counts the same as one played
+  out on the road.
 - **Elsewhere in `main.ts`**: Postcard Collector (the album's count, on every
   new card), A Week on the Road (a seven-day daily streak), and the career
-  badges Fully Loaded, Legend of the Docks, Fat Wallet and Million-Mile Club
-  (checked after every load and purchase); Repossessed also when waiting a
-  day empties the bank.
+  badges Fully Loaded, Legend of the Docks, Fat Wallet, Million-Mile Club
+  and Frequent Visitor (three hearings: the tickets of the career's trips
+  added up), checked after every load and purchase; Repossessed also when
+  waiting a day empties the bank.
+- **During a stop** nothing is awarded and the toasts stay held, as on the
+  rest of the road; the stop's badges arrive with the trip's report.
 - **Stats**: trips, loads delivered, miles, best trip (dollars), postcards,
   tickets.
 - **Cosmetics**: five rig paints, unlocked by level 3 or by a badge; the

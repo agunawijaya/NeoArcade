@@ -77,7 +77,9 @@ export function findings(report: TripReport): TripFindings {
   const delivered = Boolean(settlement);
   const unlock: BadgeId[] = [];
   const progress: [BadgeId, number][] = [];
-  const tickets = eventsOfType(trip.events, 'pulled-over').length;
+  const stops = eventsOfType(trip.events, 'pulled-over');
+  const tickets = stops.length;
+  const jailed = eventsOfType(trip.events, 'jailed').length > 0;
   const blowouts = eventsOfType(trip.events, 'blowout').length;
 
   if (settlement) {
@@ -93,11 +95,14 @@ export function findings(report: TripReport): TripFindings {
     if (settlement.profitCents > 10_000) unlock.push('good-work');
     if (trip.cargo === 'freight' && !settlement.late) progress.push(['right-on-time', 1]);
     if (mode === 'single' && tickets === 0 && blowouts === 0) unlock.push('clean-run');
+    if (tickets === 0) unlock.push('clean-record');
     if (settlement.early) unlock.push('early-bird');
     if (trip.trail.filter((point) => point.condition === 'blizzard' && point.speed > 0).length >= 3)
       unlock.push('blizzard-survivor');
     if (mode === 'daily' || mode === 'practice') unlock.push('daily-driver');
   }
+  if (tickets > 0 || jailed) unlock.push('pulled-over');
+  if (stops.some((stop) => (stop.detectorCents ?? 0) > 0)) unlock.push('detector-detected');
   const coffees = eventsOfType(trip.events, 'coffee').length;
   if (coffees > 0) progress.push(['bottomless-cup', coffees]);
   const waved = eventsOfType(trip.events, 'radar').filter((event) => !event.ticketed).length;

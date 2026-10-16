@@ -86,8 +86,7 @@ export class StopScreen {
       sunArc: scene.sunArc,
       condition: scene.condition,
       snow: scene.snow,
-      paint: scene.paint,
-      cargo: scene.cargo,
+      rig: scene.rig,
     });
   }
 

@@ -21,7 +21,16 @@ export type SoundName =
   | 'alarm'
   | 'stamp'
   | 'menu'
-  | 'postcard';
+  | 'postcard'
+  | 'siren-wail'
+  | 'siren-yelp'
+  | 'air-brake'
+  | 'car-door'
+  | 'step'
+  | 'pen'
+  | 'bell'
+  | 'signal'
+  | 'cell-door';
 
 const noise = (
   frequency: number,
@@ -57,6 +66,29 @@ const SIREN: Sound = [
   { ...tone('sawtooth', 900, 0.32, 0.12, 0.69), filter: { type: 'lowpass', frequency: 2400 } },
 ];
 const AIR_BRAKE: Sound = noise(3200, 0.45, 0.22, 'highpass', 0.6);
+
+/** One turn of a siren: a sawtooth sliding up and back down, softened. */
+const sirenSweep = (low: number, seconds: number): Sound => [
+  { ...tone('sawtooth', low, seconds, 0.09, 2), filter: { type: 'lowpass', frequency: 2600 } },
+  {
+    ...tone('sawtooth', low * 2, seconds, 0.09, 0.5),
+    filter: { type: 'lowpass', frequency: 2600 },
+  },
+];
+
+/** A struck bell: a fundamental and two partials, ringing away. */
+const bell = (frequency: number): Sound =>
+  [
+    [1, 0.14, 2.4],
+    [2.76, 0.05, 1.4],
+    [5.4, 0.025, 0.7],
+  ].map(([ratio = 1, gain = 0.1, seconds = 1]) => ({
+    wave: 'sine' as const,
+    frequency: frequency * ratio,
+    duration: seconds,
+    gain,
+    envelope: { attack: 0.003, decay: seconds * 0.9, sustain: 0, release: 0.2 },
+  }));
 const HORN: Sound = [
   { ...tone('sawtooth', 185, 0.7, 0.16), filter: { type: 'lowpass', frequency: 1200 } },
   { ...tone('sawtooth', 233, 0.7, 0.14), filter: { type: 'lowpass', frequency: 1200 } },
@@ -108,6 +140,19 @@ export const SOUNDS: Readonly<Record<Exclude<SoundName, `card:${EventArt}`>, Sou
   stamp: [noise(220, 0.12, 0.4, 'lowpass'), tone('sine', 110, 0.12, 0.2, 0.6)],
   menu: tone('triangle', 880, 0.06, 0.05),
   postcard: [tone('sine', 1319, 0.12, 0.06), tone('sine', 1760, 0.2, 0.05)],
+  'siren-wail': sirenSweep(620, 0.75),
+  'siren-yelp': sirenSweep(700, 0.17),
+  'air-brake': [noise(3600, 1.1, 0.24, 'highpass', 0.45), noise(400, 0.15, 0.25, 'lowpass')],
+  'car-door': [noise(260, 0.14, 0.45, 'lowpass'), tone('sine', 85, 0.12, 0.25, 0.7)],
+  step: [noise(2400, 0.07, 0.12, 'bandpass'), noise(700, 0.05, 0.08, 'lowpass')],
+  pen: [noise(5200, 0.12, 0.05, 'highpass', 1.3), noise(4600, 0.16, 0.05, 'highpass', 0.8)],
+  bell: bell(392),
+  signal: [tone('square', 1900, 0.018, 0.035), noise(3000, 0.02, 0.04, 'highpass')],
+  'cell-door': [
+    noise(500, 0.6, 0.45, 'lowpass', 0.4),
+    { ...tone('square', 160, 0.35, 0.12, 0.7), filter: { type: 'lowpass', frequency: 900 } },
+    tone('triangle', 740, 0.7, 0.05, 0.98),
+  ],
 };
 
 /** Sounds layered with a short delay between them: [patch, seconds]. */
@@ -123,6 +168,10 @@ const SEQUENCES: Partial<Record<SoundName, readonly number[]>> = {
   detector: [0, 0.09],
   door: [0, 0.14],
   postcard: [0, 0.1],
+  'siren-wail': [0, 0.75],
+  'siren-yelp': [0, 0.17],
+  pen: [0, 0.16],
+  'cell-door': [0, 0.05, 0.08],
 };
 
 export interface Played {
