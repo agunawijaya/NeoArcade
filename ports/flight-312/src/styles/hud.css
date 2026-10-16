@@ -26,12 +26,20 @@
   pointer-events: auto;
 }
 
-.hud-subtitles {
+.hud-talk {
   position: absolute;
   left: 50%;
   top: 7%;
   transform: translateX(-50%);
   width: min(760px, 70vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-subtitles {
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -153,6 +161,111 @@
 .hud-hint.shown,
 .hud-notice.shown {
   opacity: 1;
+}
+
+.hud-instructor {
+  max-width: min(680px, 86vw);
+  padding: 9px 16px;
+  border-radius: 9px;
+  background: rgba(10, 40, 26, 0.9);
+  border: 1px solid #5fd08a;
+  color: #f2f2ec;
+  font-size: 15px;
+  line-height: 1.4;
+  display: none;
+}
+
+.hud-instructor strong {
+  color: #8ff0b0;
+}
+
+.hud-instructor.shown {
+  display: block;
+}
+
+/* The lesson's card: right side, under the tools. */
+.hud-lesson {
+  position: absolute;
+  right: 8px;
+  top: 158px;
+  width: min(260px, 40vw);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(6, 10, 16, 0.72);
+  border: 1px solid rgba(143, 240, 176, 0.45);
+  color: #e9edf2;
+  font-size: 13px;
+}
+
+.hud-lesson p {
+  margin: 0 0 6px;
+}
+
+.hud-lesson-title {
+  color: #8ff0b0;
+  font-weight: 700;
+}
+
+.hud-lesson-task {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.hud-lesson-progress {
+  display: flex;
+  gap: 4px;
+}
+
+.hud-lesson-progress span {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.hud-lesson-progress span.done {
+  background: #8ff0b0;
+}
+
+.hud-lesson-progress span.now {
+  background: var(--accent);
+}
+
+.hud-lesson-note {
+  color: var(--accent);
+  margin: 0 !important;
+}
+
+/* On a phone the card moves to the windscreen's corner, clear of the instruments. */
+@media (max-height: 520px) {
+  .hud-lesson {
+    top: 88px;
+    left: 8px;
+    right: auto;
+    width: min(160px, 20vw);
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .hud-lesson-task {
+    font-size: 12px;
+  }
+
+  .hud-instructor {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+
+/* The glass deck's CDU takes the keyboard through this field, out of sight. */
+.cdu-keys {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: 0;
+  top: 0;
 }
 
 .hud-status {
@@ -292,8 +405,9 @@
     font-size: 10px;
   }
 
-  .hud-subtitles {
+  .hud-talk {
     top: 78px;
+    width: min(760px, 52vw);
   }
 
   .hud-choices {

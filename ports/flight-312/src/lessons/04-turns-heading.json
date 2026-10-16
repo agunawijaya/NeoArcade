@@ -1,0 +1,90 @@
+{
+  "id": "turns-heading",
+  "number": 4,
+  "title": "Turns and headings",
+  "summary": "Level turns onto new headings at 6,000 ft, by hand or with the heading mode, without losing the altitude.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "ssm",
+    "seed": 404,
+    "radio": "quiet",
+    "sky": "clear",
+    "start": {
+      "place": { "kind": "radial", "station": "RBV", "radial": 300, "dmeNm": 25 },
+      "altitudeFt": 6000,
+      "heading": 90,
+      "speedKt": 250,
+      "flaps": 0,
+      "gearDown": false,
+      "autopilot": false
+    }
+  },
+  "briefing": [
+    "Six thousand feet over Pennsylvania, two hundred and fifty knots, and she's all yours: the autopilot is off.",
+    "To turn, roll into about twenty-five degrees of bank, and as the heading comes up, roll out a little before it. Keep the altitude with a touch of back pressure in the turn."
+  ],
+  "tasks": [
+    {
+      "kind": "heading",
+      "heading": 180,
+      "withinDeg": 5,
+      "holdSeconds": 10,
+      "goal": "Turn right to heading 180 and hold it.",
+      "say": "Turn right, heading one eight zero. Hold it there for ten seconds.",
+      "done": "One eight zero. Good.",
+      "cues": [
+        {
+          "when": "bankOver",
+          "value": 32,
+          "say": "That's steep: twenty-five degrees is plenty.",
+          "every": 8
+        },
+        {
+          "when": "altitudeOff",
+          "value": 200,
+          "say": "Watch the altitude: six thousand.",
+          "every": 10
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "heading": 300,
+      "withinDeg": 5,
+      "holdSeconds": 10,
+      "goal": "Turn right to heading 300 and hold it.",
+      "say": "Now keep going round to the right: heading three zero zero. If you'd like the autopilot's help, set the heading window and press HDG, then the autopilot, Q.",
+      "done": "Three hundred.",
+      "cues": [
+        { "when": "bankOver", "value": 32, "say": "Shallower: twenty-five degrees.", "every": 8 },
+        {
+          "when": "altitudeOff",
+          "value": 200,
+          "say": "We're off our altitude: six thousand.",
+          "every": 10
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "heading": 90,
+      "withinDeg": 5,
+      "holdSeconds": 15,
+      "goal": "Turn right to heading 090 and hold it.",
+      "say": "And back to where we started: heading zero niner zero, right turn.",
+      "done": "Zero niner zero. A full circle, nearly.",
+      "cues": [
+        { "when": "bankOver", "value": 32, "say": "Easy on the bank.", "every": 8 },
+        { "when": "altitudeOff", "value": 200, "say": "Altitude: six thousand.", "every": 10 }
+      ]
+    }
+  ],
+  "grade": { "measure": "altitudeErrorFt", "three": 150, "two": 300 },
+  "debrief": {
+    "three": "Three turns and the altitude never strayed. Smooth flying.",
+    "two": "Good turns. Hold the altitude a little tighter: a touch of back pressure as you roll in.",
+    "one": "The headings are right; the altitude wandered. Watch the altimeter in the turn.",
+    "failed": "That didn't go to plan. Gentle bank, and watch the altitude. Shall we go again?"
+  }
+}

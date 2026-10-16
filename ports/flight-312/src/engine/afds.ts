@@ -11,10 +11,15 @@ import { FPS_PER_KNOT } from './units';
  * the speed set on its window. The same
  * computation drives the flight director's bars when the autopilot is off.
  *
+ * The glass deck adds two modes of its era: LNAV, which follows the track
+ * the flight management computes along the route, and flight level change,
+ * which holds the speed with the pitch while the autothrottle sets climb
+ * thrust or idle, and levels off at the altitude in the window.
+ *
  * Headings and courses here are true; the panel converts the magnetic
  * numbers the crew sets.
  */
-export type RollMode = 'wings' | 'heading' | 'navigation' | 'localizer';
+export type RollMode = 'wings' | 'heading' | 'navigation' | 'localizer' | 'route';
 export type PitchMode =
   | 'attitude'
   | 'speed'
@@ -23,6 +28,8 @@ export type PitchMode =
   | 'altitudeCapture'
   | 'glideslope'
   | 'takeoff';
+/** What the autothrottle does: hold the speed, set climb thrust, or close the levers. */
+export type ThrustMode = 'speed' | 'climb' | 'idle';
 
 export interface AfdsState {
   autopilot: boolean;
@@ -33,8 +40,15 @@ export interface AfdsState {
   /** VOR/LOC or ILS armed, waiting for the beam. */
   armedNavigation: boolean;
   armedGlideslope: boolean;
+  /** LNAV armed, waiting to be clear of the ground. */
+  armedRoute: boolean;
+  /** Flight level change: the speed on the pitch until the altitude in the window. */
+  levelChange: boolean;
+  thrustMode: ThrustMode;
   heading: number;
   course: number;
+  /** The track LNAV asks for, true, while the flight management has a leg to fly. */
+  routeTrack: number | null;
   altitude: number;
   verticalSpeed: number;
   speedKt: number;
@@ -68,8 +82,12 @@ export function startAfds(): AfdsState {
     pitchMode: 'takeoff',
     armedNavigation: false,
     armedGlideslope: false,
+    armedRoute: false,
+    levelChange: false,
+    thrustMode: 'speed',
     heading: 0,
     course: 0,
+    routeTrack: null,
     altitude: 3000,
     verticalSpeed: 0,
     speedKt: 250,
@@ -83,6 +101,11 @@ export function startAfds(): AfdsState {
 /** Steepest bank the autopilot uses. */
 const MAX_BANK = 25;
 const MAX_VERTICAL_SPEED = 3000;
+/** In the speed mode the path keeps at least this much climb toward a higher altitude in the window. */
+const MIN_CLIMB_PATH_DEG = 1.5;
+const LEVEL_BAND_FT = 200;
+/** The levers the autothrottle sets for a climb: climb thrust, a little short of full. */
+const CLIMB_LEVER = 0.93;
 
 export function stepAfds(
   afds: AfdsState,
@@ -91,6 +114,11 @@ export function stepAfds(
   currentLever: number,
   dt: number,
 ): AfdsOutput {
+  // A level change belongs to the speed mode: leaving it, the autothrottle goes back to the speed.
+  if (afds.pitchMode !== 'speed' && afds.levelChange) {
+    afds.levelChange = false;
+    afds.thrustMode = 'speed';
+  }
   captureBeams(afds, nav);
   if (afds.lastIas > 0) {
     afds.iasTrend += ((aircraft.iasKt - afds.lastIas) / dt - afds.iasTrend) * clamp(dt / 1.5, 0, 1);
@@ -148,6 +176,10 @@ function rollTarget(afds: AfdsState, aircraft: AirframeState, nav: NavReading): 
       const intercept = clamp(12 * nav.deviation, -30, 30);
       return bankForTrack(aircraft, normaliseDegrees(afds.course + intercept));
     }
+    case 'route':
+      return afds.routeTrack === null
+        ? clamp(1.6 * angleDifference(afds.heading, aircraft.headingTrue), -MAX_BANK, MAX_BANK)
+        : bankForTrack(aircraft, afds.routeTrack);
     default:
       return 0;
   }
@@ -168,8 +200,13 @@ function pitchTargetFor(afds: AfdsState, aircraft: AirframeState, nav: NavReadin
       return aircraft.onGround ? 0 : clamp(speedOnPitch(afds, aircraft), 8, 18);
     case 'attitude':
       return afds.pitchHold;
-    case 'speed':
-      return clamp(speedOnPitch(afds, aircraft), -10, 20);
+    case 'speed': {
+      if (afds.levelChange) captureFromLevelChange(afds, aircraft);
+      // Climbing to the altitude in the window, the speed is never bought by descending.
+      const climbing = afds.altitude - aircraft.altitudeFt > LEVEL_BAND_FT;
+      const lowest = climbing ? aircraft.alphaDeg + MIN_CLIMB_PATH_DEG : -10;
+      return clamp(speedOnPitch(afds, aircraft), lowest, 20);
+    }
     case 'verticalSpeed': {
       const toGo = afds.altitude - aircraft.altitudeFt;
       // Capture the selected altitude: start levelling a tenth of the climb rate before it.
@@ -201,6 +238,20 @@ function pitchTargetFor(afds: AfdsState, aircraft: AirframeState, nav: NavReadin
   }
 }
 
+/** Level change ends as the altitude in the window comes up: capture it, and the autothrottle holds the speed again. */
+function captureFromLevelChange(afds: AfdsState, aircraft: AirframeState) {
+  const toGo = afds.altitude - aircraft.altitudeFt;
+  const climbing = afds.thrustMode === 'climb';
+  if (
+    (climbing ? toGo < 0 : toGo > 0) ||
+    Math.abs(toGo) < Math.abs(aircraft.verticalSpeedFpm) / 10 + 80
+  ) {
+    afds.pitchMode = 'altitudeCapture';
+    afds.levelChange = false;
+    afds.thrustMode = 'speed';
+  }
+}
+
 /**
  * Holds a speed with the pitch: trade the climb for the speed error, the
  * path that would bring the speed back over about ten seconds, from
@@ -224,9 +275,15 @@ function autothrottle(
   current: number,
   dt: number,
 ): number {
+  const step = 0.1 * dt;
+  if (afds.thrustMode !== 'speed') {
+    // The speed loop follows the levers meanwhile, so it takes over from where they are.
+    afds.leverTrim = current;
+    const target = afds.thrustMode === 'climb' ? CLIMB_LEVER : 0;
+    return clamp(target, current - step, current + step);
+  }
   const error = afds.speedKt - aircraft.iasKt;
   afds.leverTrim = clamp(afds.leverTrim + error * 0.0015 * dt, 0, 1);
   const wanted = clamp(afds.leverTrim + 0.025 * error - 0.12 * afds.iasTrend, 0, 1);
-  const step = 0.1 * dt;
   return clamp(wanted, current - step, current + step);
 }

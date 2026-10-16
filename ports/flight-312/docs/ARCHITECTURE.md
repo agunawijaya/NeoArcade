@@ -11,11 +11,23 @@ Canvas 2D, and the HUD in plain DOM; it synthesises every sound and speaks
 the controllers through the browser's own (local) voices. Nothing the game
 draws or says can change a flight.
 
+Part two builds on that determinism. Every hand on the flight is a crew
+command, so a flight is its setup, its inputs and its commands: that is
+what a replay records, flies again and sends in a link. The glass deck is
+the same engine with a small flight management computer and two more
+autopilot modes, drawn as six screens. The flight school's lessons are
+JSON files that the engine marks and the test pilot flies; the Daily
+Approach is a seed from the date; the landing score is engine code, so a
+challenger's score is worked out again on the receiver's machine.
+
 The decisions behind it:
 [the 3D library and the rendering split](../../../docs/adr/0022-flight-312-three-and-rendering-split.md),
 [the flight-model levels and exact arithmetic](../../../docs/adr/0023-flight-312-flight-model-levels.md),
 [airport, navaid and terrain data and their licences](../../../docs/adr/0024-flight-312-data-sources.md),
-[the code-drawn cockpit](../../../docs/adr/0025-flight-312-cockpit-rendering.md).
+[the code-drawn cockpit](../../../docs/adr/0025-flight-312-cockpit-rendering.md),
+[replays as recorded commands](../../../docs/adr/0029-flight-312-replays-as-recorded-commands.md),
+[the glass deck](../../../docs/adr/0030-flight-312-glass-deck.md),
+[lessons as data](../../../docs/adr/0031-flight-312-lessons-as-data.md).
 What the original did, and every change from it, is in
 [the behaviour notes](../../../docs/games/flight-312.md).
 
@@ -29,39 +41,54 @@ flowchart TB
     geography["geography-data: land, lakes, rivers, towns"]
     unpack["unpack: DecompressionStream"]
   end
+  lessonFiles["src/lessons: 13 lesson files, JSON"]
   subgraph engine["src/engine — the rules, no DOM"]
     flight["flight: createFlight, stepFlight"]
+    crew["crew: CrewCommand, applyCommand"]
     program["program-model + fly-program: 1982 Rules"]
     airframe["airframe + fly-airframe + afds + engines"]
+    fms["fms: route, ILS fixes, LNAV, speeds"]
     readout["readout: one Readout for both models"]
     nav["navdata, radios, magnetic, plan, geo"]
     world["world, terrain, weather, runways"]
     atc["atc + phraseology + radio-calls"]
     checks["warnings, procedures, checklists"]
     ending["finish, outcome: the report"]
-    pilot["test-pilot, fingerprint"]
+    score["approach-log + landing-score"]
+    lessons["lesson, lesson-monitor, lesson-pilot"]
+    daily["daily-approach"]
+    recording["recording + recording-codec"]
+    pilot["test-pilot, practice-player, fingerprint"]
   end
   subgraph game["src/game — playing it"]
-    session["session: loop, input, events"]
-    controls["controls, input: keys, pad, clicks"]
+    session["session: loop, input, events, recorder"]
+    input["input: keys, pad"]
+    school["school: LessonController, the record"]
+    replays["replay-director, replay-link, replay-store"]
     passReport["pass-report"]
   end
   subgraph view["drawn and heard"]
-    worldView["src/world: Three.js WorldView"]
-    cockpit["src/cockpit: Canvas 2D flight deck"]
+    worldView["src/world: Three.js WorldView, jumbo, replay overlay"]
+    cockpit["src/cockpit: Canvas 2D, classic and glass decks"]
     audio["src/audio: Soundscape, RadioVoices"]
-    ui["src/ui: HUD, screens, chart"]
+    ui["src/ui: HUD, screens, school, daily, replays, chart"]
   end
   main["main.ts: screens, modes, storage, Pass, Hall"]
-  shared["@shared: loop, input, audio, pass, storage, last-played, hall-link, rng"]
+  shared["@shared: loop, input, audio, pass, storage, daily, last-played, hall-link, rng"]
 
   data --> engine
+  lessonFiles --> lessons
   engine --> session
-  controls --> session
+  input --> session
+  cockpit -- "CrewCommand" --> crew
+  ui -- "CrewCommand" --> crew
   session --> worldView
   session --> cockpit
   session --> audio
   session --> ui
+  engine --> replays
+  replays --> worldView
+  school --> session
   data --> worldView
   data --> ui
   passReport --> main
@@ -71,12 +98,19 @@ flowchart TB
 ```
 
 The engine never imports from `game`, `world`, `cockpit`, `audio` or `ui`.
-The test pilot and the determinism trace sit inside the engine, because
-tests, `scripts/balance.ts`, the scene lab and the browser determinism
-check all use them. The world and the cockpit only read the flight; the
-only things that change it are the panel functions (`engine/panel.ts`)
-and `game/controls.ts`, which the keyboard, the gamepad, the cockpit's
-clicks and the test pilot all go through.
+The test pilot, the lesson pilot, the practice player and the determinism
+trace sit inside the engine, because tests, `scripts/balance.ts`, the
+scene lab, the lessons' demonstrations and the browser determinism check
+all use them. The world and the cockpit only read the flight. A player
+changes it in one way only: a `CrewCommand` (`engine/crew.ts`) — a knob
+turned so many clicks, a button pressed, the levers set, a readback
+chosen, a checklist called, a CDU edit — carried out by `applyCommand`.
+The keyboard, the gamepad, the cockpit's clicks, the touch buttons, the
+readback buttons, the checklist screen and the CDU all produce commands,
+and the session's recorder writes each one down. The stick, pedals and
+brakes are the step's `FlightInput`. The scripted crews (the test pilot,
+the lesson pilot) set the panel directly and are reproduced by flying
+their script again.
 
 ## Folder tree
 
@@ -84,30 +118,34 @@ clicks and the test pilot all go through.
 ports/flight-312/
 ├── index.html                    the page: #game, the description, the favicon
 ├── favicon.svg                   the jumbo seen from above, on night blue
-├── pass.manifest.ts              Arcade Pass: 16 badges, 4 cosmetics, 5 stats
+├── pass.manifest.ts              Arcade Pass: 23 badges, 5 cosmetics, 7 stats
 ├── playwright.config.ts          browser tests: smoke, phone, determinism, screens
 ├── README.md
-├── docs/                         ABOUT, HOW-TO-PLAY, ARCHITECTURE
+├── docs/                         ABOUT, HOW-TO-PLAY, ARCHITECTURE, IDEAS
 ├── media/                        screenshots for the docs and the Hall
 ├── e2e/
-│   ├── game.spec.ts              smoke tests, also run at phone size
+│   ├── game.spec.ts              smoke tests (glass, school, daily, a challenge link), also at phone size
 │   ├── engine.determinism.ts     the engine bundled and compared with Node, per browser
-│   └── media.screens.ts          the pictures in media/, from the scene lab
+│   └── media.screens.ts          the pictures in media/, from the scene lab and seeded screens
 ├── scripts/
 │   ├── build-world.ts            OurAirports, ETOPO1, Natural Earth → src/data/*
 │   └── balance.ts                the test pilot at every level and destination
 └── src/
-    ├── main.ts                   screens, modes, settings, Pass, Hall, the labs
+    ├── main.ts                   screens, modes, settings, school, daily, replays, Pass, Hall, the labs
     ├── settings.ts               the settings and their sanitiser
     ├── styles/
     │   ├── base.css              tokens for light and dark menus, page basics
     │   ├── screens.css           title, briefing, settings, overlays, report, chart
-    │   └── hud.css               subtitles, readbacks, hints, view buttons, touch controls
+    │   ├── school.css            the flight school, the Daily Approach, replays, challenges, debrief
+    │   └── hud.css               subtitles, instructor, lesson card, readbacks, hints, views, touch
     ├── data/
     │   ├── airport-data.ts       generated: the six airports' runways, the stations' identities
     │   ├── geography-data.ts     generated: land, lakes, rivers, urban areas, towns
     │   ├── terrain-data.ts       generated: the region's grid and the airport patches
     │   └── unpack.ts             gunzips the terrain once, in the browser and in Node
+    ├── lessons/
+    │   ├── 01-cockpit-tour.json … 13-check-ride.json   one lesson each (see Lessons)
+    │   └── index.ts              LESSONS in teaching order, each checked by parseLesson
     ├── engine/
     │   ├── exact-math.ts         sin, cos, atan2, exp, ln, pow from + − × ÷ and sqrt
     │   ├── units.ts              feet, knots, pounds, the Earth's radius
@@ -123,12 +161,14 @@ ports/flight-312/
     │   ├── radios.ts             VOR, DME, localizer, glideslope, markers, radar altimeter
     │   ├── aircraft.ts           the jumbo's numbers, flap detents, tanks, V-speeds
     │   ├── engines.ts            JT9D-class fans: N1, N2, EPR, EGT, fuel flow, reversers
-    │   ├── airframe.ts           the point-mass model, in the air and on the wheels
-    │   ├── afds.ts               autopilot, flight director and autothrottle
+    │   ├── airframe.ts           the point-mass model, in the air and on the wheels; in-flight starts
+    │   ├── afds.ts               autopilot, flight director, autothrottle; LNAV and level change
+    │   ├── fms.ts                the glass deck's route, ILS fixes, edits, LNAV guidance, speeds
     │   ├── panel.ts              levers, switches and radio heads, and how they move
+    │   ├── crew.ts               CrewCommand and applyCommand: every hand on the flight
     │   ├── program-model.ts      JETSET's own model: the 1982 Rules
     │   ├── readout.ts            the aircraft as the instruments see it, from either model
-    │   ├── flight-state.ts       the Flight, its setup, inputs, events and records
+    │   ├── flight-state.ts       the Flight, its setup (deck, lesson starts), inputs, events, records
     │   ├── flight.ts             createFlight, stepFlight, time scale, checklists
     │   ├── fly-program.ts        a step under the 1982 Rules
     │   ├── fly-airframe.ts       a step at Arcade, Pilot and Captain; touchdown judged
@@ -137,33 +177,47 @@ ports/flight-312/
     │   ├── warnings.ts           GPWS, horns, stick shaker, height callouts
     │   ├── procedures.ts         the Captain's book: limits, clearances, the stable gate
     │   ├── checklists.ts         four checklists that tick themselves
+    │   ├── approach-log.ts       the approach as a check captain sees it: the 1,000 and 500 ft gates
+    │   ├── landing-score.ts      a landing in points and stars
+    │   ├── daily-approach.ts     the day's field, sky, hour and wind from its seed; the share line
+    │   ├── lesson.ts             the lesson format and parseLesson
+    │   ├── lesson-monitor.ts     marks a lesson as it is flown: tasks, cues, the grade
+    │   ├── lesson-pilot.ts       the instructor's hands: the test pilot set up for each task
+    │   ├── recording.ts          FlightRecorder, ReplayPlayer, snapshots
+    │   ├── recording-codec.ts    a recording as bytes, with a checksum
     │   ├── phraseology.ts        what controllers and crews say, written and spoken
     │   ├── atc.ts                the controllers: stages, queue, readbacks, retries
     │   ├── radio-calls.ts        what ATC needs to know each step; the first officer tunes
-    │   ├── test-pilot.ts         a scripted crew that flies whole flights
+    │   ├── test-pilot.ts         a scripted crew that flies whole flights, on either deck
+    │   ├── practice-player.ts    a player's hands for tests: flies an approach through commands
     │   ├── fingerprint.ts        the determinism trace
     │   └── *.test.ts             one test file per area (see Tests)
     ├── game/
-    │   ├── session.ts            one flight in play: loop, devices, events, replay buffer
-    │   ├── controls.ts           cockpit actions, keys and pad onto the panel
-    │   ├── input.ts              the modern layout and the two 1982 layouts, the pad
-    │   └── pass-report.ts        XP, badges, counted badges and stats from a flight
+    │   ├── session.ts            one flight in play: loop, devices, recorder, events, replays
+    │   ├── input.ts              the modern layout and the two 1982 layouts, the pad; views per deck
+    │   ├── school.ts             LessonController: the monitor in play, the card, the school's record
+    │   ├── replay-director.ts    flies a recording again and chooses the camera, slow motion
+    │   ├── replay-link.ts        a replay as text for a link: words, bytes, deflate, base64url
+    │   ├── replay-store.ts       the last ten replays on this device
+    │   └── pass-report.ts        XP, badges, counted badges and stats
     ├── world/
-    │   ├── world-view.ts         the Three.js scene: camera, lens, light, fog, frame
+    │   ├── world-view.ts         the Three.js scene: camera, lens, light, fog, frame, replay views
     │   ├── frame.ts              the scene's moving origin and flat projection
     │   ├── shaders.ts            shared GLSL: curvature, projection, noise, fog, decals
     │   ├── sun.ts                NOAA solar position for 25 February 1982
     │   ├── sky.ts                the dome and the light it throws
     │   ├── clouds.ts             cloud layers from the brief and the fields' overcast
     │   ├── glidepath.ts          the Arcade level's ghost glidepath: gates down the ILS
+    │   ├── replay-overlay.ts     the flown path, the glideslope corridor, the touchdown ring
     │   ├── landuse.ts            water and towns drawn into a texture from Natural Earth
     │   ├── terrain-mesh.ts       terrain tiles, airport squares, the ground shader
     │   ├── airports.ts           runways, taxiways, aprons, buildings, every light
     │   ├── runway-paint.ts       FAA markings drawn on canvases
     │   ├── lights.ts             point-sprite lights: steady, sequenced flashers, VASI
-    │   └── jumbo.ts              the jumbo from outside, in the livery chosen (Brightwater's or a Pass one)
+    │   ├── jumbo.ts              the jumbo from outside, classic or later, in the livery chosen
+    │   └── jumbo-paint.ts        the jumbo's skin on canvases: livery, windows, doors, titles
     ├── cockpit/
-    │   ├── cockpit.ts            the flight-deck canvas: views, head, regions, zoom
+    │   ├── cockpit.ts            the flight-deck canvas: deck, views, head, regions, zoom, the CDU's keys
     │   ├── actions.ts            what a click, knob or lever can do; views; regions
     │   ├── canvas-kit.ts         bezels, ticks, needles, counters, the dial-face cache
     │   ├── palette.ts            day, dusk and night lighting
@@ -173,19 +227,33 @@ ports/flight-312/
     │   ├── main-panel.ts         glareshield and MCP, captain, centre, first officer; compact
     │   ├── windscreen.ts         frame, posts, rain and wipers
     │   ├── pedestal.ts           thrust levers, speedbrake, flaps, radios, INS, trim
-    │   └── stations.ts           the overhead panel and the flight engineer's station
+    │   ├── stations.ts           the overhead panel (both decks) and the flight engineer's station
+    │   └── glass/
+    │       ├── glass-model.ts    what the six screens show, worked out once a frame; their settings
+    │       ├── glass-kit.ts      display colours, lettering, screens, the display stamp
+    │       ├── glass-panel.ts    the glass main panel, MCP, EFIS panels; compact
+    │       ├── glass-pedestal.ts the CDU beside the levers, radios, transponder and trim
+    │       ├── pfd.ts, pfd-tapes.ts   the primary flight display and its tapes
+    │       ├── nd.ts, nd-symbols.ts   the navigation display: map, VOR and approach modes
+    │       ├── eicas.ts, eicas-pages.ts   the upper EICAS and the four lower pages
+    │       ├── cdu.ts            the CDU: screen, keys, scratchpad, typing
+    │       └── cdu-pages.ts      RTE, LEGS, DEP ARR, TAKEOFF, APPROACH, PROG, NAV RAD
     ├── audio/
     │   ├── soundscape.ts         engines, wind, motors, warnings, markers, radio noise
-    │   └── radio-voices.ts       speechSynthesis with this device's own voices
+    │   └── radio-voices.ts       speechSynthesis with this device's own voices; the instructor
     ├── ui/
     │   ├── dom.ts                h(): elements with attributes and children
-    │   ├── hud.ts                subtitles, readback choices, hints, views, touch controls
+    │   ├── hud.ts                subtitles, instructor, lesson card, readbacks, hints, views, touch
     │   ├── screens.ts            title, briefing, settings, pause, checklists, report
+    │   ├── school-screen.ts      the lesson list and the debrief
+    │   ├── daily-screen.ts       today's approach, the result, the calendar and streak
+    │   ├── replay-screens.ts     the replay bar, saved replays, a challenge, the share box
     │   └── chart.ts              the en-route chart
     └── lab/
         ├── world-lab.ts          ?lab=world: the world behind a debug camera
         ├── instrument-lab.ts     ?lab=instruments: every dial at the values that test it
-        └── scene-lab.ts          ?lab=scene: a moment of a flight, set up for a picture
+        ├── glass-lab.ts          ?lab=glass: the glass screens at moments of a real flight
+        └── scene-lab.ts          ?lab=scene: a moment of a flight, a lesson or a replay, for a picture
 ```
 
 ## The loop and the state machine
@@ -212,18 +280,27 @@ which runs `createLoop` from `@shared/loop` with a fixed step of
   liftoff, touchdown, violations, the ending — and the session turns them
   into voices, subtitles, sounds and notices, and passes every one to
   `main.ts` for the Pass.
-- **Replay.** The session keeps the last 90 s of poses at 10 Hz. After
-  the ending, "Watch the replay" plays them back from a chase camera
-  orbiting the jumbo.
+- **Recording.** Unless a scripted crew is flying, each step goes through
+  a `FlightRecorder`: the input is quantised, written when it changes, and
+  the commands given before the step are written with it. Every ten
+  seconds it keeps a snapshot. "Watch the replay" hands the recording to
+  a `ReplayDirector` (see Recordings and replays), and the session draws
+  its shots instead of the live flight.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Title
+  [*] --> Challenge: a #r= link
   Title --> Briefing: choose Flight 312, Takeoff or Approach
+  Title --> School: Flight school
+  Title --> Daily: Daily Approach
+  Title --> Replays: Saved replays
   Title --> Settings
   Settings --> Title
   Briefing --> Title: back
   Briefing --> Flight: start the flight
+  School --> Flight: fly a lesson, or watch the instructor
+  Daily --> Flight: fly today's approach, scored or practice
   state Flight {
     [*] --> Flying
     Flying --> Paused: Esc
@@ -232,14 +309,23 @@ stateDiagram-v2
     Chart --> Flying: close
     Flying --> Checklists: K
     Checklists --> Flying: close
-    Flying --> Ended: an ending
+    Flying --> Ended: an ending, or a lesson's verdict
   }
   Flight --> Report: 1.6 s after the ending
+  Flight --> Debrief: a lesson, 2.5 s after the verdict
   Report --> Replay: watch the replay
-  Replay --> Report: back to the report
+  Debrief --> Replay: watch the replay
+  Replay --> Report: back
+  Replay --> Debrief: back, after a lesson
   Report --> Flight: fly it again
   Report --> Briefing: change the flight
+  Report --> Daily: after the Daily Approach
   Report --> Title
+  Debrief --> Flight: try again, next lesson, watch first
+  Debrief --> School
+  Replays --> Replay: watch a saved one
+  Challenge --> Replay: watch their landing
+  Challenge --> Flight: fly it
   Paused --> Title: leave the flight
 ```
 
@@ -439,9 +525,247 @@ climbs, cruises and descends with the autopilot along the plan, sets up
 the approach (flaps and gear by the speeds, Vref + 15 on the localizer,
 Vref + 5 on the glideslope), lands by hand inside 4 nm, flares at 30 ft
 and goes around when it is not stable between 1,000 and 200 ft. Under the
-1982 Rules it flies the program's keys. It proves every destination at
-every level (`flight.test.ts`, `scripts/balance.ts`) and makes the flights
-the determinism trace compares.
+1982 Rules it flies the program's keys. On the glass deck it flies the
+route on LNAV, climbs in level change above 1,000 ft, and switches to HDG
+for the controllers' vectors. It proves every destination at every level
+on both decks (`flight.test.ts`, `glass.test.ts`, `scripts/balance.ts`
+with `glass`) and makes the flights the determinism trace compares. Two more scripted hands sit beside it: the
+**lesson pilot** (`lesson-pilot.ts`), the instructor's demonstration and
+the lessons' proof, which sets the test pilot up for each task; and the
+**practice player** (`practice-player.ts`), which flies an approach the way
+a person does — every switch through a `CrewCommand`, the stick as inputs —
+so that its whole flight is in a recording.
+
+### Crew commands
+
+`CrewCommand` (`crew.ts`) is a closed union: `knob` (one of fourteen knobs,
+a whole number of clicks), `button` (one of twelve mode control panel
+buttons), `gear`, `levers` (all four, rounded to 1/1024), `reverse`,
+`flapLever`, `speedbrake`, `parkingBrake`, `swapComm`, `crossfeed`,
+`wipers`, `landingLights`, `tuneNav`, `nextStation`, `readback` (one of
+three), `completeChecklist`, `fms` (an `FmsEdit`) and the steps the keys
+and the 1982 layouts use (`thrustStep`, `flapStep`, `programFlaps`,
+`speedbrakeStep`, `reverseToggle`, `autoCourse`). `applyCommand(flight,
+command)` is the only code that carries one out, with exact arithmetic
+only: the same flight and command give the same flight in every
+browser. The cockpit's regions, the HUD,
+the checklist screen and the CDU return commands rather than changing the
+flight; the session hands them to `applyCommand` through its recorder.
+
+### The glass deck: a small FMS, LNAV and level change
+
+`FlightSetup.deck` is `classic` or `glass`; the 1982 Rules are always
+classic. On the glass deck `createFlight` gives the flight an `FmsState`
+(`fms.ts`) built from the briefing's plan, and the fuel system opens the
+crossfeed itself when the symmetrical tanks drift 2,000 lb apart.
+
+```mermaid
+flowchart LR
+  subgraph crewSide["the crew"]
+    cdu["CDU keys and typing: cdu.ts, cdu-pages.ts"]
+    mcp["MCP: LNAV, FLCH, SPD, HDG, ALT, V/S, LOC, APP, CMD"]
+    efis["EFIS panels and display select"]
+  end
+  subgraph engineSide["the engine, each step"]
+    edit["editFms: insert, delete, direct-to, approach, EXEC, speeds"]
+    fmsState["FmsState: route, ILS fixes, active leg, speeds"]
+    step["stepFms: sequence at 1.5 nm, autotune the ILS inside 50 nm"]
+    lnav["lnavGuidance: cross-track, intercept up to 45°"]
+    afds["afds: route roll mode; speed on pitch with climb or idle thrust"]
+    airframe["airframe"]
+  end
+  subgraph screensSide["the screens, each frame"]
+    model["glassModel: PFD, ND, EICAS models"]
+    displays["pfd.ts, nd.ts, eicas.ts"]
+  end
+  cdu -- "CrewCommand fms" --> edit
+  edit --> fmsState
+  mcp -- "CrewCommand button" --> afds
+  fmsState --> step
+  step --> lnav
+  lnav --> afds
+  afds --> airframe
+  fmsState --> model
+  afds --> model
+  airframe --> model
+  efis -- "display settings, not the flight" --> model
+  model --> displays
+```
+
+- **The route** is the program's VOR stations from the plan, then three
+  fixes on the destination's final course: CF at 15 nm, FF at 6 nm
+  (crossed at the glideslope's height) and the runway. The approach is
+  loaded from the start; DEP ARR takes it off or puts it back.
+  An edit makes a `pending` copy (the CDU's MOD pages); `execute` makes it
+  the route. `direct` flies from the present position to a waypoint.
+- **LNAV** (`lnavGuidance`) flies the great circle between the active
+  leg's ends: the desired track is the leg's course corrected by the
+  cross-track error (an intercept up to 45°), and the leg sequences
+  1.5 nm before the waypoint. The roll mode `route` arms on the ground and
+  engages above 50 ft. A localizer capture takes over from it.
+- **Level change** (`afds.ts`): the speed mode on the elevator, with the
+  autothrottle at climb thrust when the window is above and idle when it
+  is below, levelling at the window (`captureFromLevelChange`). Leaving
+  the speed mode ends it. In the speed mode, climbing to a higher window,
+  the path is never allowed below a climb: this also stops the classic
+  deck's IAS mode diving to buy speed (a change to part one, in the diff
+  log).
+- **Speeds.** `acceptTakeoffSpeeds` and `acceptVref` keep V1, VR, V2 and
+  Vref from `referenceSpeeds(weight, flaps)` for the PFD's bugs.
+- **The screens' own state** — the ND's mode and range, the lower EICAS
+  page, the minimums — lives in the cockpit (`GlassDisplays`), not in the
+  flight: it changes nothing the engine does, and a replay keeps the
+  player's choice.
+
+### Lessons
+
+A lesson is a JSON file in `src/lessons/` read by `parseLesson`
+(`lesson.ts`), which throws a `LessonError` naming the field that is
+wrong. `lesson-monitor.ts` steps beside the flight and only reads it.
+
+```mermaid
+classDiagram
+  class Lesson {
+    id, number, title, summary
+    level
+    setup: FlightSetup and start
+    briefing: lines
+    tasks: LessonTask[]
+    grade: measure, three, two
+    debrief: three, two, one, failed
+  }
+  class AirStart {
+    place: radial or final
+    altitudeFt, heading, speedKt
+    flaps, gearDown, autopilot, fuelLb
+  }
+  class LessonTask {
+    kind: set, roll, liftoff, climb, heading, altitude, track, dme, crossAt, localizer, glideslope, glidepath, land, goAround, flight
+    say, sayGlass, goal, done
+    check, limitSeconds and the task's numbers
+  }
+  class LessonCue {
+    when: offCentreline, altitudeOff, headingOff, bankOver, speedBelow, speedAbove, aboveGlideslope, belowGlideslope, courseLeft, courseRight, sinkOver, pitchOver, gearUpLow
+    value, say, every
+  }
+  Lesson --> AirStart
+  Lesson --> "1..*" LessonTask
+  LessonTask --> "0..*" LessonCue
+```
+
+```mermaid
+sequenceDiagram
+  participant Flight as stepFlight
+  participant Monitor as stepLesson
+  participant Controller as LessonController
+  participant Hud as Hud and RadioVoices
+  Monitor->>Controller: say each briefing line on a timetable
+  loop every step
+    Flight-->>Monitor: the flight and its events
+    Monitor->>Monitor: judge the task: done, failed or on
+    Monitor->>Monitor: a cue at most every few seconds
+    Monitor->>Monitor: keep the worst value of the graded measure
+    Monitor-->>Controller: LessonEvent say, task, passed or failed
+    Controller->>Hud: instructor line spoken and shown, the card
+  end
+  Controller->>Controller: 2.5 s for the last words, then the debrief
+```
+
+- **Starting in the air.** A lesson's `start` puts the jumbo on a station's
+  radial or out on the final, configured and trimmed (`startInFlight` in
+  `airframe.ts` trims for level flight or for the glideslope's path), with
+  the autopilot in the modes the lesson wants. The radio is `quiet` for
+  most lessons (no controller calls), or the first officer's.
+- **Grading.** One `Measure` per lesson (seconds, feet off the centreline,
+  knots off the speed, feet off the altitude, needle dots, beam dots,
+  miles off a fix, feet off a crossing altitude, feet below minimums, sink
+  rate, landing points); three stars within `three`, two within `two`,
+  one for a pass outside both. A failed task (off the centreline, far off
+  the beams, landing at minimums without the runway, the clock out, the
+  flight's own ending) ends the lesson with its reason.
+- **The demonstration** is the same monitor with the lesson pilot flying
+  (`createLessonPilot`); its verdict is shown but never recorded or
+  reported to the Pass.
+- **The instructor's voice** is `RadioVoices.instructor`: a local voice no
+  controller uses, no radio clicks, and the words always in the HUD's
+  instructor line, whatever the subtitle setting.
+
+### Landing score and the Daily Approach
+
+`approach-log.ts` watches each approach as a check captain would: the
+state at 1,000 and 500 ft (`GateCheck`: configured, on speed, sink, both
+beams), the sink rate at 50 ft, go-arounds. `scoreLanding` turns that and
+the touchdown into a thousand points — stable at 1,000 ft 150, at 500 ft
+150, the touchdown rate 250 (full at 240 fpm, none at 650), the point 250
+(full from 750 to 1,750 ft past the threshold, none beyond 3,000), the
+centreline 150 (full within 6 ft, none at 60), the flare 50 (sink at
+touchdown against the sink at 50 ft), less 50 for each go-around — and
+stars: three from 850, two from 650, one for a hard landing. The Daily
+Approach, challenge links and the crosswind and check-ride lessons use it.
+
+```mermaid
+flowchart LR
+  date["the UTC date, YYYY-MM-DD"] --> day["dailyChallenge('flight-312', launch 2026-10-16).on(date)"]
+  day --> seed["DailyDay: number, seed = hashText('flight-312:' + date)"]
+  seed --> approach["dailyApproach: createRng(seed) picks the field, sky, hour, a wind 15–75° off the runway, gusts"]
+  approach --> setup["dailySetup(daily, level, deck): an Approach practice with that weather"]
+  setup --> flight["createFlight: weather from seed and sky"]
+  flight --> fly["the first attempt, recorded"]
+  fly --> score["scoreLanding"]
+  score --> log["createDailyLog: one result per day, the streak"]
+  score --> share["dailyShareText: one line to share"]
+  log --> calendar["the month's calendar, Daily Flyer"]
+```
+
+Everything from the date to the score is engine code or `@shared/daily`,
+and the determinism trace includes two months of days and the first one
+flown, so a day's approach is the same flight in every browser. Only the
+first attempt of a day is written to the log (`record` refuses a second);
+later ones are flown as practice.
+
+### Recordings and replays
+
+```mermaid
+flowchart TB
+  subgraph record["while flying"]
+    input["FlightInput: stick, pedals, brakes quantised to 1/128"] --> recorder["FlightRecorder.step"]
+    commands["CrewCommands given before the step"] --> recorder
+    recorder --> entries["RecordedStep: the step, the input if it changed, the commands"]
+    recorder --> snapshots["a snapshot every 600 steps, the last 20"]
+  end
+  entries --> recording["Recording: version, setup, steps, entries"]
+  recording --> codec["encodeRecording: 'F3', setup JSON, LEB128 step gaps, a flag byte, zigzag axis differences, command bytes, FNV-1a"]
+  codec --> link["packReplay: kind, daily or lesson, nickname; deflate-raw; base64url after #r="]
+  recording --> store["replay-store: the last ten, packed"]
+  recording --> director["ReplayDirector.prepare: fly it once for the path and the touchdown"]
+  snapshots --> director
+  director --> shots["frame(): the replayed flight, camera, lens, slow motion"]
+  shots --> view["WorldView spot, chase or cockpit; ReplayOverlay"]
+```
+
+- **The format.** A `Recording` is the `RECORDING_VERSION` (1), the setup,
+  the number of steps and the entries. `recording-codec.ts` writes it as
+  bytes (an approach of six minutes is under 1 KB, about 400 bytes once
+  deflated); `replay-link.ts` prefixes a few words of JSON (the kind, the
+  daily's number or the lesson's id, a nickname cleaned of control and
+  direction characters and cut to 16), deflates and writes base64url.
+  Links longer than 24,000 characters are not offered.
+- **Flying it again.** `ReplayPlayer` creates the flight from the setup
+  (or restores a snapshot without its world) and steps it with the
+  recorded inputs and commands; `replayRecording` flies it to the end.
+  The recording tests check the replay equals the flight to the last bit.
+- **The director** (`game/replay-director.ts`) flies the recording once to
+  find the touchdown and sample the path, then plays from 55 s before the
+  touchdown (from the nearest snapshot when there is one) at real time,
+  at a quarter speed for 2.5 s either side of the touchdown, holds the
+  last picture 2.5 s and starts again. Its cameras: `chase` (115 m back,
+  20 m up, orbiting unless motion is reduced), `tower` (the airport's
+  tower, or a stand-in abeam the runway), `runway` (beside the touchdown
+  zone, 16 ft above the ground), `cockpit` (the player's seat with the
+  instruments), and `auto`, which cuts between them. The long lenses keep
+  the jumbo about the same size whatever the distance.
+- **A challenge** carries no score: the receiver's game flies the
+  recording and scores it with `scoreLanding`.
 
 ## Air traffic control
 
@@ -557,10 +881,14 @@ flowchart TB
     sky["SkyDome"] --> terrain["terrain tiles and airport squares"]
     terrain --> airports["runways, paint, buildings, lights"]
     airports --> clouds["cloud layers"]
-    clouds --> jumbo["the jumbo, chase view only"]
+    clouds --> jumbo["the jumbo and the replay overlay, replay cameras only"]
   end
   worldView --> world
 ```
+
+In a replay the director's shot replaces the live flight: the world is
+drawn from its camera and lens, and the cockpit canvas only for the
+cockpit camera, where the cockpit draws the replayed flight as it was.
 
 **The world** (`world/world-view.ts`). The scene's coordinates are metres
 east, up and south of an origin that follows the aircraft
@@ -600,6 +928,20 @@ the ASI, ADI, HSI, altimeter, flaps, markers and N1. Drawing pushes
 dragged), and a drag away from every region flies the aircraft like a
 yoke. A double click zooms ×2.2 on the instruments under it.
 
+**The glass deck** draws on the same canvas. `glassModel` (`glass/glass-model.ts`)
+works out what the screens show once a frame — the PFD's tapes, bugs and
+modes, the ND's route, waypoints and course, the EICAS gauges and alerts —
+and `pfd.ts`, `nd.ts` and `eicas.ts` draw it inside a clipped black
+`screen()` turned down at night. Its main panel is laid out in its own
+units (`GLASS_WIDTH`, 266 across) with the glareshield set higher than the
+classic deck's (`mainLayout(…, 'glass')`) so the six screens get the
+height; the compact layout keeps the PFD, the ND and the upper EICAS.
+Each pilot has a PFD and an ND showing the same aircraft, so each is drawn
+once into a `DisplayStamp` at the panel's pixel scale and stamped on both
+sides, on whole pixels. The CDU on the pedestal is drawn from
+`cdu-pages.ts`; while it has the focus a hidden input takes the keyboard,
+so typing an ident never moves a lever, and Escape gives it back.
+
 **Dial faces are cached.** A dial's case, ticks, numerals and printed
 words change only with its size and the lighting, so `face()` in
 `canvas-kit.ts` draws each once into a canvas of its own, keyed by name,
@@ -609,9 +951,10 @@ once north-up and stamped turned by the heading. This took the cockpit
 from the largest share of a frame's script time to a small one (the
 numbers are in the behaviour notes).
 
-**The HUD** (`ui/hud.ts`) is DOM: the radio's last three lines, the
-readback choices with a bar for the time left, hints, notices, the clock
-and level and time scale, the view buttons and the tools. On a touch
+**The HUD** (`ui/hud.ts`) is DOM: the instructor's line above the radio's
+last three lines (both at the top, clear of the runway), the lesson's
+card, the readback choices with a bar for the time left, hints, notices,
+the clock and level and time scale, the view buttons and the tools. On a touch
 screen it adds a thrust slider and buttons for gear, flaps, spoilers,
 brakes, reverse and flare; on a short screen the view list folds into one
 button that steps through the views.
@@ -637,7 +980,12 @@ There are no image files except the favicon; everything is drawn by code.
 | Approach lights and the rabbit | `airports.ts` (`runwayLights`) + `world/lights.ts` | barrettes to 2,400 ft, the 1,000 ft bar, red side rows, sequenced flashers |
 | VASI | `airports.ts` + `lights.ts` (`kind: 'vasi'`) | two bars at 2.5° and 3.25°, white above the beam and red below |
 | Taxiway, apron, terminal, hangars, tower | `airports.ts` (`addTaxiwayAndBuildings`) | windows light at night |
-| The jumbo from outside | `world/jumbo.ts` (`JumboModel`, `LIVERIES`) | lathed fuselage and hump, wings, engines, gear; Brightwater's livery (white, blue cheatline, sea-green pinstripe, blue fin) or Sunrise, Silver jet, Night blue |
+| The jumbo from outside | `world/jumbo.ts` (`JumboModel`, `LIVERIES`) | lathed fuselage and hump, wings, engines, gear; the later jumbo's longer upper deck and winglets on the glass deck; Brightwater's livery (white, blue cheatline, sea-green pinstripe, blue fin) or Sunrise, Silver jet, Night blue, Academy trainer |
+| The jumbo's skin | `world/jumbo-paint.ts` (`paintFuselage`, `paintUpperDeck`) | canvases drawn in metres on each side: livery bands, cabin windows, five door outlines, the BRIGHTWATER title, the flight deck's and upper deck's windows |
+| Replay overlay | `world/replay-overlay.ts` (`ReplayOverlay`) | the flown path as a magenta tube, the glideslope's one-dot corridor and beam in blue, an amber ring and post at the touchdown |
+| Glass deck's screens | `cockpit/glass/pfd.ts`, `pfd-tapes.ts`, `nd.ts`, `nd-symbols.ts`, `eicas.ts`, `eicas-pages.ts` | colours in `glass-kit.ts` (`DISPLAY`): sky blue, ground brown, magenta for selected, green engaged, cyan prompts, amber and red alerts |
+| Glass main panel, MCP, EFIS panels, display select | `cockpit/glass/glass-panel.ts` | three face plates; the master lights outboard of the captain's EFIS panel |
+| CDU | `cockpit/glass/cdu.ts`, `cdu-pages.ts`, `glass-pedestal.ts` | 24 × 14 characters, small and large type, line select keys, keypad |
 | Captain's cap (cosmetic) | `cockpit/main-panel.ts` (`drawCap`) | navy crown, black visor, gold band and badge, left on the glareshield |
 | ADI, HSI, ASI, altimeter, IVSI, RMI, radio altimeter, clock, markers | `cockpit/flight-instruments.ts` | one `draw…` function each |
 | EPR, N1, EGT, N2, fuel flow; gear panel; flap indicator; master lights | `cockpit/engine-instruments.ts` (`GAUGES`, `drawEngineGauge`, `drawGearPanel`, `drawFlapIndicator`, `drawMasterLights`) | |
@@ -659,6 +1007,8 @@ There are no image files except the favicon; everything is drawn by code.
 | Stick shaker, gear horn, configuration horn, overspeed clacker, autopilot wail | `soundscape.ts` | |
 | Radio key click, squelch, static bed, engine ducking | `soundscape.ts` (`play`, `update`) | |
 | Controllers' and crew's voices, GPWS | `audio/radio-voices.ts` (`RadioVoices`, `calloutWords`) | a voice and pitch for each speaker |
+| The instructor's voice | `radio-voices.ts` (`RadioVoices.instructor`) | a local voice none of the controllers use, no radio clicks |
+| School, Daily Approach, replays, challenge screens | `ui/school-screen.ts`, `ui/daily-screen.ts`, `ui/replay-screens.ts`, `styles/school.css` | the stars are text (★☆) |
 
 ## How settings flow
 
@@ -674,7 +1024,8 @@ flowchart LR
   apply --> sound["Soundscape: effects volume"]
   apply --> hud["Hud: subtitles"]
   apply --> keys["rebindAll: modern, single-file or IBM keys"]
-  main --> newFlight["a new FlightSession: detail, pixel ratio"]
+  main --> briefing["briefing, school, daily: the flight deck to start with"]
+  main --> newFlight["a new FlightSession: detail, pixel ratio, livery"]
   main --> perFrame["read each frame: hints, cockpit lighting, invert pitch"]
 ```
 
@@ -692,8 +1043,13 @@ Detail chooses the land-use texture size and the pixel ratio when a
 flight starts. Reduced motion comes from the device: views cut instead of
 easing, the replay camera stops orbiting, rain sits still on the glass.
 The arcade-wide volume and mute (`@shared/audio`) scale everything.
-Other saved state: `lastSetup` (the briefing remembers the last flight)
-and `destinations` (the fields landed at, for the Grand Tour).
+`flightDeck` is the deck the briefing, the school and the Daily Approach
+start with; each flight's own choice goes in its `FlightSetup.deck`.
+Other saved state: `lastSetup` (the briefing remembers the last flight),
+`destinations` and `skies` (the fields landed at and the kinds of weather
+landed in, for the Grand Tour and Weather Watcher), `school` (the best
+stars of each lesson), `daily` (a result for each day flown, through
+`createDailyLog`) and `replays` (the last ten, packed).
 
 ## Tests
 
@@ -714,34 +1070,56 @@ and `destinations` (the fields landed at, for the Grand Tour).
   | `atc.test.ts` | handoffs in order, no overlaps, tuning, clearances, readbacks at each level, reminders, relays, practice modes, go-around |
   | `outcome.test.ts` | reports for each ending, grades, positions |
   | `flight.test.ts` | whole flights by the test pilot (1982 Rules to Kennedy, ILS practice at all six fields, takeoff practice at every level, a clean Captain flight, the same flight twice), and the flight on its own: the 08:00 clearance, seeds, time scale, the configuration horn, checklists, a flap overspeed, a belly landing, a flapless takeoff into the marshes |
+  | `crew.test.ts` | every command kind, rounding for replays, commands refused where the deck or the level has no such thing |
+  | `glass.test.ts` | the FMS: route, ILS fixes, edits and EXEC, direct-to, sequencing, autotuning; LNAV's guidance; level change; the glass deck's whole flights to every destination |
+  | `lessons.test.ts` | every lesson file parses (and a broken one is refused with its reason); every lesson flown by the lesson pilot on both decks with at least two stars; cues, failures and grades |
+  | `scoring.test.ts` | the approach log's gates, the landing score's parts and stars, the Daily Approach's days, setup and share line |
+  | `recording.test.ts` | a recorded approach flown again equals the flight, from the start and from a snapshot, after a trip through bytes; quantising; damaged bytes refused |
+  | `game/replay-link.test.ts` | packing and unpacking a link, meta and nicknames cleaned, damaged links and other versions refused |
+  | `cockpit/glass/cdu.test.ts` | the CDU's pages, typing, line select keys, MOD and EXEC, messages |
 
 - **Determinism** (`npx playwright test -c ports/flight-312 --project='determinism-*'`,
   after `npx playwright install firefox webkit`): `e2e/engine.determinism.ts`
   bundles `src/engine/fingerprint.ts` with Vite and runs
   `determinismTrace()` in Chromium, Firefox and WebKit: the weather of 40
-  seeds, and six flights flown by the test pilot (takeoff practice at
+  seeds; seven flights flown by the test pilot (takeoff practice at
   Arcade and Captain, ILS practice at Pilot, Captain and under the 1982
-  Rules, the whole 1982 flight to Kennedy), sampled every 30 s with full
-  precision, with the radio transcript and the report. Every line must
-  equal Node's.
+  Rules, the whole 1982 flight to Kennedy, and a whole flight on the glass
+  deck), sampled every 30 s with full precision, with the radio transcript
+  and the report; two lessons as the lesson pilot flies them; sixty days
+  of Daily Approaches with their weather, the first one flown; and an
+  approach flown by the practice player, its recording's bytes and the
+  recording flown again. Every line must equal Node's.
 - **Smoke and phone** (`--project=smoke --project=phone`): `e2e/game.spec.ts`
   from the production build — the title and its credit, a takeoff
   practice with the radio talking, the chart, checklists and pause menu,
   the view buttons (folded on a phone), an approach starting in the air,
-  and no console errors.
+  the glass deck chosen on the briefing (and no engineer's view), a lesson
+  with the instructor speaking, the Daily Approach's screen, a challenge
+  link (made in the test by the practice player) opening and playing its
+  replay, and no console errors.
 - **Pictures** (`--project=screens`): `e2e/media.screens.ts` writes
-  `media/*.jpg` from the scene lab at 1440 × 900 and one at 844 × 390.
+  `media/*.jpg` from the scene lab at 1440 × 900 and three at 844 × 390;
+  the school and the Daily Approach are taken with a fixed clock and a
+  week of results seeded into the store.
 - **Labs** (in the dev server or the build):
   - `?lab=instruments` — every instrument at the values that test it,
     by day and by night.
   - `?lab=world&scene=runway|final|breakout|cruise|ridges|chase|night-final`
     with `dest=`, `clock=hh:mm`, `sky=clear|low|minimums|fog`, and
     `miles=`, `height=`, `pitch=` to place the eye on final.
+  - `?lab=glass` — each of the glass deck's screens at moments of a real
+    flight flown there by the test pilot (the takeoff roll, the climb on
+    LNAV, the cruise, the ILS, the last hundred feet) and each CDU page;
+    `scene=`, `show=pfd,nd,upper,lower,cdu`, `size=` and `light=night`.
   - `?lab=scene&scene=…` — `takeoff`, `roll`, `climb`, `cruise`,
     `approach`, `breakout`, `night`, `dusk`, `touchdown`, `outside`,
-    `pedestal`, `overhead`, `engineer`, `chart`, `report`, `1982`, with
-    `dest=` to change the field. The test pilot flies there and the flight
-    is handed over paused; `body[data-ready="scene"]` says when.
+    `pedestal`, `overhead`, `engineer`, `chart`, `report`, `1982`,
+    `glass`, `glass-night`, `glass-climb`, `glass-pedestal`, `lesson`,
+    `debrief`, `replay-chase`, `replay-tower`, `replay-runway`,
+    `replay-cockpit`, with `dest=` to change the field. The test pilot (or
+    the instructor, or the practice player for a replay) flies there and
+    the flight is handed over paused; `body[data-ready="scene"]` says when.
 - **Balance**: `npx tsx ports/flight-312/scripts/balance.ts [level] [destination] [mode]`
   flies the test pilot everywhere; the results are in the behaviour notes.
 
@@ -778,9 +1156,29 @@ and `destinations` (the fields landed at, for the Grand Tour).
   `lab/scene-lab.ts` (a setup, the moment to stop, the view) and, if it
   belongs in `media/`, to `e2e/media.screens.ts`.
 - **A badge.** Add it to `pass.manifest.ts`, then unlock it in
-  `game/pass-report.ts` (from an event in `reportEvent`, or from the
-  outcome in `reportOutcome`); the manifest check in the build will catch
-  a typo.
+  `game/pass-report.ts` (from an event in `reportEvent`, from the outcome
+  in `reportOutcome`, or from `reportLesson` and `reportDaily`); the
+  manifest check in the build will catch a typo.
+- **A lesson.** Write `src/lessons/NN-name.json` (copy the nearest one:
+  setup and start, briefing, tasks with their cues, grade, debrief) and
+  add it to `LESSONS` in `src/lessons/index.ts`. `lessons.test.ts` parses
+  it and has the lesson pilot fly it on both decks; it must earn two
+  stars. A task of a new kind needs a case in `judgeTask`
+  (`lesson-monitor.ts`) and a hand in `lesson-pilot.ts`; a new cue a case
+  in `cueHolds`; a new measure a line in `MEASURES`. `parseLesson` must
+  learn any new field.
+- **A CDU page.** Add a `CduPageId` and its `CduPage` (`count`, `view`
+  and `select`) to `CDU_PAGES` in `cdu-pages.ts`, and its key in `GROUPS`
+  (`cdu.ts`). Whatever it changes goes out as `fms` commands, never into
+  the flight directly; a new kind of change is an `FmsEdit` in `fms.ts`,
+  a byte in the codec's tables (`recording-codec.ts`), and a bump of
+  `RECORDING_VERSION`.
+- **A replay camera.** Add a `ReplayShotCamera` and its case in
+  `lookFrom` (`game/replay-director.ts`: a view and a lens), a button in
+  `CAMERAS` (`ui/replay-screens.ts`), and, if it should be in the
+  director's cut, a moment in `autoCamera`.
+- **A lower EICAS page.** Add it to `LowerPage` and `LOWER_PAGES`
+  (`glass-panel.ts`) and draw it in `eicas-pages.ts`.
 
 ## Arcade Pass
 
@@ -790,6 +1188,9 @@ audio). Toasts are **held** from the moment a flight starts (`toasts.hold()`
 in `fly`) and **flushed** when the report opens, 1.6 s after the ending, so
 nothing covers the instruments on short final. In flight, Esc first
 dismisses a visible toast before pausing.
+
+Nothing is reported for the instructor's demonstrations. A lesson flushes
+the toasts when its debrief opens, 2.5 s after the verdict.
 
 - **During the flight** (`reportEvent`): Wheels Up at the first liftoff;
   Go-Around when a missed approach from below 1,000 ft without touching
@@ -805,18 +1206,30 @@ dismisses a visible toast before pausing.
     lowest sink rate), 30 XP; Greaser and 15 XP under 100 fpm; Breakout
     and 15 XP at a field with a ceiling of 300 ft or lower; Night Owl with
     the sun more than 6° below the horizon; Short Field at Philipsburg or
-    Sault Ste. Marie at Pilot or Captain.
+    Sault Ste. Marie at Pilot or Captain; Kiss Landing under 60 fpm;
+    Crosswind Ace with 15 kt or more across the runway and the wheels
+    within 15 ft of the centreline; a step of Weather Watcher for each new
+    kind of sky landed in at the destination (clear, low, minimums, fog;
+    the set is kept in the store as `skies`).
   - For a whole Flight 312 that lands at its destination: 60 XP; 1982 Ace
     under the 1982 Rules; Captain's Hat and 40 XP at Captain with an
     empty book; Radio Ace at Pilot or Captain with no missed or wrong
-    readback; By the Book with all four checklists completed; a step of
-    Grand Tour for each new destination (the set is kept in the game's
-    store), and the `destinations` stat.
+    readback; By the Book with all four checklists completed; Glass Act on
+    the glass deck; a step of Grand Tour for each new destination (the set
+    is kept in the game's store), and the `destinations` stat.
+- **A lesson passed** (`reportLesson`, from the debrief): 40 XP the first
+  time, 10 after; Student Pilot for lesson 1; Check-Ride for the lesson
+  that is a whole flight; the `lessonsPassed` stat.
+- **The day's Daily Approach** (`reportDaily`, when the first attempt is
+  recorded): 20 XP and 10 a star; Daily Flyer counts the streak to seven;
+  `bestDaily` keeps the best points.
 - **Stats**: flights flown, landings, softest touchdown (fpm), time
-  flown (min), fields landed at.
+  flown (min), fields landed at, lessons passed, best Daily Approach
+  (points).
 - **Cosmetics**: the Sunrise livery (Greaser), the Silver jet livery
-  (level 5), the Night blue livery (Night Owl) and the captain's cap on
-  the glareshield (Captain's Hat). Settings offers only what the Pass has
+  (level 5), the Night blue livery (Night Owl), the Academy trainer
+  livery (Check-Ride) and the captain's cap on the glareshield (Captain's
+  Hat). Settings offers only what the Pass has
   unlocked (`unlockedCosmetics` in `main.ts`), and a choice that is not
   unlocked falls back before it reaches the session
   (`withUnlockedCosmetics`). The livery repaints the jumbo
@@ -832,8 +1245,12 @@ When a flight starts, `main.ts` reports it through `@shared/last-played`:
 | Flight 312 | `flight` | the destination id | Flight 312 · New York |
 | Takeoff | `takeoff` | the destination id | Takeoff · Boston |
 | Approach | `approach` | the destination id | Approach · Buffalo |
+| A lesson | `school` | the lesson id | Flight school · Flare and touchdown |
+| The Daily Approach | `daily` | the destination id | Daily Approach #12 · Boston |
 
 At start-up `takeResumeRequest()` reads `?play=<mode>&item=<destination>`
-(and removes them from the address); a known mode opens its briefing with
-that destination chosen, anything else opens the title. The Hall button
+(and removes them from the address); `school` opens the flight school,
+`daily` today's approach, another known mode its briefing with that
+destination chosen, anything else the title. A `#r=` challenge link is
+opened before any of them. The Hall button
 (`mountHallButton`, top right) ends the session before leaving.

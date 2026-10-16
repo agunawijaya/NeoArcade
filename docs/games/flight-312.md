@@ -30,10 +30,11 @@ before that issue. The IBM edition does not mention BYTE at all.
 - [Bugs and quirks, and what the port does](#bugs-and-quirks-and-what-the-port-does)
 - [Where the brief and the source disagree](#where-the-brief-and-the-source-disagree)
 - [Diff log: every deliberate change](#diff-log-every-deliberate-change)
+- [Part two: the glass deck, the school, the Daily Approach and replays](#part-two-the-glass-deck-the-school-the-daily-approach-and-replays)
 - [Validation: the jumbo against its public numbers](#validation-the-jumbo-against-its-public-numbers)
 - [Balance](#balance)
 - [Performance](#performance)
-- [Known limits and notes for part 2](#known-limits-and-notes-for-part-2)
+- [Known limits](#known-limits)
 
 ## How the original behaves
 
@@ -442,6 +443,116 @@ The source wins in each case.
 | **Reports** for every ending, rewritten: what happened, where, the numbers, one line of advice; a landing report with the touchdown rate, the point from the threshold and the centreline offset | The brief: in the spirit of the original's messages, not copied |
 | **The en-route chart**, the **checklists**, the **Arcade Pass** badges (Wheels Up, Greaser, Breakout, Marshlands, Tail Strike, Belly Flop, Go-Around, 1982 Ace, Captain's Hat and more) | New |
 
+## Part two: the glass deck, the school, the Daily Approach and replays
+
+Prompt 010 added a second flight deck, a flight school, a daily challenge
+and landing replays. None of it is in JETSET, which had one panel of text
+and one flight; the 1982 Rules stay exactly as they were, on the classic
+deck. The decisions are in ADR 0029 (replays), 0030 (the glass deck) and
+0031 (lessons as data).
+
+### The glass deck, and how it differs from a real -400
+
+The displays are drawn from public descriptions of the 747-400's EFIS and
+EICAS, not traced from pictures or manuals, and they keep only what the
+game's flights use.
+
+| The aircraft | The port |
+|---|---|
+| Six display units: PFD and ND per pilot, upper and lower EICAS | The same six, in the same places; on a phone the PFD, the ND and the upper EICAS |
+| ND modes APP, VOR, MAP and PLN, expanded and centred, ranges 5–640 nm | MAP, VOR and APP, expanded only; ranges 10–640 nm |
+| Lower EICAS synoptics: ENG, STAT, ELEC, FUEL, ECS, HYD, DRS, GEAR, FCTL | ENG, FUEL, GEAR and FCTL |
+| EICAS messages, a few hundred | Thirteen: the takeoff configuration warnings (flaps, parking brake, spoilers, gear), overspeed, engine flameout, low fuel and fuel balance, no flight director, and memos for the parking brake, the speedbrake and the landing lights |
+| Three autopilots, CMD L, C, R; a DISENGAGE bar | One CMD |
+| VNAV, with the FMC's vertical path, speed restrictions and economy speeds | Not fitted: the button is there and dark. Climbs and descents are flown with FLCH or V/S |
+| An FMC with a navigation database of airways, SIDs, STARs and waypoints | The program's sixteen VORs as the waypoints, the six ILS approaches; routes VOR to VOR |
+| CDU pages: IDENT, POS INIT, RTE, DEP ARR, LEGS, PERF INIT, THRUST LIM, TAKEOFF, APPROACH, PROG, NAV RAD, FIX, HOLD and more | RTE, LEGS, DEP ARR, TAKEOFF REF, APPROACH REF, PROG, NAV RAD |
+| The approach is chosen on DEP ARR | Loaded from the start (the briefing's destination), removable and restorable on DEP ARR |
+| Flight engineer: none | None; the crossfeed opens itself at 2,000 lb of imbalance and closes once level |
+| TCAS on the ND | The transponder panel only; there is no traffic in the game |
+
+The glass deck's glareshield sits higher than the classic deck's (the
+windscreen is a little shorter) so that the screens are as large as the
+panel allows; the classic deck is unchanged.
+
+### The flight school
+
+Thirteen lessons, the prompt's suggested arc one for one ("about 12" in
+its words). The crosswind landing is in low cloud at Buffalo and the
+missed approach in fog at Kennedy, so "a crosswind landing in fog" is two
+lessons. They fly at the Pilot level, with the controllers silent
+(`radio: quiet`) except on the check-ride. The air-work lessons start in
+the air (`AirStart`), which part one never did; the cockpit tour is one
+lesson whose words differ on the glass deck (`sayGlass`).
+
+The instructor's voice is one of the device's local voices that no
+controller uses, without the radio's clicks and static. Its words are
+always on screen, whatever the subtitle setting, at the top of the screen
+above the radio's lines, where they never cover the runway.
+
+The instructor's own demonstrations (the lesson pilot, the lesson file's
+seed), the same on both decks except where noted:
+
+| Lesson | Stars | The graded measure |
+|---|---|---|
+| 1 Cockpit tour | ★★★ | 8 s |
+| 2 The takeoff roll | ★★★ | 0.2 ft off the centreline |
+| 3 Rotation and climb-out | ★★★ | 4.6 kt off the speed (4.5 on glass) |
+| 4 Turns and headings | ★★★ | 3 ft off the altitude |
+| 5 Tracking a VOR radial | ★★☆ | 1.0 dot |
+| 6 DME and position | ★★☆ | 0.5 nm from the fix |
+| 7 Descent planning | ★★☆ | 222 ft off the crossing altitude |
+| 8 Capturing the ILS | ★★☆ | 0.5 dot |
+| 9 Flying the glideslope | ★★★ | 0.13 dot |
+| 10 Flare and touchdown | ★★☆ | 300 fpm |
+| 11 Crosswind landing | ★★★ | 916 points |
+| 12 The missed approach | ★★★ | 14 ft below minimums |
+| 13 The check-ride | ★★★ | 909 points (898 on glass) |
+
+The demonstrations show the lesson flown well, not perfectly: the
+autopilot's intercepts and the test pilot's flare leave room for a
+player to earn the third star the instructor did not.
+
+### The Daily Approach
+
+Day 1 is 16 October 2026; a day is a UTC date. The seed is
+`hashText('flight-312:YYYY-MM-DD')` from `@shared/daily`; from it the
+field (one of the six), the sky (minimums and low cloud four days in six,
+fog one, clear one), the hour (morning three days in five, dusk one,
+night one) and a surface wind 15–75° off the runway at 6–22 kt, gusting
+6–10 kt more about a day in three. The score is out of 1,000 (see
+HOW-TO-PLAY). The share line is the prompt's, with the realism level added
+at the end, so that two lines can be compared fairly:
+`Flight 312 · Daily Approach #12 · BOS ☁️ 300 ft · 💨 18 kt · 🛬 142 fpm · ★★☆ · Pilot`.
+
+### Replays
+
+Part one kept 90 s of poses at 10 Hz and replayed them from one orbiting
+chase camera. Part two replaces that with recordings of the setup, the
+inputs and the crew's commands, flown again by the engine (ADR 0029), so
+the replay has the cockpit camera's instruments, the radio and the exact
+touchdown, and can be saved (ten, on the device) or sent as a link. The
+challenge's score is worked out again on the receiver's machine.
+
+### Diff log, part two
+
+| Change | Why |
+|---|---|
+| **The glass deck**, selectable on the briefing, in the school and the Daily Approach, with a default in Settings; the 1982 Rules always classic, with a note | Prompt 010; the program knew nothing of screens |
+| **LNAV and flight level change** in the autopilot; an autothrottle with climb, idle and speed modes | The glass deck's MCP |
+| **The classic deck's IAS mode no longer dives to gain speed** when the altitude window is above: in the speed mode, climbing to a higher window, the path is held at a climb at least (`afds.ts`) | A part-one bug found by the glass deck's level change: the test pilot's flights at the real levels were unaffected, but a player's IAS mode could descend toward a window above |
+| **Every hand on the flight is a crew command** (`engine/crew.ts`); `game/controls.ts` is gone | Replays and links record the commands (ADR 0029) |
+| **The stick and pedals are quantised to 1/128** in play | So the flight flown and the flight replayed are the same flight |
+| **The flight school**: thirteen lessons, an instructor with a voice of their own, a demonstration, live cues, one to three stars, a debrief | Prompt 010 |
+| **The Daily Approach**: one seeded approach a day, the first attempt scored, a share line, a streak and a calendar | Prompt 010 |
+| **The landing score**: 1,000 points from the stable gates, the touchdown rate, point and centreline, the flare, less go-arounds | The prompt's "score from stabilised criteria + landing"; also the challenge's score |
+| **Landing replays**: director, chase, tower, runway and cockpit cameras; the path, the glideslope corridor and the touchdown overlaid; a quarter-speed touchdown; ten saved; challenge links | Prompt 010 |
+| **The jumbo from outside**: a painted skin (cheatline, windows, doors, the BRIGHTWATER title), and on the glass deck the later jumbo's longer upper deck and winglets; the Academy trainer livery | The replays look at it close up |
+| **The jumbo's fuselage faced backwards** in part one's chase replay (the lathe was turned the wrong way, so the tail cone was at the nose): fixed | A part-one bug, found by the replay cameras |
+| **The classic ADI's and HSI's glideslope pointers moved the wrong way** in part one (above the beam, the pointer went up): fixed, the pointer shows where the beam is | A part-one bug, found while drawing the PFD's deviation scales |
+| **The Arcade Pass**: Glass Act, Student Pilot, Check-Ride, Daily Flyer, Kiss Landing, Crosswind Ace and Weather Watcher; the Academy livery; lessons passed and the best Daily Approach on the profile | Prompt 010. Its Night Owl already existed in part one (a landing after dark) and is kept as it was |
+| **Continue playing** reports lessons (`school`) and the Daily Approach (`daily`) too | So the Hall can send a player back to them |
+
 ## Validation: the jumbo against its public numbers
 
 The Pilot and Captain levels fly a point-mass model (`airframe.ts`) with
@@ -476,32 +587,45 @@ flaps-30 stall speed.
 
 ## Balance
 
-`npx tsx ports/flight-312/scripts/balance.ts [level] [destination] [mode]`
+`npx tsx ports/flight-312/scripts/balance.ts [level|all] [destination|all] [mode] [deck]`
 flies the scripted test pilot (`test-pilot.ts`) through the same panel,
 keys and radio a player has, seed 312, over the real terrain. Every flight
-lands, every level, every destination, with no Captain violations.
-Touchdowns are given as sink rate, feet past the threshold and feet right
-of the centreline.
+lands, every level, every destination, on both decks, with no Captain
+violations. Touchdowns are given as sink rate, feet past the threshold and
+feet right of the centreline. (Measured again after part two; the classic
+deck's numbers moved by a few feet and fpm with the AFDS's climb floor.)
 
-**Flight 312, the whole flight:**
+**Flight 312, the whole flight, classic deck:**
 
 | Destination | 1982 Rules | Arcade | Pilot | Captain |
 |---|---|---|---|---|
-| New York (JFK) | 22 min · 300 fpm at 1,141 ft, 42 ft | 22 min · 363 fpm at 1,216 ft, −6 ft | 22 min · 295 fpm at 1,420 ft, −3 ft | as Pilot |
-| Boston (BOS) | 47 min · 300 fpm at 1,141 ft, 39 ft | 43 min · 361 fpm at 1,190 ft, −8 ft | 44 min · 219 fpm at 1,905 ft, −2 ft | as Pilot |
-| Sault Ste. Marie (CYAM) | 97 min · 300 fpm at 1,144 ft, 50 ft | 113 min · 380 fpm at 1,251 ft, 5 ft | 113 min · 281 fpm at 1,554 ft, 0 ft | as Pilot |
-| Philipsburg (PSB) | 35 min · 300 fpm at 1,142 ft, 74 ft | 41 min · 387 fpm at 1,355 ft, 5 ft | 41 min · 429 fpm at 1,134 ft, 4 ft | as Pilot |
-| Buffalo (BUF) | 48 min · 300 fpm at 1,142 ft, −44 ft | 55 min · 354 fpm at 1,312 ft, −7 ft | 55 min · 363 fpm at 1,275 ft, 0 ft | as Pilot |
-| Philadelphia (PHL) | 15 min · 300 fpm at 1,142 ft, 43 ft | 22 min · 387 fpm at 1,162 ft, −3 ft | 22 min · 269 fpm at 1,702 ft, −1 ft | as Pilot |
+| New York (JFK) | 22 min · 300 fpm at 1,141 ft, 42 ft | 22 min · 363 fpm at 1,205 ft, −6 ft | 22 min · 293 fpm at 1,432 ft, −3 ft | as Pilot |
+| Boston (BOS) | 47 min · 300 fpm at 1,141 ft, 39 ft | 43 min · 353 fpm at 1,241 ft, −8 ft | 44 min · 213 fpm at 2,011 ft, −2 ft | as Pilot |
+| Sault Ste. Marie (CYAM) | 97 min · 300 fpm at 1,144 ft, 50 ft | 113 min · 382 fpm at 1,222 ft, 5 ft | 113 min · 255 fpm at 1,754 ft, 1 ft | as Pilot |
+| Philipsburg (PSB) | 35 min · 300 fpm at 1,142 ft, 74 ft | 41 min · 422 fpm at 1,149 ft, 5 ft | 41 min · 433 fpm at 1,118 ft, 4 ft | as Pilot |
+| Buffalo (BUF) | 48 min · 300 fpm at 1,142 ft, −44 ft | 55 min · 381 fpm at 1,128 ft, −7 ft | 55 min · 351 fpm at 1,332 ft, 0 ft | as Pilot |
+| Philadelphia (PHL) | 15 min · 300 fpm at 1,142 ft, 43 ft | 22 min · 380 fpm at 1,197 ft, −3 ft | 22 min · 352 fpm at 1,267 ft, −1 ft | as Pilot |
+
+**Flight 312, the whole flight, glass deck** (LNAV and level change):
+
+| Destination | Arcade | Pilot | Captain |
+|---|---|---|---|
+| New York (JFK) | 22 min · 365 fpm at 1,208 ft, −6 ft | 22 min · 304 fpm at 1,401 ft, −3 ft | as Pilot |
+| Boston (BOS) | 43 min · 348 fpm at 1,356 ft, −8 ft | 44 min · 216 fpm at 1,944 ft, −2 ft | as Pilot |
+| Sault Ste. Marie (CYAM) | 113 min · 403 fpm at 1,086 ft, 5 ft | 113 min · 294 fpm at 1,637 ft, 1 ft | as Pilot |
+| Philipsburg (PSB) | 42 min · 430 fpm at 1,094 ft, 5 ft | 42 min · 380 fpm at 1,338 ft, 4 ft | as Pilot |
+| Buffalo (BUF) | 54 min · 394 fpm at 1,098 ft, −7 ft | 54 min · 274 fpm at 1,711 ft, 0 ft | as Pilot |
+| Philadelphia (PHL) | 22 min · 367 fpm at 1,419 ft, −3 ft | 22 min · 265 fpm at 1,714 ft, −1 ft | as Pilot |
 
 The 1982 Rules always touch down at 300 fpm: that is the program's flare at
 idle. Their fuel is the program's: 137,600–187,000 lb left of 200,000. The
-real levels carry the briefing's block fuel and land with 32,600–41,200 lb.
+real levels carry the briefing's block fuel and land with 32,500–41,300 lb
+on either deck.
 
 **Approach practice** (15 nm out, the seed's weather): all 24 land, 6–10
-minutes; touchdowns 300 fpm (1982 Rules), 360–410 fpm (Arcade) and
-190–450 fpm (Pilot, Captain), 930–2,150 ft past the threshold and within
-8 ft of the centreline at the real levels. **Takeoff practice** at Kennedy's
+minutes; touchdowns 300 fpm (1982 Rules), 360–412 fpm (Arcade) and
+194–450 fpm (Pilot, Captain), 930–2,150 ft past the threshold and within
+8 ft of the centreline at the real levels; the same on the glass deck. **Takeoff practice** at Kennedy's
 seed: every level climbs out to 3,000 ft in 2–3 minutes.
 
 ## Performance
@@ -544,17 +668,73 @@ are what a frame costs, not the display's 16.7 ms:
   the game still averages 60 fps. The Settings' "Detail: low" lightens the
   world further.
 
-## Known limits and notes for part 2
+### Part two: the glass deck and the replays
 
-- Part 2 (prompt 010) adds the glass cockpit, the flight school, daily
-  approaches and landing replays. The session already keeps a 90-second
-  replay buffer at 10 Hz and the jumbo model for the chase camera; the
-  replay screen is part 2's.
+Measured the same way (Chromium headless, ANGLE on Direct3D 11, RTX 4060
+Laptop GPU, the frame-rate limit off, 5 s of frames from the production
+build), with the classic deck's approach measured alongside in the same
+runs. Other work was running on the machine at the time, so single runs
+varied by a few milliseconds; the ranges are three runs each.
+
+| Scene | Size | Mean | p95 | p99 |
+|---|---|---|---|---|
+| Classic deck, final at JFK | 1440 × 900 | 4.2–5.1 ms | 7.8–8.6 ms | 10.1–11.0 ms |
+| Glass deck, final at JFK | 1440 × 900 | 5.5–7.9 ms | 9.7–12.7 ms | 11.8–14.8 ms |
+| Glass deck, final at JFK | 1920 × 1080 | 11.4 ms | 15.5 ms | 17.9 ms |
+| Glass deck, final at JFK | 1280 × 720 | 8.6 ms | 13.2 ms | 16.3 ms |
+| Glass deck, final at JFK | 844 × 390 | 4.7 ms | 6.9 ms | 8.1 ms |
+| Glass deck, the pedestal and CDU | 1440 × 900 | 2.7 ms | | |
+| A lesson on the glideslope, classic | 1440 × 900 | 4.0 ms | | |
+| Replay, chase camera | 1440 × 900 | 0.9 ms | 1.6 ms | 2.3 ms |
+| Replay, cockpit camera | 1440 × 900 | 2.4 ms | 4.8 ms | 6.5 ms |
+| Classic deck, final at JFK, CPU throttled 4× | 1440 × 900 | 13.3–13.9 ms | | |
+| Glass deck, final at JFK, CPU throttled 4× | 1440 × 900 | 13.7–19.3 ms | | |
+
+- **The glass deck costs 1–3 ms more** than the classic one: its screens
+  are drawn live, text and all, where the classic dials stamp cached faces.
+  Two things brought it to this: each pilot's PFD and ND show the same
+  aircraft, so each is drawn once into a canvas and stamped on both sides
+  (`DisplayStamp`), and the displays' type is set in half-pixel sizes, so
+  the canvas keeps a handful of fonts parsed instead of one per label.
+  Together they took the glass deck's p95 at 1440 × 900 from 20 ms to about
+  12 ms. The largest screen, 1920 × 1080, is the slowest at 11.4 ms, inside
+  the budget.
+- **Replays** are cheap to draw: the world from a camera, without the
+  cockpit (the cockpit camera draws it). Playing, a replay steps the engine
+  once a frame at real speed (22 µs), and once every four frames in slow
+  motion. Preparing one flies the recording from
+  the start in slices of 3,000 steps, with a progress line: about 0.5 s
+  for an approach, longer for a whole Flight 312 from a saved replay or a
+  link (the instant replay starts from the nearest snapshot instead).
+- **Under a 4× CPU throttle** the glass deck averages 52–73 fps uncapped;
+  part one's build, measured in the same session for comparison, varied
+  between 17 and 29 ms a frame from run to run under the throttle, as the
+  current classic deck did — the machine's other load, not a regression.
+
+## Known limits
+
 - The 1982 Rules keep the program's quirks that make it the program: no
   wheel brakes, the flare at idle, the missed approach that ends the flight,
   the turn rates (now per second).
 - The determinism trace (`src/engine/fingerprint.ts`) is the contract for
-  anything part 2 builds on seeds: forty skies and six whole flights must
-  come out bit for bit the same in Node, Chromium, Firefox and WebKit.
+  anything built on seeds or recordings: forty skies, seven whole flights
+  on both decks, two lessons, sixty Daily Approaches and a recorded
+  approach must come out bit for bit the same in Node, Chromium, Firefox
+  and WebKit.
 - The destination runways are today's, from OurAirports; a 1982 chart may
   show other lengths or numbers. The program never named them.
+- The glass deck has no VNAV, one autopilot, four lower EICAS pages and
+  seven CDU pages (see the table above). Its routes are the program's VORs.
+- Lessons fly at the Pilot level only. The instructor's voice needs a
+  local voice on the device; without one, the words are on screen only.
+- The Daily Approach's "first attempt" is kept on the device, like the
+  rest of the game's progress: there is no server, so clearing the
+  browser's storage allows another first attempt.
+- A recording belongs to the engine version that made it
+  (`RECORDING_VERSION`); a change to how the engine flies must bump it, and
+  older links are then refused rather than flown wrong. Links over 24,000
+  characters (a long whole flight) are not offered; the replay stays in
+  the saved list.
+- The jumbo seen in the replays is simple: a lathed fuselage with a
+  painted skin, flat wings and tail, cylinders for the engines. It is a
+  shape to follow down the glideslope, not a model to inspect.

@@ -235,7 +235,11 @@ function climbCruiseDescend(pilot: TestPilot) {
 
   if (flight.approach.active || flight.atc.stage === 'vectors' || flight.atc.stage === 'approach') {
     approachSetup(pilot);
+  } else if (flight.fms && cleared.heading === null) {
+    // The glass deck flies the route on LNAV; the heading mode is for the controllers' vectors.
+    if (afds.rollMode !== 'route') afds.armedRoute = true;
   } else {
+    if (afds.rollMode === 'route') afds.rollMode = 'heading';
     panel.headingBug =
       cleared.heading ?? magnetic(flight, bearingTrue(r.position, nextWaypoint(pilot)));
   }
@@ -306,9 +310,18 @@ function verticalPath(flight: Flight, targetFt: number) {
     // V2 + 15 to 1,000 ft, then the nose comes down a little to accelerate and clean up.
     const initial = flight.readout.heightFt < 1000 && !approaching ? flight.speeds.v2 + 15 : speed;
     afds.speedKt = Math.min(initial, cruiseSpeed(r.altitudeFt));
+    if (flight.fms && flight.readout.heightFt > 1000) {
+      // The glass deck climbs in flight level change: climb thrust from the autothrottle.
+      afds.levelChange = true;
+      afds.thrustMode = 'climb';
+      afds.autothrottle = true;
+      return;
+    }
     afds.autothrottle = false;
     if (flight.readout.heightFt > 1000) setLevers(panel, 0.93);
   } else if (toGo < -600) {
+    afds.levelChange = false;
+    afds.thrustMode = 'speed';
     if (afds.pitchMode !== 'verticalSpeed') {
       afds.pitchMode = 'verticalSpeed';
     }
@@ -375,6 +388,12 @@ function approachSetup(pilot: TestPilot) {
   const cleared = flight.atc.cleared;
   const courseMagnetic = magnetic(flight, strip.headingTrue);
   panel.nav[0] = { frequency: destination.localizer, course: courseMagnetic };
+  // Vectors from the controller: off LNAV and onto the heading mode.
+  if (afds.rollMode === 'route' || afds.armedRoute) {
+    afds.rollMode = 'heading';
+    afds.armedRoute = false;
+    panel.headingBug = magnetic(flight, r.headingTrue);
+  }
   panel.speedBugKt = referenceSpeedNow(flight);
   if (r.altitudeFt < 18_000) panel.altimeterInHg = flight.world.weather.destination.qnh;
   tryChecklist(flight, 'approach');

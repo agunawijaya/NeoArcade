@@ -1,5 +1,6 @@
 import { createInput, type Input } from '@shared/input';
 import type { CockpitView } from '../cockpit/actions';
+import type { Deck } from '../engine/flight';
 
 /**
  * The keyboard, the gamepad and a joystick or yoke, mapped to the crew's
@@ -211,6 +212,12 @@ export function bindingsFor(scheme: ControlScheme): Bindings {
     bindings.answer2 = ['key:Digit9'];
   }
   return bindings;
+}
+
+/** The views a flight deck has: the glass one has no flight engineer's station. */
+export function viewsFor(deck: Deck): CockpitView[] {
+  const all = VIEW_KEYS.map(([, view]) => view);
+  return deck === 'glass' ? all.filter((view) => view !== 'engineer') : all;
 }
 
 export const VIEW_KEYS: [FlightKey, CockpitView][] = [

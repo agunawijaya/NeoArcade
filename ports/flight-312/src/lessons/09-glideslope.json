@@ -1,0 +1,72 @@
+{
+  "id": "glideslope",
+  "number": 9,
+  "title": "Flying the glideslope",
+  "summary": "Nine miles out on Logan's ILS, autopilot off: fly both needles down to 500 ft by hand.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "bos",
+    "seed": 909,
+    "radio": "quiet",
+    "sky": "low",
+    "timeOfDay": "morning",
+    "wind": { "direction": 60, "speedKt": 10, "gustKt": 0 },
+    "start": {
+      "place": { "kind": "final", "outNm": 9, "offsetNm": 0 },
+      "speedKt": 150,
+      "flaps": 25,
+      "gearDown": true,
+      "autopilot": false
+    }
+  },
+  "briefing": [
+    "Nine miles from Boston's four right, on the glideslope, gear down, flaps twenty-five, and the autopilot is off. She's yours.",
+    "Pitch moves you on the glideslope, the bank on the localizer. Make small corrections and hold each one: the jumbo answers slowly, and the needles answer more slowly still."
+  ],
+  "tasks": [
+    {
+      "kind": "glidepath",
+      "downToFt": 500,
+      "withinDots": 1,
+      "goal": "Fly the ILS by hand down to 500 ft.",
+      "say": "Fly the needles down to five hundred feet. The glideslope diamond above the centre means fly up; below means fly down.",
+      "sayGlass": "Fly the deviation scales down to five hundred feet: the glideslope diamond on the right of the attitude, the localizer below it. Diamond high, fly up; low, fly down.",
+      "done": "Five hundred feet. You flew that.",
+      "cues": [
+        {
+          "when": "aboveGlideslope",
+          "value": 0.7,
+          "say": "We're high: a little more descent.",
+          "every": 10
+        },
+        {
+          "when": "belowGlideslope",
+          "value": 0.7,
+          "say": "Low: ease the descent off.",
+          "every": 10
+        },
+        {
+          "when": "courseLeft",
+          "value": 0.7,
+          "say": "The localizer's to the left: a little left bank.",
+          "every": 10
+        },
+        {
+          "when": "courseRight",
+          "value": 0.7,
+          "say": "Localizer to the right: correct right.",
+          "every": 10
+        },
+        { "when": "bankOver", "value": 15, "say": "Small bank angles on final.", "every": 8 }
+      ]
+    }
+  ],
+  "grade": { "measure": "beamDots", "three": 0.5, "two": 1 },
+  "debrief": {
+    "three": "Both needles in the middle all the way down. A training captain would sign that.",
+    "two": "On the ILS the whole way. Hold your corrections a little longer.",
+    "one": "We made five hundred feet, but the needles wandered. Smaller, steadier corrections.",
+    "failed": "We drifted too far off the beams. Small corrections, held. Shall we go again?"
+  }
+}

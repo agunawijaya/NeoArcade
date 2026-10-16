@@ -8,6 +8,7 @@ import {
 } from './airframe';
 import { approach, clamp } from './exact-math';
 import { finish, referenceSpeedNow } from './finish';
+import { activeWaypoints, lnavGuidance, stepFms } from './fms';
 import {
   STEP_SECONDS,
   RESERVE_FUEL_LB,
@@ -34,6 +35,11 @@ const LIMITS = {
 const OVERRIDE = 0.35;
 /** How fast the autopilot runs the stabiliser trim, degrees of angle of attack a second. */
 const AUTOPILOT_TRIM_RATE = 0.5;
+/** LNAV takes over the roll this high after takeoff, as the -400's does. */
+const LNAV_ENGAGE_FT = 50;
+/** The glass deck's fuel system opens the crossfeed past this imbalance and closes it once level. */
+const IMBALANCE_OPEN_LB = 2000;
+const IMBALANCE_CLOSED_LB = 500;
 
 /** The Arcade, Pilot and Captain levels: the panel, the stick and the autopilot fly the airframe. */
 export function flyAirframe(flight: Flight, input: FlightInput, events: FlightEvent[]) {
@@ -59,7 +65,21 @@ export function flyAirframe(flight: Flight, input: FlightInput, events: FlightEv
     flight.afds.autopilot = false;
     events.push({ kind: 'autopilotOff' });
   }
+  if (flight.fms) {
+    stepFms(flight.fms, world, aircraft.position, panel);
+    balanceFuel(flight, aircraft);
+  }
   setAfdsTargets(flight);
+  const afds = flight.afds;
+  if (
+    afds.armedRoute &&
+    afds.routeTrack !== null &&
+    !aircraft.onGround &&
+    flight.readout.heightFt > LNAV_ENGAGE_FT
+  ) {
+    afds.rollMode = 'route';
+    afds.armedRoute = false;
+  }
   const lever = panel.levers.reduce((sum, value) => sum + value, 0) / panel.levers.length;
   const output = stepAfds(flight.afds, aircraft, flight.nav[0], lever, STEP_SECONDS);
   flight.director = flight.afds.flightDirector
@@ -132,6 +152,21 @@ function setAfdsTargets(flight: Flight) {
     (station) => Math.abs(station.frequency - panel.nav[0].frequency) < 0.005,
   );
   afds.course = toTrue(panel.nav[0].course, tuned ? tuned.variation : variationAt(position));
+  const fms = flight.fms;
+  afds.routeTrack = fms
+    ? (lnavGuidance(fms, activeWaypoints(fms, flight.world), position)?.desiredTrack ?? null)
+    : null;
+}
+
+/**
+ * The glass deck has no flight engineer: its fuel system keeps the tanks
+ * level itself, opening the crossfeed when the symmetrical tanks drift apart.
+ */
+function balanceFuel(flight: Flight, aircraft: AirframeState) {
+  const fuel = aircraft.fuel;
+  const imbalance = Math.max(Math.abs(fuel.main1 - fuel.main4), Math.abs(fuel.main2 - fuel.main3));
+  if (imbalance > IMBALANCE_OPEN_LB) flight.panel.crossfeed = true;
+  else if (imbalance < IMBALANCE_CLOSED_LB) flight.panel.crossfeed = false;
 }
 
 /**

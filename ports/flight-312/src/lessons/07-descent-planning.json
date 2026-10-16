@@ -1,0 +1,56 @@
+{
+  "id": "descent-planning",
+  "number": 7,
+  "title": "Descent planning",
+  "summary": "Ten thousand feet to lose before Kennedy: start down at the right distance and cross 15 DME at 5,000 ft.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "ssm",
+    "seed": 707,
+    "radio": "quiet",
+    "sky": "clear",
+    "start": {
+      "place": { "kind": "radial", "station": "JFK", "radial": 230, "dmeNm": 58 },
+      "altitudeFt": 15000,
+      "heading": 50,
+      "speedKt": 280,
+      "flaps": 0,
+      "gearDown": false,
+      "autopilot": true
+    }
+  },
+  "briefing": [
+    "Fifteen thousand feet, fifty-eight miles south-west of Kennedy, heading for the VOR. We have to cross fifteen DME at five thousand feet.",
+    "The rule of thumb: three miles for every thousand feet to lose. Ten thousand feet is thirty miles, so we start down at about forty-five DME, a little more to slow down."
+  ],
+  "tasks": [
+    {
+      "kind": "crossAt",
+      "station": "JFK",
+      "dmeNm": 15,
+      "altitudeFt": 5000,
+      "withinFt": 300,
+      "goal": "Cross 15 DME from Kennedy at 5,000 ft.",
+      "say": "Set five thousand in the altitude window. At about forty-five DME, start down: the vertical speed mode, Y, and around eighteen hundred feet a minute.",
+      "sayGlass": "Set five thousand in the altitude window. At about forty-five DME, start down: flight level change, J, or vertical speed, Y, at around eighteen hundred feet a minute.",
+      "done": "Fifteen DME.",
+      "cues": [
+        {
+          "when": "speedAbove",
+          "value": 330,
+          "say": "We're getting fast: shallower, or the speed brake.",
+          "every": 15
+        }
+      ],
+      "limitSeconds": 900
+    }
+  ],
+  "grade": { "measure": "crossingErrorFt", "three": 200, "two": 500 },
+  "debrief": {
+    "three": "Right on the altitude at the fix. That's a descent planned, not guessed.",
+    "two": "Close. Check the sums as you go down: three miles a thousand feet.",
+    "one": "We made the fix, off the altitude. Start down earlier, or later, and keep checking.",
+    "failed": "That descent didn't come together. Three miles for every thousand feet. Again?"
+  }
+}

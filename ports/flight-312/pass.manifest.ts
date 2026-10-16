@@ -2,8 +2,9 @@ import { definePassManifest, glyphs, type EmblemDrawer } from '@shared/pass/mani
 
 /**
  * Flight 312 on the Arcade Pass: badges for the moments of a flight, the
- * liveries and the cap they unlock, and the stats on the profile. Imports
- * nothing but the manifest API, so the Hall can bundle it.
+ * flight school and the Daily Approach, the liveries and the cap they
+ * unlock, and the stats on the profile. Imports nothing but the manifest
+ * API, so the Hall can bundle it.
  */
 const jumbo: EmblemDrawer = (pen) => {
   pen.path(
@@ -88,6 +89,50 @@ const headset: EmblemDrawer = (pen) => {
   pen.rect(8, 34, 10, 16, { radius: 3 });
   pen.rect(46, 34, 10, 16, { radius: 3 });
   pen.path('M50 50c0 6-8 8-14 8', { stroke: 'accent', width: 3 });
+};
+
+const screens: EmblemDrawer = (pen) => {
+  pen.rect(8, 16, 22, 26, { radius: 3 });
+  pen.rect(34, 16, 22, 26, { radius: 3 });
+  pen.path('M12 30h14M38 24l7 8 7-8', { stroke: 'face', width: 2 });
+  pen.circle(19, 25, 4, { fill: 'accent' });
+  pen.path('M8 50h48', { stroke: 'shine', width: 3 });
+};
+
+const wings: EmblemDrawer = (pen) => {
+  pen.path('M32 26c-6 0-10 4-26 2 4 6 14 10 26 8 12 2 22-2 26-8-16 2-20-2-26-2z');
+  pen.circle(32, 31, 5, { fill: 'accent' });
+  pen.path('M24 44h16', { stroke: 'shine', width: 3 });
+};
+
+const signedBook: EmblemDrawer = (pen) => {
+  pen.rect(14, 10, 36, 44, { radius: 3 });
+  pen.path('M20 22h24M20 30h24', { stroke: 'face', width: 2 });
+  pen.path('M20 44c4-6 8 2 12-4s8 4 12-2', { stroke: 'accent', width: 3 });
+};
+
+const calendarStreak: EmblemDrawer = (pen) => {
+  glyphs.calendar(pen);
+  pen.path('M18 48h28', { stroke: 'accent', width: 4 });
+};
+
+const kiss: EmblemDrawer = (pen) => {
+  pen.path('M8 44c16-2 32-2 48 0', { stroke: 'ink', width: 3 });
+  pen.path('M22 36c6-6 14-6 20 0', { stroke: 'accent', width: 3 });
+  pen.circle(32, 30, 3, { fill: 'shine' });
+};
+
+const crosswind: EmblemDrawer = (pen) => {
+  pen.rect(26, 8, 12, 48, { radius: 2 });
+  pen.path('M32 14v6M32 26v6M32 38v6', { stroke: 'face', width: 2 });
+  pen.path('M6 24h16l-4-4M6 34h16l-4 4', { stroke: 'accent', width: 3 });
+};
+
+const fourSkies: EmblemDrawer = (pen) => {
+  pen.circle(20, 20, 7, { fill: 'accent' });
+  pen.path('M36 22a6 6 0 0 1 11-3 5 5 0 0 1 8 4H36z');
+  pen.path('M10 42a6 6 0 0 1 11-3 5 5 0 0 1 8 4H10z');
+  pen.path('M36 38h18M36 44h18M36 50h18', { stroke: 'shine', width: 2 });
 };
 
 const shortField: EmblemDrawer = (pen) => {
@@ -229,6 +274,71 @@ export default definePassManifest({
       target: 10,
       emblem: jumbo,
     },
+    {
+      id: 'glass-act',
+      name: 'Glass Act',
+      description:
+        'A whole Flight 312 on the glass deck, LNAV and all. The flight engineer has the day off.',
+      hint: 'Land a full flight on the glass deck.',
+      tier: 'silver',
+      emblem: screens,
+    },
+    {
+      id: 'student-pilot',
+      name: 'Student Pilot',
+      description:
+        'Your first lesson at the flight school. Everyone starts by finding the flap lever.',
+      hint: 'Pass the first lesson of the flight school.',
+      tier: 'bronze',
+      emblem: wings,
+    },
+    {
+      id: 'check-ride',
+      name: 'Check-Ride',
+      description:
+        'Passed the check-ride: a whole flight with the instructor watching. Captain, your book is signed.',
+      hint: 'Pass the flight school’s check-ride.',
+      tier: 'gold',
+      emblem: signedBook,
+    },
+    {
+      id: 'daily-flyer',
+      name: 'Daily Flyer',
+      description:
+        'Seven Daily Approaches on seven days running. The approach controllers know your voice.',
+      hint: 'Fly the Daily Approach seven days in a row.',
+      tier: 'silver',
+      target: 7,
+      emblem: calendarStreak,
+    },
+    {
+      id: 'kiss-landing',
+      name: 'Kiss Landing',
+      description:
+        'Touched down at under 60 feet a minute. Nobody noticed: not even the flight deck.',
+      hint: 'Touch down at less than 60 fpm.',
+      tier: 'gold',
+      emblem: kiss,
+    },
+    {
+      id: 'crosswind-ace',
+      name: 'Crosswind Ace',
+      description:
+        'Fifteen knots or more across the runway, and the wheels still met the centreline.',
+      hint: 'Land with at least 15 kt of crosswind, within 15 ft of the centreline.',
+      tier: 'silver',
+      emblem: crosswind,
+    },
+    {
+      id: 'weather-watcher',
+      name: 'Weather Watcher',
+      description:
+        'Landed in clear skies, low cloud, minimums and fog. Every sky the north-east can throw.',
+      hint: 'Land at a field in each of its four kinds of weather.',
+      tier: 'silver',
+      target: 4,
+      emblem: fourSkies,
+    },
   ],
   cosmetics: [
     { id: 'livery-sunrise', name: 'Sunrise livery', kind: 'Livery', unlock: { badge: 'greaser' } },
@@ -245,6 +355,12 @@ export default definePassManifest({
       kind: 'Cockpit',
       unlock: { badge: 'captains-hat' },
     },
+    {
+      id: 'livery-academy',
+      name: 'Academy trainer livery',
+      kind: 'Livery',
+      unlock: { badge: 'check-ride' },
+    },
   ],
   stats: [
     { key: 'flights', label: 'Flights flown' },
@@ -252,5 +368,7 @@ export default definePassManifest({
     { key: 'bestTouchdown', label: 'Softest touchdown', unit: 'fpm' },
     { key: 'minutesFlown', label: 'Time flown', unit: 'min' },
     { key: 'destinations', label: 'Fields landed at' },
+    { key: 'lessonsPassed', label: 'Lessons passed' },
+    { key: 'bestDaily', label: 'Best Daily Approach', unit: 'points' },
   ],
 });

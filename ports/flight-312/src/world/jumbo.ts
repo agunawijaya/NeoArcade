@@ -11,14 +11,23 @@ import {
   Vector2,
   Vector3,
 } from 'three';
+import {
+  fuselageCanvas,
+  paintFuselage,
+  paintUpperDeck,
+  skinTexture,
+  upperDeckCanvas,
+  type Paint,
+} from './jumbo-paint';
 import { buildLights } from './lights';
 
 /**
- * The jumbo from outside, for the replay's chase camera: a lathed fuselage
+ * The jumbo from outside, for the replay's cameras: a lathed fuselage
  * with the upper-deck hump, swept wings with dihedral, the tailplane and
  * fin, four big fan nacelles on pylons and the gear, in the livery the
- * player has chosen. Metres; the nose points along −z, the main wheels sit
- * at the origin.
+ * player has chosen. The glass-deck jumbo of the later era has the
+ * stretched upper deck and winglets. Metres; the nose points along −z, the
+ * main wheels sit at the origin.
  */
 const LENGTH = 70.6;
 const RADIUS = 3.25;
@@ -27,17 +36,8 @@ const AXIS_HEIGHT = 5.1;
 /** The main wheels are this far behind the nose. */
 const MAINS_FROM_NOSE = 40;
 
-export type Livery = 'brightwater' | 'sunrise' | 'silver' | 'night';
-
-interface Paint {
-  top: string;
-  belly: string;
-  cheatline: string;
-  pinstripe: string;
-  fin: string;
-  finMark: string;
-  engine: string;
-}
+export type Livery = 'brightwater' | 'sunrise' | 'silver' | 'night' | 'academy';
+export type JumboVariant = 'classic' | 'glass';
 
 /**
  * Brightwater's own colours — an invented airline: white over grey, a deep
@@ -53,6 +53,7 @@ export const LIVERIES: Record<Livery, Paint> = {
     fin: '#173a6e',
     finMark: '#f3f4f2',
     engine: '#d9dcdf',
+    title: 'BRIGHTWATER',
   },
   sunrise: {
     top: '#f6f1e7',
@@ -62,6 +63,7 @@ export const LIVERIES: Record<Livery, Paint> = {
     fin: '#d2601c',
     finMark: '#f6d27a',
     engine: '#e4ded2',
+    title: 'BRIGHTWATER',
   },
   silver: {
     top: '#c7ccd1',
@@ -71,6 +73,7 @@ export const LIVERIES: Record<Livery, Paint> = {
     fin: '#c7ccd1',
     finMark: '#1f4f8f',
     engine: '#c2c6ca',
+    title: 'BRIGHTWATER',
   },
   night: {
     top: '#1d2a44',
@@ -80,6 +83,18 @@ export const LIVERIES: Record<Livery, Paint> = {
     fin: '#1d2a44',
     finMark: '#e9ecef',
     engine: '#d9dcdf',
+    title: 'BRIGHTWATER',
+  },
+  /** The flight school's trainer: white, a red cheatline, a checked-red fin. */
+  academy: {
+    top: '#f4f4f1',
+    belly: '#c4c6c8',
+    cheatline: '#b3262b',
+    pinstripe: '#1d1f22',
+    fin: '#b3262b',
+    finMark: '#f4f4f1',
+    engine: '#e2e3e1',
+    title: 'BRIGHTWATER ACADEMY',
   },
 };
 
@@ -90,7 +105,7 @@ const FIXED = {
   tyre: new Color('#1e1f21'),
 };
 
-type Part = 'fuselage' | 'tailplane' | 'fin' | 'finMark' | 'wing';
+type Part = 'tailplane' | 'fin' | 'finMark' | 'wing';
 
 /** Radius of the fuselage at a station from the nose, metres. */
 function fuselageRadius(station: number): number {
@@ -100,38 +115,24 @@ function fuselageRadius(station: number): number {
   return RADIUS * (1 - t * 0.86);
 }
 
-function paintByHeight(geometry: BufferGeometry, paint: (y: number, z: number) => Color) {
-  const position = geometry.getAttribute('position');
-  const colours = new Float32Array(position.count * 3);
-  for (let index = 0; index < position.count; index++) {
-    const colour = paint(position.getY(index), position.getZ(index));
+function paintSolid(geometry: BufferGeometry, colour: Color) {
+  const count = geometry.getAttribute('position').count;
+  const colours = new Float32Array(count * 3);
+  for (let index = 0; index < count; index++)
     colours.set([colour.r, colour.g, colour.b], index * 3);
-  }
   geometry.setAttribute('color', new BufferAttribute(colours, 3));
 }
 
-function paintFuselage(geometry: BufferGeometry, paint: Paint) {
-  const [top, belly, cheatline, pinstripe] = [
-    paint.top,
-    paint.belly,
-    paint.cheatline,
-    paint.pinstripe,
-  ].map((colour) => new Color(colour)) as [Color, Color, Color, Color];
-  paintByHeight(geometry, (y) => {
-    if (y < -RADIUS * 0.3) return belly;
-    if (y > RADIUS * 0.02 && y < RADIUS * 0.26) return cheatline;
-    if (y >= RADIUS * 0.26 && y < RADIUS * 0.31) return pinstripe;
-    return top;
-  });
-}
+/** The lathe's last station, where the skin's texture ends. */
+const SKIN_LENGTH = Math.floor(LENGTH * 2) / 2;
 
 function fuselage(): BufferGeometry {
   const points: Vector2[] = [];
-  for (let station = 0; station <= LENGTH; station += 0.5)
+  for (let station = 0; station <= SKIN_LENGTH; station += 0.5)
     points.push(new Vector2(fuselageRadius(station), station));
-  const geometry = new LatheGeometry(points, 40);
-  // The lathe runs along +y: lay it down with the nose forward (−z).
-  geometry.rotateX(-Math.PI / 2);
+  const geometry = new LatheGeometry(points, 48);
+  // The lathe runs from the nose along +y: a quarter turn lays it along +z, the nose ahead (−z) once moved back.
+  geometry.rotateX(Math.PI / 2);
   geometry.translate(0, 0, -MAINS_FROM_NOSE);
   // The tail sweeps up as it narrows.
   const position = geometry.getAttribute('position');
@@ -207,9 +208,12 @@ export class JumboModel {
   private beacon: Mesh;
   private parts: { geometry: BufferGeometry; part: Part }[] = [];
   private engineSkin: MeshStandardMaterial;
-  private humpSkin: MeshStandardMaterial;
+  private skin = fuselageCanvas();
+  private upperDeck = upperDeckCanvas();
+  private skinTextures = [skinTexture(this.skin), skinTexture(this.upperDeck)];
+  private stretched: boolean;
 
-  constructor(livery: Livery = 'brightwater') {
+  constructor(livery: Livery = 'brightwater', variant: JumboVariant = 'classic') {
     this.group.name = 'jumbo';
     const painted = new MeshStandardMaterial({
       vertexColors: true,
@@ -217,7 +221,9 @@ export class JumboModel {
       metalness: 0.15,
     });
     this.engineSkin = new MeshStandardMaterial({ roughness: 0.4, metalness: 0.3 });
-    this.humpSkin = new MeshStandardMaterial({ roughness: 0.45 });
+    const [skinMap, upperDeckMap] = this.skinTextures;
+    const skin = new MeshStandardMaterial({ map: skinMap, roughness: 0.45, metalness: 0.15 });
+    const humpSkin = new MeshStandardMaterial({ map: upperDeckMap, roughness: 0.45 });
     const intake = new MeshStandardMaterial({ color: FIXED.intake, roughness: 0.8 });
     const metal = new MeshStandardMaterial({ color: FIXED.metal, roughness: 0.5, metalness: 0.6 });
     const tyre = new MeshStandardMaterial({ color: FIXED.tyre, roughness: 0.9 });
@@ -226,11 +232,14 @@ export class JumboModel {
       return new Mesh(geometry, painted);
     };
 
-    const body = part(fuselage(), 'fuselage');
+    const body = new Mesh(fuselage(), skin);
     body.position.y = AXIS_HEIGHT;
-    const hump = new Mesh(new SphereGeometry(1, 24, 12), this.humpSkin);
-    hump.scale.set(RADIUS * 0.72, 1.9, 13);
-    hump.position.set(0, AXIS_HEIGHT + RADIUS * 0.72, -MAINS_FROM_NOSE + 15.5);
+    const hump = new Mesh(new SphereGeometry(1, 32, 16), humpSkin);
+    // The later jumbo's upper deck runs some seven metres further aft.
+    const stretched = variant === 'glass';
+    this.stretched = stretched;
+    hump.scale.set(RADIUS * 0.72, 1.9, stretched ? 16.5 : 13);
+    hump.position.set(0, AXIS_HEIGHT + RADIUS * 0.72, -MAINS_FROM_NOSE + (stretched ? 19 : 15.5));
     this.group.add(body, hump);
 
     // Wings: low on the fuselage, 37.5° of sweep, 7° of dihedral.
@@ -240,6 +249,18 @@ export class JumboModel {
       wing.position.set(side * RADIUS * 0.8, AXIS_HEIGHT - RADIUS * 0.55, -6);
       wing.rotation.z = side * 7 * (Math.PI / 180);
       this.group.add(wing);
+      if (variant === 'glass') {
+        // A winglet at the tip, canted out and swept back.
+        const winglet = part(surface(3.6, 1.2, 1.8, 50, 0.3, 0.12), 'wing');
+        winglet.scale.x = side;
+        winglet.rotation.z = side * (Math.PI / 2 - 0.5);
+        winglet.position.set(
+          side * (RADIUS * 0.8 + 31 * Math.cos(7 * (Math.PI / 180))),
+          AXIS_HEIGHT - RADIUS * 0.55 + 31 * Math.sin(7 * (Math.PI / 180)),
+          -6 + 31 * Math.tan(37.5 * (Math.PI / 180)),
+        );
+        this.group.add(winglet);
+      }
       const tailplane = part(surface(7.5, 2.6, 10.5, 38, 0.6, 0.2), 'tailplane');
       tailplane.scale.x = side;
       tailplane.position.set(side * 0.6, AXIS_HEIGHT + 1.4, 20);
@@ -337,19 +358,16 @@ export class JumboModel {
   paint(livery: Livery) {
     const paint = LIVERIES[livery];
     for (const { geometry, part } of this.parts) {
-      if (part === 'fuselage') paintFuselage(geometry, paint);
-      else {
-        const colour =
-          part === 'wing'
-            ? FIXED.wing
-            : new Color(
-                part === 'fin' ? paint.fin : part === 'finMark' ? paint.finMark : paint.top,
-              );
-        paintByHeight(geometry, () => colour);
-      }
+      const colour =
+        part === 'wing'
+          ? FIXED.wing
+          : new Color(part === 'fin' ? paint.fin : part === 'finMark' ? paint.finMark : paint.top);
+      paintSolid(geometry, colour);
     }
+    paintFuselage(this.skin, paint, { radius: RADIUS, length: SKIN_LENGTH });
+    paintUpperDeck(this.upperDeck, paint, this.stretched);
+    for (const texture of this.skinTextures) texture.needsUpdate = true;
     this.engineSkin.color.set(paint.engine);
-    this.humpSkin.color.set(paint.top);
   }
 
   /** Gear 0 up … 1 down; the beacon flashes about once a second. */
@@ -362,6 +380,7 @@ export class JumboModel {
   }
 
   dispose() {
+    for (const texture of this.skinTextures) texture.dispose();
     this.group.traverse((object) => {
       if (object instanceof Mesh) {
         object.geometry.dispose();

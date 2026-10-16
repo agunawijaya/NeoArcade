@@ -68,7 +68,8 @@ export function finish(
     readbacks: { missed: flight.atc.missedReadbacks, wrong: flight.atc.wrongReadbacks },
     breakout:
       ending === 'landed' && onDestination && ceiling !== null && ceiling <= BREAKOUT_CEILING_FT,
-    fullFlight: flight.setup.mode === 'flight' && ending === 'landed' && onDestination,
+    fullFlight:
+      flight.setup.mode === 'flight' && !flight.setup.start && ending === 'landed' && onDestination,
     properGoArounds: flight.approach.properGoArounds,
   };
   events.push({ kind: 'ending', outcome: flight.outcome });

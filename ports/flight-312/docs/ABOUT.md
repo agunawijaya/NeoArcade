@@ -72,8 +72,6 @@ remember the marshes.
 Flight 312 keeps the flight, the route network, the weather, the six ILS
 fields and the verdicts, and builds the rest of the aeroplane around them.
 
-![The flight deck at night on final into Kennedy, the city lights below](../media/night.jpg)
-
 - **A classic jumbo flight deck, drawn by code.** The three-crew analog
   cockpit of the 747-100/200 era, instrument by instrument: the attitude
   director with its command bars, the HSI, the airspeed indicator with its
@@ -111,12 +109,48 @@ fields and the verdicts, and builds the rest of the aeroplane around them.
   rewritten in the original's spirit: what happened, where, the numbers,
   and one line of advice.
 
-![The original's flight under the 1982 Rules, in the new cockpit](../media/rules-1982.jpg)
+### Then the glass, the school, the daily and the replays
+
+The jumbo grew up after 1982, and so does the game.
+
+![The glass deck on final into Kennedy: the PFDs, the NDs with the magenta line, the EICAS and the mode control panel](../media/glass.jpg)
+
+- **The glass deck.** Before any flight, swap the round dials for the
+  two-crew cockpit of the later jumbo: a primary flight display with its
+  speed and altitude tapes, a map that draws your route in magenta and the
+  runway at the end of it, engine and system pages on the EICAS, a mode
+  control panel with LNAV, level change, LOC, APP and an autothrottle, and
+  a small flight management computer to type the route and the approach
+  into. Same aeroplane, same sky, same weather; a different way to fly it.
+  The 1982 Rules stay on the classic deck, where they belong.
+- **A flight school.** Thirteen lessons, from finding the flap lever to a
+  check-ride on the whole flight: the takeoff roll, rotation, turns, a VOR
+  radial, a DME fix, descent planning, the ILS, the flare, a crosswind, a
+  missed approach in fog. An instructor talks you through each one in a
+  voice of their own, says it on screen too, watches the needles with you
+  and calls it the moment you drift — and if you would rather see it done
+  first, they will fly it while you watch. One to three stars at the end,
+  and a debrief that tells you what to try next time.
+- **The Daily Approach.** One ILS a day — the same field, ceiling, wind and
+  hour for everyone — and only the first attempt counts. The score is how a
+  check captain would mark it: stabilised at 1,000 and 500 feet, then the
+  touchdown, the point, the centreline and the flare. Share it as one line
+  (*Flight 312 · Daily Approach #12 · BOS ☁️ 300 ft · 💨 18 kt · 🛬 142 fpm
+  · ★★☆ · Pilot*), keep a streak, and watch the month fill up.
+- **Replays.** After every landing, watch it again: from the control tower,
+  from the grass beside the touchdown zone in slow motion, from a chase
+  plane, or from your own seat with every needle moving as it did. The path
+  you flew, the glideslope and the spot where the wheels touched are drawn
+  into the sky. The last ten are kept, and any of them becomes a link: send
+  it, and your friend watches your landing, then tries to beat it in the
+  same weather.
+
+![A replay from the chase plane, the flown path in magenta and the glideslope in blue](../media/replay-chase.jpg)
 
 Why fly it today? Because it is still the purest version of a good idea:
 one flight, made hard by the weather, flown on instruments, where landing
 safely is the whole reward. And now you can see the runway when you get
-there.
+there — and watch yourself land on it.
 
 Flight 312's airline, Brightwater, is invented; the aircraft is called the
 jumbo. The original program named the aircraft it simulated, a Boeing 747,

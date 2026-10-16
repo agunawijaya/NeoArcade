@@ -1,3 +1,4 @@
+import type { Deck } from './engine/flight';
 import type { ControlScheme } from './game/input';
 import type { Livery } from './world/jumbo';
 
@@ -29,6 +30,8 @@ export interface Settings {
   livery: Livery;
   /** The captain's cap on the glareshield, once the Captain's Hat badge has earned it. */
   glareshieldCap: boolean;
+  /** The flight deck a briefing starts with: the classic one, or the glass one. */
+  flightDeck: Deck;
 }
 
 export function defaultSettings(): Settings {
@@ -47,6 +50,7 @@ export function defaultSettings(): Settings {
     menuTheme: 'auto',
     livery: 'brightwater',
     glareshieldCap: true,
+    flightDeck: 'classic',
   };
 }
 
@@ -83,10 +87,11 @@ export function sanitiseSettings(raw: unknown): Settings {
     menuTheme: oneOf(value.menuTheme, ['auto', 'light', 'dark'] as const, fallback.menuTheme),
     livery: oneOf(
       value.livery,
-      ['brightwater', 'sunrise', 'silver', 'night'] as const,
+      ['brightwater', 'sunrise', 'silver', 'night', 'academy'] as const,
       fallback.livery,
     ),
     glareshieldCap:
       typeof value.glareshieldCap === 'boolean' ? value.glareshieldCap : fallback.glareshieldCap,
+    flightDeck: oneOf(value.flightDeck, ['classic', 'glass'] as const, fallback.flightDeck),
   };
 }

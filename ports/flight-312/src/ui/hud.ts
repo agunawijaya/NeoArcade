@@ -8,8 +8,19 @@ import { h } from './dom';
  * What sits over the cockpit: the radio's subtitles, the readback choices
  * when a controller waits for an answer, coaching hints, the clock and
  * time compression, the view buttons, and on touch screens the levers and
- * buttons a thumb needs. Plain DOM, so it stays sharp and readable.
+ * buttons a thumb needs. In a lesson, the instructor's words and a card
+ * with the lesson's task. Plain DOM, so it stays sharp and readable.
  */
+export interface LessonPanel {
+  title: string;
+  task: string;
+  /** Tasks done and in all. */
+  done: number;
+  total: number;
+  /** A line under the task: a demonstration in progress, a time left. */
+  note: string | null;
+}
+
 const SPEAKER_NAMES: Record<Controller, string> = {
   clearance: 'Clearance',
   tower: 'Tower',
@@ -51,6 +62,8 @@ const VIEWS: [CockpitView, string][] = [
 
 /** Matches the stylesheet's rule that folds the view list into one button. */
 const FOLDED_VIEWS_QUERY = '(max-height: 520px)';
+/** How long an instructor's line stays up once said. */
+const INSTRUCTOR_SECONDS = 9;
 
 export interface HudHandlers {
   answer(choice: ReadbackChoice['id']): void;
@@ -71,10 +84,15 @@ export class Hud {
   private hint: HTMLElement;
   private status: HTMLElement;
   private notice: HTMLElement;
+  private instructorLine: HTMLElement;
+  private lessonCard: HTMLElement;
+  private views: [CockpitView, string][];
   private viewButtons = new Map<CockpitView, HTMLButtonElement>();
   private view: CockpitView = 'main';
   private hintTimer = 0;
   private noticeTimer = 0;
+  private instructorTimer = 0;
+  private lessonKey = '';
   private lines: { at: number; node: HTMLElement }[] = [];
   private showingChoicesFor: number | null = null;
   subtitlesOn = true;
@@ -84,6 +102,8 @@ export class Hud {
     touch: boolean,
     /** The 1982 Rules flare on a key, so the touch controls get a button for it. */
     flareButton: boolean,
+    /** The views this flight deck has. */
+    deckViews: readonly CockpitView[],
   ) {
     this.subtitles = h('div', {
       class: 'hud-subtitles',
@@ -95,8 +115,15 @@ export class Hud {
     this.hint = h('div', { class: 'hud-hint', role: 'status' });
     this.status = h('div', { class: 'hud-status' });
     this.notice = h('div', { class: 'hud-notice', role: 'status' });
+    this.instructorLine = h('div', {
+      class: 'hud-instructor',
+      role: 'status',
+      'aria-live': 'polite',
+    });
+    this.lessonCard = h('section', { class: 'hud-lesson', 'aria-label': 'Lesson', hidden: true });
+    this.views = VIEWS.filter(([view]) => deckViews.includes(view));
     const views = h('nav', { class: 'hud-views', 'aria-label': 'Views' });
-    for (const [view, label] of VIEWS) {
+    for (const [view, label] of this.views) {
       const button = h(
         'button',
         { type: 'button', class: 'hud-view', onclick: () => this.chooseView(view) },
@@ -137,13 +164,15 @@ export class Hud {
     this.element = h(
       'div',
       { class: 'hud' },
-      this.subtitles,
+      // The instructor speaks above the radio, both clear of the runway ahead.
+      h('div', { class: 'hud-talk' }, this.instructorLine, this.subtitles),
       this.choices,
       this.hint,
       this.status,
       this.notice,
       views,
       tools,
+      this.lessonCard,
     );
     if (touch) this.element.append(this.touchControls(flareButton));
   }
@@ -255,11 +284,41 @@ export class Hud {
     this.noticeTimer = seconds;
   }
 
+  /** The instructor's words, on screen whatever the subtitles say. */
+  instructor(text: string) {
+    this.instructorLine.replaceChildren(h('strong', {}, 'Instructor: '), text);
+    this.instructorLine.classList.add('shown');
+    this.instructorTimer = INSTRUCTOR_SECONDS;
+  }
+
+  /** The lesson's card: its title, the task now, how far along it is. */
+  lesson(panel: LessonPanel | null) {
+    const key = panel ? `${panel.title}|${panel.task}|${panel.done}|${panel.note}` : '';
+    if (key === this.lessonKey) return;
+    this.lessonKey = key;
+    this.lessonCard.hidden = !panel;
+    if (!panel) return;
+    this.lessonCard.replaceChildren(
+      h('p', { class: 'hud-lesson-title' }, panel.title),
+      h('p', { class: 'hud-lesson-task' }, panel.task),
+      h(
+        'p',
+        { class: 'hud-lesson-progress', 'aria-label': `${panel.done} of ${panel.total} done` },
+        ...Array.from({ length: panel.total }, (_, index) =>
+          h('span', { class: index < panel.done ? 'done' : index === panel.done ? 'now' : '' }),
+        ),
+      ),
+      panel.note ? h('p', { class: 'hud-lesson-note' }, panel.note) : '',
+    );
+  }
+
   update(dt: number, time: number, status: string, view: CockpitView) {
     this.hintTimer -= dt;
     this.noticeTimer -= dt;
+    this.instructorTimer -= dt;
     if (this.hintTimer <= 0) this.hint.classList.remove('shown');
     if (this.noticeTimer <= 0) this.notice.classList.remove('shown');
+    if (this.instructorTimer <= 0) this.instructorLine.classList.remove('shown');
     for (const line of this.lines) line.node.classList.toggle('old', time - line.at > 12);
     if (this.status.textContent !== status) this.status.textContent = status;
     if (view !== this.view || this.element.dataset.view !== view) {
@@ -276,7 +335,7 @@ export class Hud {
       this.handlers.view(view);
       return;
     }
-    const index = VIEWS.findIndex(([key]) => key === view);
-    this.handlers.view((VIEWS[(index + 1) % VIEWS.length] as [CockpitView, string])[0]);
+    const index = this.views.findIndex(([key]) => key === view);
+    this.handlers.view((this.views[(index + 1) % this.views.length] as [CockpitView, string])[0]);
   }
 }

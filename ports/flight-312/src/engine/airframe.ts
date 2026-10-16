@@ -180,6 +180,8 @@ export function startInFlight(
   fuel: Record<TankId, number>,
   flaps: number,
   gearDown: boolean,
+  /** The path to be trimmed for: level, or down a glideslope. */
+  pathDeg = 0,
 ): AirframeState {
   const state = startOnRunway(position, altitudeFt, headingTrue, fuel);
   state.onGround = false;
@@ -187,21 +189,26 @@ export function startInFlight(
   state.flaps = flaps;
   state.gear = gearDown ? 1 : 0;
   state.weightLb = weightOf(state);
-  // Trimmed for level flight at this speed.
+  // Trimmed for steady flight along the path at this speed.
   const air = airAt(altitudeFt);
-  const lift = state.weightLb / (dynamicPressure(tasKt, air) * JUMBO.wingAreaFt2);
+  const path = sinCosDegrees(pathDeg);
+  const lift = (state.weightLb * path.cos) / (dynamicPressure(tasKt, air) * JUMBO.wingAreaFt2);
   const alpha = (lift - flapAero(flaps).liftAtZero) / JUMBO.liftSlopePerDeg;
-  state.pitchDeg = alpha;
+  state.pathDeg = pathDeg;
+  state.pitchDeg = alpha + pathDeg;
   state.alphaDeg = alpha;
   state.trimAlphaDeg = alpha;
   state.iasKt = casFromTas(tasKt, air);
   state.groundSpeedKt = tasKt;
-  // The engines spooled to the thrust that holds this speed level.
+  state.verticalSpeedFpm = tasKt * FPS_PER_KNOT * FPM_PER_FPS * path.sin;
+  // The engines spooled to the thrust that holds this speed on the path: less of it going downhill.
   const drag =
     dynamicPressure(tasKt, air) *
     JUMBO.wingAreaFt2 *
     dragCoefficient(state, lift, altitudeFt, tasKt / air.soundKt);
-  const lever = leverForThrust(drag / JUMBO.engineCount, air, tasKt / air.soundKt);
+  const needed = drag + state.weightLb * path.sin;
+  const lever =
+    needed > 0 ? leverForThrust(needed / JUMBO.engineCount, air, tasKt / air.soundKt) : 0;
   for (let settle = 0; settle < 600; settle++) {
     state.engines = state.engines.map((engine) =>
       stepEngine(

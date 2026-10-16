@@ -13,6 +13,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { JUMBO } from '../engine/aircraft';
+import type { Deck } from '../engine/flight';
 import type { LatLon } from '../engine/geo';
 import type { Terrain } from '../engine/terrain';
 import { nearestField, skyAt } from '../engine/weather';
@@ -22,6 +23,7 @@ import { CloudLayers } from './clouds';
 import { METRES_PER_FOOT, RECENTRE_METRES, SceneFrame } from './frame';
 import { GlidePath } from './glidepath';
 import { JumboModel, type Livery } from './jumbo';
+import { ReplayOverlay, type OverlayPathPoint } from './replay-overlay';
 import { lightUniforms } from './lights';
 import { atmosphere } from './shaders';
 import { SkyDome, skyLighting } from './sky';
@@ -48,6 +50,8 @@ export interface AircraftPose {
 export type ViewPoint =
   | { kind: 'cockpit'; headYawDeg: number; headPitchDeg: number }
   | { kind: 'chase'; distanceM: number; heightM: number; orbitDeg: number }
+  /** A camera standing somewhere, the tower or beside the runway, following the jumbo. */
+  | { kind: 'spot'; position: LatLon; altitudeFt: number }
   | { kind: 'free'; position: LatLon; altitudeFt: number; headingDeg: number; pitchDeg: number };
 
 export interface Picture {
@@ -82,7 +86,8 @@ export class WorldView {
   private clouds: CloudLayers;
   private glidePath: GlidePath | null;
   private sky = new SkyDome();
-  private jumbo = new JumboModel();
+  private jumbo: JumboModel;
+  private overlay: ReplayOverlay | null = null;
   private sun = new DirectionalLight(0xffffff, 3);
   private hemisphere = new HemisphereLight(0xbfd4ff, 0x40382c, 2.4);
   private fog = new FogExp2(0xaabbcc, 0.00005);
@@ -99,8 +104,10 @@ export class WorldView {
     detail: 'high' | 'low' = 'high',
     /** The Arcade level's ghost glidepath down the destination's ILS. */
     showGlidePath = false,
+    deck: Deck = 'classic',
   ) {
     this.world = world;
+    this.jumbo = new JumboModel('brightwater', deck);
     this.renderer = new WebGLRenderer({
       canvas,
       antialias: true,
@@ -137,6 +144,7 @@ export class WorldView {
     this.terrain.place(this.frame);
     this.airports.place(this.frame);
     this.glidePath?.place(this.frame);
+    this.overlay?.place(this.frame);
   }
 
   setSize(width: number, height: number, pixelRatio: number, lens: Lens) {
@@ -144,6 +152,12 @@ export class WorldView {
     this.lens = lens;
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height, false);
+    this.updateProjection();
+  }
+
+  /** A new lens for the same picture: the replay's long lenses zoom every frame. */
+  setLens(lens: Lens) {
+    this.lens = lens;
     this.updateProjection();
   }
 
@@ -174,7 +188,11 @@ export class WorldView {
       ),
     );
     const wheels = this.frame.toScene(pose.position, pose.altitudeFt * FT);
-    this.jumbo.group.visible = view.kind === 'chase';
+    this.jumbo.group.visible = view.kind === 'chase' || view.kind === 'spot';
+    if (this.jumbo.group.visible) {
+      this.jumbo.group.position.copy(wheels);
+      this.jumbo.group.quaternion.copy(body);
+    }
     if (view.kind === 'cockpit') {
       const offset = new Vector3(0, JUMBO.eyeHeightFt * FT, -JUMBO.eyeAheadFt * FT).applyQuaternion(
         body,
@@ -192,9 +210,13 @@ export class WorldView {
       this.camera.quaternion.copy(body).multiply(head);
       return { eye, eyeAt: this.frame.toLatLon(eye.x, eye.z), eyeAltitudeFt: eye.y / FT };
     }
+    if (view.kind === 'spot') {
+      const eye = this.frame.toScene(view.position, view.altitudeFt * FT);
+      this.camera.position.copy(eye);
+      this.camera.lookAt(wheels.clone().add(new Vector3(0, 6, 0)));
+      return { eye, eyeAt: view.position, eyeAltitudeFt: view.altitudeFt };
+    }
     if (view.kind === 'chase') {
-      this.jumbo.group.position.copy(wheels);
-      this.jumbo.group.quaternion.copy(body);
       const around = (pose.headingTrue + 180 + view.orbitDeg) * (Math.PI / 180);
       const eye = wheels
         .clone()
@@ -293,11 +315,41 @@ export class WorldView {
     this.jumbo.paint(livery);
   }
 
+  /** Where the tower's cab nearest a place stands, if one is within a few miles: the replay's tower camera. */
+  towerNear(point: LatLon, withinMetres = 8000): { position: LatLon; altitudeFt: number } | null {
+    const target = this.frame.toScene(point, 0);
+    let best: Vector3 | null = null;
+    this.airports.group.traverse((object) => {
+      if (object.name !== 'tower cab') return;
+      const at = object.getWorldPosition(new Vector3());
+      if (!best || at.distanceToSquared(target) < best.distanceToSquared(target)) best = at;
+    });
+    const found = best as Vector3 | null;
+    // Fields crowded with runways have no buildings drawn, and so no tower of their own.
+    if (!found || Math.hypot(found.x - target.x, found.z - target.z) > withinMetres) return null;
+    return { position: this.frame.toLatLon(found.x, found.z), altitudeFt: (found.y + 2) / FT };
+  }
+
+  showReplayOverlay(path: readonly OverlayPathPoint[], touchdown: LatLon | null) {
+    this.hideReplayOverlay();
+    this.overlay = new ReplayOverlay(this.world.ils, path, touchdown);
+    this.overlay.place(this.frame);
+    this.scene.add(this.overlay.group);
+  }
+
+  hideReplayOverlay() {
+    if (!this.overlay) return;
+    this.scene.remove(this.overlay.group);
+    this.overlay.dispose();
+    this.overlay = null;
+  }
+
   dispose() {
     this.terrain.dispose();
     this.airports.dispose();
     this.clouds.dispose();
     this.glidePath?.dispose();
+    this.overlay?.dispose();
     this.sky.dispose();
     this.jumbo.dispose();
     this.renderer.dispose();

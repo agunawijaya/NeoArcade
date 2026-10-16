@@ -1,0 +1,68 @@
+{
+  "id": "crosswind-landing",
+  "number": 11,
+  "title": "Crosswind landing",
+  "summary": "Buffalo's runway 05 with eighteen knots across it, gusting: crab down the approach, kick it straight, land on the centreline.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "buf",
+    "seed": 1111,
+    "radio": "quiet",
+    "sky": "low",
+    "timeOfDay": "morning",
+    "wind": { "direction": 140, "speedKt": 18, "gustKt": 26 },
+    "start": {
+      "place": { "kind": "final", "outNm": 5, "offsetNm": 0 },
+      "speedKt": 145,
+      "flaps": 30,
+      "gearDown": true,
+      "autopilot": false
+    }
+  },
+  "briefing": [
+    "Five miles from Buffalo's runway zero five, and the wind is from one four zero at eighteen, gusting twenty-six: almost straight across from the right.",
+    "Fly the approach crabbed into the wind, nose pointing a little right of the runway. Just before touchdown, rudder the nose straight with the centreline, keep the wings level, and put her down."
+  ],
+  "tasks": [
+    {
+      "kind": "land",
+      "goal": "Land on the centreline in the crosswind.",
+      "say": "Keep the localizer centred with the crab. Add a few knots for the gusts. At fifteen feet, rudder straight.",
+      "done": "On the ground. Keep the wings level into the wind as you slow.",
+      "cues": [
+        {
+          "when": "courseLeft",
+          "value": 0.7,
+          "say": "Drifting right of the centreline: more crab into the wind.",
+          "every": 10
+        },
+        {
+          "when": "courseRight",
+          "value": 0.7,
+          "say": "We're left of the centreline: ease the crab.",
+          "every": 10
+        },
+        {
+          "when": "sinkOver",
+          "value": 1000,
+          "say": "Sinking fast: watch the descent.",
+          "every": 6
+        },
+        {
+          "when": "bankOver",
+          "value": 10,
+          "say": "Wings level near the ground: the engines hang low.",
+          "every": 5
+        }
+      ]
+    }
+  ],
+  "grade": { "measure": "landingPoints", "three": 800, "two": 600 },
+  "debrief": {
+    "three": "Crabbed, kicked straight and planted on the centreline. That's a crosswind landing.",
+    "two": "A good crosswind landing. A little earlier with the rudder before the wheels touch.",
+    "one": "Down safely in a tough wind. Fly the crab all the way to the flare, then straighten.",
+    "failed": "The crosswind won that one. Crab into it, and straighten just before touchdown. Again?"
+  }
+}

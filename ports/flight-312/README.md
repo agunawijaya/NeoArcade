@@ -10,6 +10,11 @@ approach lights in the last few hundred feet. It keeps the original's
 flight, rules and verdicts — they are one of four realism levels — and puts
 them inside a fully code-drawn classic jumbo flight deck, with a 3D world
 outside, controllers who talk, and reports that tell you exactly how it went.
+Then it adds the later jumbo's glass cockpit, a flight school of thirteen
+lessons with an instructor who talks you through them, a Daily Approach
+that everyone flies in the same weather, and replays of every landing from
+the tower, the runway's edge and a chase plane, to watch or to send as a
+challenge.
 
 *Inspired by JETSET, an IFR Boeing 747 simulator by J. (Jean/Gene) Szymanski
 (1981–82, BYTE magazine; IBM PC edition 1982).*
@@ -35,15 +40,18 @@ npx playwright test -c ports/flight-312 --project='determinism-*'
 npx playwright test -c ports/flight-312 --project=screens
 ```
 
-The determinism test runs whole seeded flights in Chromium, Firefox and
-WebKit and compares them with Node's, bit for bit; `screens` takes the
-pictures in `media/` from the scene lab.
+The determinism test runs whole seeded flights on both decks, two lessons,
+two months of Daily Approaches and a recorded approach flown again, in
+Chromium, Firefox and WebKit, and compares them with Node's, bit for bit;
+`screens` takes the pictures in `media/` from the scene lab.
 
 Balance: `npx tsx ports/flight-312/scripts/balance.ts` flies every level to
 every destination with the scripted test pilot. The labs are
-`?lab=instruments` (every dial at its key values), `?lab=world` (the 3D world
-from any point on any approach) and `?lab=scene&scene=breakout` (a moment of
-a flight, paused, for screenshots).
+`?lab=instruments` (every dial at its key values), `?lab=glass` (the glass
+deck's screens at their key moments), `?lab=world` (the 3D world from any
+point on any approach) and `?lab=scene&scene=breakout` (a moment of a
+flight, paused, for screenshots; also `glass`, `lesson`, `debrief` and
+`replay-chase`, `replay-tower`, `replay-runway`, `replay-cockpit`).
 
 ## Read more
 
@@ -51,10 +59,14 @@ a flight, paused, for screenshots).
 - [How to play](docs/HOW-TO-PLAY.md): controls, levels, the first flight, the radio, tips.
 - [Architecture](docs/ARCHITECTURE.md): how the code fits together.
 - [Behaviour notes, the two editions compared, bugs fixed, change log and numbers](../../docs/games/flight-312.md).
+- [Ideas](docs/IDEAS.md): follow-ups after part two.
 - Decisions: [the 3D library and the rendering split](../../docs/adr/0022-flight-312-three-and-rendering-split.md),
   [the realism levels](../../docs/adr/0023-flight-312-flight-model-levels.md),
   [airport, terrain and map data](../../docs/adr/0024-flight-312-data-sources.md),
-  [the cockpit drawn in Canvas 2D](../../docs/adr/0025-flight-312-cockpit-rendering.md).
+  [the cockpit drawn in Canvas 2D](../../docs/adr/0025-flight-312-cockpit-rendering.md),
+  [replays as recorded commands](../../docs/adr/0029-flight-312-replays-as-recorded-commands.md),
+  [the glass deck](../../docs/adr/0030-flight-312-glass-deck.md),
+  [lessons as data](../../docs/adr/0031-flight-312-lessons-as-data.md).
 
 ## Credit
 

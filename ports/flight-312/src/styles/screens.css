@@ -46,10 +46,30 @@
   max-width: 46ch;
 }
 
+/* The three flights across the top, the school and the Daily Approach in two wider cards under them. */
 .title-menu {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: 14px;
+}
+
+.title-menu .menu-card {
+  grid-column: span 2;
+}
+
+.title-menu .menu-card-wide {
+  grid-column: span 3;
+}
+
+@media (max-width: 640px) {
+  .title-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .title-menu .menu-card,
+  .title-menu .menu-card-wide {
+    grid-column: auto;
+  }
 }
 
 .menu-card {
@@ -432,7 +452,7 @@ input[type='number'] {
     font-size: 20px;
   }
 
-  .report-actions {
+  .report-card .report-actions {
     position: sticky;
     bottom: 0;
     padding: 8px 0 12px;
@@ -472,14 +492,6 @@ input[type='number'] {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
-}
-
-.replay-bar {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 30;
 }
 
 .chart-overlay {

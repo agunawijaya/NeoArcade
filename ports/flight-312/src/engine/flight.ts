@@ -1,8 +1,10 @@
 import { startAfds } from './afds';
+import { startApproachLog, stepApproachLog } from './approach-log';
 import { JUMBO, loadFuel, referenceSpeeds } from './aircraft';
 import { startInFlight, startOnRunway } from './airframe';
 import { startAtc } from './atc';
 import { tasFromCas, airAt } from './atmosphere';
+import { RADIANS_PER_DEGREE, tan } from './exact-math';
 import { checklistReady, type ChecklistId, type ChecklistView } from './checklists';
 import { leverForN1 } from './engines';
 import { finish, referenceSpeedNow } from './finish';
@@ -12,6 +14,7 @@ import {
   NO_INPUT,
   RESERVE_FUEL_LB,
   STEP_SECONDS,
+  type AirStart,
   type Flight,
   type FlightEvent,
   type FlightInput,
@@ -21,6 +24,8 @@ import {
 } from './flight-state';
 import { flyAirframe, takeoffSpeedsNow } from './fly-airframe';
 import { flyProgram } from './fly-program';
+import { skipPassedFixes, startFms } from './fms';
+import { destination as alongBearing, type LatLon } from './geo';
 import { toMagnetic, toTrue, variationAt } from './magnetic';
 import { DEPARTURE, destinationById, STATIONS } from './navdata';
 import { flapLeverDegrees, setFlapDegrees, setLevers, startPanel, type Panel } from './panel';
@@ -30,11 +35,11 @@ import { programGate, startProgram, type ProgramState } from './program-model';
 import { ilsFor, NO_READING, readMarker, readNav, readRadarAltitude } from './radios';
 import { atcContextFor, stepRadio } from './radio-calls';
 import { PROGRAM_LEVERS, readAirframe, readProgram, startProgramLook } from './readout';
-import { onRunway, runway, runwayPoint } from './runways';
+import { onRunway, runway, runwayPoint, type Runway } from './runways';
 import type { Terrain } from './terrain';
 import { FEET_PER_NM } from './units';
 import { startWarnings, stepWarnings } from './warnings';
-import { generateWeather, PROGRAM_SEED } from './weather';
+import { generateWeather, nearestField, PROGRAM_SEED } from './weather';
 import { createWorld, groundAt, type FlightWorld } from './world';
 
 export * from './flight-state';
@@ -83,12 +88,14 @@ export function createFlight(setup: FlightSetup, terrain: Terrain): Flight {
       ? 75
       : Math.round(toMagnetic(departure.headingTrue, variationAt(departure.threshold)));
   const atcContext = atcContextFor(setup, world, facilities, plan, departureHeading);
-  const start =
-    setup.mode === 'approach'
+  const deck = rules === 'program' ? 'classic' : (setup.deck ?? 'classic');
+  const start = setup.start
+    ? startInAir(world, facilities, setup.start, fuelLb)
+    : setup.mode === 'approach'
       ? startOnApproach(world, facilities, fuelLb)
       : startAtPhiladelphia(setup, world, facilities, plan, fuelLb, departureHeading, speeds.v2);
   const procedures = startProcedures();
-  if (setup.mode === 'approach') {
+  if (setup.mode === 'approach' || setup.start) {
     // The crew briefed the approach before the practice begins.
     procedures.completed = { beforeTakeoff: 0, afterTakeoff: 0, approach: 0, landing: null };
   }
@@ -96,6 +103,7 @@ export function createFlight(setup: FlightSetup, terrain: Terrain): Flight {
   const flight: Flight = {
     setup,
     rules,
+    deck,
     world,
     plan,
     facilities,
@@ -106,8 +114,18 @@ export function createFlight(setup: FlightSetup, terrain: Terrain): Flight {
         ? PRACTICE_CLOCK[setup.timeOfDay ?? 'morning']
         : CLOCK_AT_START[setup.mode],
     ...start,
+    fms:
+      deck === 'glass'
+        ? startFms(
+            setup.mode === 'flight' && !setup.start
+              ? plan.legs.map((leg) => leg.station.index)
+              : [],
+            setup.mode === 'flight' && !setup.start ? runwayEnd(departure) : start.readout.position,
+          )
+        : null,
     director: null,
     pitchPresses: 0,
+    controls: { elevator: 0, aileron: 0, rudder: 0 },
     nav: [NO_READING, NO_READING],
     marker: null,
     radioAltitudeFt: null,
@@ -116,11 +134,12 @@ export function createFlight(setup: FlightSetup, terrain: Terrain): Flight {
     warnings: startWarnings(),
     procedures,
     approach: {
-      active: setup.mode === 'approach',
+      active: setup.mode === 'approach' && (!setup.start || setup.start.place.kind === 'final'),
       lowestFt: Infinity,
       goingAround: false,
       properGoArounds: 0,
     },
+    approachLog: startApproachLog(),
     hintsGiven: [],
     brakesReleasedAt: null,
     liftoffAt: null,
@@ -130,10 +149,13 @@ export function createFlight(setup: FlightSetup, terrain: Terrain): Flight {
     track: [],
   };
   readRadios(flight);
+  if (flight.fms && (setup.mode !== 'flight' || setup.start))
+    skipPassedFixes(flight.fms, world, flight.readout.position);
   return flight;
 }
 
 function startingFuel(setup: FlightSetup, blockFuelLb: number): number {
+  if (setup.start) return setup.start.fuelLb ?? APPROACH_PRACTICE_FUEL_LB;
   if (setup.level === 'rules1982' && setup.mode !== 'approach') return PROGRAM_FUEL_LB;
   if (setup.mode === 'approach') return APPROACH_PRACTICE_FUEL_LB;
   if (setup.mode === 'takeoff') return setup.fuelLb ?? TAKEOFF_PRACTICE_FUEL_LB;
@@ -318,6 +340,92 @@ function startOnApproach(world: FlightWorld, facilities: Facilities, fuelLb: num
   };
 }
 
+/** The far end of a runway, where the route's first leg begins. */
+const runwayEnd = (strip: Runway): LatLon => runwayPoint(strip, strip.landingLengthFt, 0);
+
+/**
+ * A lesson's start in the air: on a station's radial at a distance, or on
+ * the destination's final, trimmed for level flight at the speed asked
+ * for, the radios on the station or the localizer, the autopilot holding
+ * the heading and altitude if the lesson wants it.
+ */
+function startInAir(
+  world: FlightWorld,
+  facilities: Facilities,
+  start: AirStart,
+  fuelLb: number,
+): Start {
+  const strip = world.ils.runway;
+  const destination = world.destination;
+  const landingCourse = Math.round(toMagnetic(strip.headingTrue, variationAt(strip.threshold)));
+  let position: LatLon;
+  let altitudeFt: number;
+  let nav1: { frequency: number; course: number };
+  let pathDeg = 0;
+  if (start.place.kind === 'final') {
+    const outFt = start.place.outNm * FEET_PER_NM;
+    position = runwayPoint(strip, -outFt, start.place.offsetNm * FEET_PER_NM);
+    // On the glideslope unless the lesson says otherwise: three degrees up from the glide point.
+    const onSlope =
+      (outFt + world.ils.glidePointFt) * tan(world.ils.glideslopeDeg * RADIANS_PER_DEGREE);
+    altitudeFt = strip.elevationFt + (start.altitudeFt ?? onSlope);
+    if (start.altitudeFt === undefined) pathDeg = -world.ils.glideslopeDeg;
+    nav1 = { frequency: destination.localizer, course: landingCourse };
+  } else {
+    const place = start.place;
+    const station = STATIONS.find((candidate) => candidate.ident === place.station);
+    if (!station) throw new Error(`A lesson starts on an unknown station, ${place.station}.`);
+    position = alongBearing(station.position, toTrue(place.radial, station.variation), place.dmeNm);
+    altitudeFt = start.altitudeFt ?? 5000;
+    nav1 = { frequency: station.frequency, course: place.radial };
+  }
+  const heading = start.heading ?? landingCourse;
+  const headingTrue = toTrue(heading, variationAt(position));
+  const tas = tasFromCas(start.speedKt, airAt(altitudeFt));
+  const aircraft = startInFlight(
+    position,
+    altitudeFt,
+    headingTrue,
+    tas,
+    loadFuel(fuelLb),
+    start.flaps,
+    start.gearDown,
+    pathDeg,
+  );
+  const lever = leverForN1(aircraft.engines[0]?.n1 ?? 60);
+  const station = STATIONS[destination.station];
+  const panel = startPanel({
+    comm: facilities.approach,
+    commStandby: facilities.arrivalTower,
+    altimeterInHg: nearestField(world.weather, position)?.qnh ?? 29.92,
+    parkingBrake: false,
+    gearDown: start.gearDown,
+    headingBug: Math.round(heading),
+    speedBugKt: referenceSpeeds(aircraft.weightLb, 10).vref,
+    nav: [nav1, { frequency: station?.frequency ?? 112.8, course: landingCourse }],
+  });
+  setFlapDegrees(panel, start.flaps);
+  setLevers(panel, lever);
+  return {
+    panel,
+    afds: {
+      ...startAfds(),
+      autopilot: start.autopilot,
+      autothrottle: start.autopilot,
+      rollMode: 'heading',
+      pitchMode: 'altitudeHold',
+      altitude: Math.round(altitudeFt / 100) * 100,
+      speedKt: start.speedKt,
+      leverTrim: lever,
+    },
+    program: null,
+    programLook: null,
+    programGate: null,
+    airframe: aircraft,
+    readout: readAirframe(aircraft, groundAt(world, position)),
+  };
+}
+
 function readRadios(flight: Flight) {
   const r = flight.readout;
   const { style, ilsList, terrain, ils } = flight.world;
@@ -338,12 +446,18 @@ export function stepFlight(flight: Flight, input: FlightInput = NO_INPUT): Fligh
   const events: FlightEvent[] = [];
   if (flight.outcome) return events;
   flight.time += STEP_SECONDS;
+  flight.controls = { elevator: input.elevator, aileron: input.aileron, rudder: input.rudder };
   readRadios(flight);
   if (input.missedApproach && flight.airframe) pressGoAround(flight, events);
   if (flight.program) flyProgram(flight, input, events);
   else flyAirframe(flight, input, events);
   if (flight.outcome) return events;
   watchApproach(flight, events);
+  stepApproachLog(
+    flight.approachLog,
+    flight,
+    events.some((event) => event.kind === 'goAroundComplete'),
+  );
   for (const callout of stepWarnings(flight.warnings, warningContext(flight), STEP_SECONDS)) {
     events.push({ kind: 'callout', callout });
   }

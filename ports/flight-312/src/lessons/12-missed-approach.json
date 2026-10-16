@@ -1,0 +1,55 @@
+{
+  "id": "missed-approach",
+  "number": 12,
+  "title": "The missed approach",
+  "summary": "Fog below minimums at Kennedy: fly the ILS to 200 ft, and when there is no runway, go around by the book.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "jfk",
+    "seed": 1212,
+    "radio": "quiet",
+    "sky": "fog",
+    "timeOfDay": "morning",
+    "wind": { "direction": 40, "speedKt": 5, "gustKt": 0 }
+  },
+  "briefing": [
+    "Kennedy is in fog: a hundred-foot ceiling, a quarter of a mile. Our minimums are two hundred feet.",
+    "We fly the ILS down to minimums. If we can't see the runway there, we go around: TO GA, the T key, climb away, gear up, flaps twenty. Going around is never a failure. Landing when you shouldn't is."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "approachArmed" },
+      "goal": "Arm the approach.",
+      "say": "Arm the approach: I.",
+      "done": "Armed. Now we fly it down."
+    },
+    {
+      "kind": "glidepath",
+      "downToFt": 300,
+      "withinDots": 1.5,
+      "goal": "Fly the ILS down to 300 ft.",
+      "say": "Gear down when the glideslope's alive, landing flaps, and down the ILS. Eyes on the instruments: there's nothing to see outside.",
+      "done": "Three hundred. Minimums coming.",
+      "cues": [
+        { "when": "aboveGlideslope", "value": 1, "say": "High on the glideslope.", "every": 12 },
+        { "when": "belowGlideslope", "value": 1, "say": "Low on the glideslope.", "every": 12 }
+      ]
+    },
+    {
+      "kind": "goAround",
+      "goal": "At minimums with no runway in sight: go around.",
+      "say": "Listen for minimums. If you can't see the runway: TO GA, T, pitch up, positive climb, gear up.",
+      "done": "Going around, climbing away. That's exactly right.",
+      "limitSeconds": 300
+    }
+  ],
+  "grade": { "measure": "belowMinimumsFt", "three": 30, "two": 80 },
+  "debrief": {
+    "three": "Right at minimums, no runway, and away we went without a moment's doubt. Textbook.",
+    "two": "A good go-around, a moment late: decide as you reach minimums, not after.",
+    "one": "We went around, but well below minimums. Be ready before the callout.",
+    "failed": "We must not land without seeing the runway. At minimums, look, and if it isn't there, go around."
+  }
+}

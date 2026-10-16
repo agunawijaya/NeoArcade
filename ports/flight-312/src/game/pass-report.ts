@@ -1,15 +1,18 @@
+import type { Streak } from '@shared/daily';
 import type { GamePass } from '@shared/pass';
 import type { Store } from '@shared/storage';
 import type manifest from '../../pass.manifest';
+import type { DailyApproachResult } from '../engine/daily-approach';
 import type { Flight, FlightEvent, Outcome } from '../engine/flight';
+import type { Lesson } from '../engine/lesson';
 import { sunAt } from '../world/sun';
 
 /**
  * How a flight reports to the Arcade Pass: the badge for the first takeoff
  * the moment the wheels leave, and everything else when the flight ends —
  * XP for the landing and its quality, the badges it earned, the counted
- * badges and the profile's stats. Toasts are queued; the report screen
- * flushes them.
+ * badges and the profile's stats. Lessons and the Daily Approach report
+ * when they are marked. Toasts are queued; the report screen flushes them.
  */
 type Manifest = typeof manifest;
 type BadgeOf<M> = M extends { badges: readonly { id: infer Id }[] } ? Id : never;
@@ -23,6 +26,17 @@ export type FlightPass = GamePass<
 >;
 
 const SHORT_FIELDS = ['psb', 'ssm'];
+/** Crosswind Ace: this much wind across the runway, and this close to the centreline. */
+const ACE_CROSSWIND_KT = 15;
+const ACE_CENTRELINE_FT = 15;
+type SkyKind = 'clear' | 'low' | 'minimums' | 'fog';
+
+/** The weather a landing was made in, by the destination's cloud. */
+function skyKind(ceilingFt: number | null): SkyKind {
+  if (ceilingFt === null) return 'clear';
+  if (ceilingFt <= 100) return 'fog';
+  return ceilingFt <= 300 ? 'minimums' : 'low';
+}
 
 export function reportEvent(pass: FlightPass, event: FlightEvent) {
   if (event.kind === 'liftoff') pass.unlock('wheels-up');
@@ -74,6 +88,18 @@ export function reportOutcome(pass: FlightPass, store: Store, flight: Flight, ou
   }
   const sun = sunAt(flight.readout.position, flight.clockStart + flight.time);
   if (sun.elevation < -6) pass.unlock('night-owl');
+  if (touchdown.sinkFpm < 60) pass.unlock('kiss-landing');
+  if (
+    Math.abs(touchdown.crosswindKt) >= ACE_CROSSWIND_KT &&
+    Math.abs(touchdown.across) <= ACE_CENTRELINE_FT
+  )
+    pass.unlock('crosswind-ace');
+  if (touchdown.runway.airport === flight.world.ils.runway.airport) {
+    const skies = new Set(store.get<SkyKind[]>('skies', []));
+    skies.add(skyKind(flight.world.weather.destination.ceilingFt));
+    store.set('skies', [...skies]);
+    pass.progress('weather-watcher', skies.size);
+  }
   const real = level !== 'rules1982';
   if (real && level !== 'arcade' && SHORT_FIELDS.includes(outcome.destination))
     pass.unlock('short-field');
@@ -81,6 +107,7 @@ export function reportOutcome(pass: FlightPass, store: Store, flight: Flight, ou
 
   pass.award(60, 'Flew Flight 312 all the way');
   if (level === 'rules1982') pass.unlock('ace-1982');
+  if (flight.deck === 'glass') pass.unlock('glass-act');
   if (level === 'captain' && outcome.violations.length === 0) {
     pass.unlock('captains-hat');
     pass.award(40, 'A clean flight at the Captain level');
@@ -101,4 +128,25 @@ export function reportOutcome(pass: FlightPass, store: Store, flight: Flight, ou
     pass.progress('grand-tour', { add: 1 });
   }
   pass.stat('destinations', { max: visited.size });
+}
+
+/** A lesson passed: the school's badges, the stat, and XP the first time it is passed. */
+export function reportLesson(
+  pass: FlightPass,
+  lesson: Lesson,
+  stars: number,
+  record: Record<string, number>,
+  firstPass: boolean,
+) {
+  pass.stat('lessonsPassed', { max: Object.values(record).filter((best) => best > 0).length });
+  pass.award(firstPass ? 40 : 10, `Lesson ${lesson.number} passed, ${stars} of 3 stars`);
+  if (lesson.number === 1) pass.unlock('student-pilot');
+  if (lesson.tasks.at(-1)?.kind === 'flight') pass.unlock('check-ride');
+}
+
+/** The day's scored Daily Approach: XP by the stars, the streak, the best score. */
+export function reportDaily(pass: FlightPass, result: DailyApproachResult, streak: Streak) {
+  pass.award(20 + result.stars * 10, `Daily Approach, ${result.starsText}`);
+  pass.progress('daily-flyer', streak.current);
+  if (result.landed) pass.stat('bestDaily', { max: result.points });
 }

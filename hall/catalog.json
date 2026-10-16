@@ -294,12 +294,12 @@
     "slug": "flight-312",
     "title": "Flight 312",
     "tagline": "A classic jumbo, on instruments, into the murk at the far end.",
-    "pitch": "07:59 at Philadelphia on a February morning in 1982, runway 09R, and a minimum ceiling everywhere you might go. Fly the 1982 program's own rules in a fully drawn classic jumbo cockpit, or a real flight model with an autopilot of the era, controllers who talk and want their readbacks, and an ILS that ends in grey cloud until the approach lights appear at minimums.",
+    "pitch": "07:59 at Philadelphia on a February morning in 1982, runway 09R, and a minimum ceiling everywhere you might go. Fly the 1982 program's own rules in a fully drawn classic jumbo cockpit, or the later jumbo's glass deck with LNAV and a flight management computer; controllers who talk and want their readbacks; a flight school with an instructor; one Daily Approach for everyone; and replays of every landing from the tower, the runway's edge and the cockpit.",
     "highlights": [
-      "A code-drawn classic jumbo flight deck, from the six-pack to the engineer's fuel panel",
+      "Two code-drawn flight decks: the classic three-crew jumbo and the glass two-crew one",
       "Four realism levels, from the 1982 rules to Captain with checklists and clearances",
-      "Air traffic control that speaks, on this device's own voices",
-      "Six ILS fields on real terrain, runways and approach lights"
+      "A flight school of thirteen lessons, with an instructor who talks you through them",
+      "A Daily Approach for everyone, landing replays and challenge links"
     ],
     "screens": [
       {
@@ -311,16 +311,28 @@
         "caption": "Out of the overcast at minimums, the approach lights dead ahead."
       },
       {
+        "image": "media/glass.jpg",
+        "caption": "The glass deck on final into Kennedy: PFDs, NDs with the magenta line, the EICAS and the mode control panel."
+      },
+      {
+        "image": "media/replay-chase.jpg",
+        "caption": "A replay from the chase plane: the path flown in magenta, the glideslope's corridor in blue."
+      },
+      {
+        "image": "media/lesson.jpg",
+        "caption": "Flight school, lesson 9: the glideslope by hand, the instructor talking you down."
+      },
+      {
+        "image": "media/daily.jpg",
+        "caption": "The Daily Approach: one field and one sky for everyone, a streak and the month's calendar."
+      },
+      {
         "image": "media/takeoff.jpg",
         "caption": "Rolling on 09R at Philadelphia under a minimum ceiling, cleared at 08:00."
       },
       {
         "image": "media/night.jpg",
         "caption": "The panel at night: integral lighting, a city of street lamps, the runway ahead."
-      },
-      {
-        "image": "media/pedestal.jpg",
-        "caption": "The pedestal: thrust levers, flaps, radios and the INS read-out."
       },
       {
         "image": "media/engineer.jpg",
@@ -358,6 +370,22 @@
       "about": "docs/ABOUT.md",
       "architecture": "docs/ARCHITECTURE.md"
     },
-    "added": "2026-10-16"
+    "added": "2026-10-16",
+    "daily": {
+      "name": "Daily Approach",
+      "launch": "2026-10-16",
+      "mode": "daily",
+      "results": [
+        {
+          "when": {
+            "landed": false
+          },
+          "text": "Did not land at {field}"
+        },
+        {
+          "text": "{starsText} · {points|number} points at {field}"
+        }
+      ]
+    }
   }
 ]

@@ -1,5 +1,5 @@
 import { loadTerrainSource } from '../src/data/unpack';
-import { createFlight, type Level, type Mode } from '../src/engine/flight';
+import { createFlight, type Deck, type Level, type Mode } from '../src/engine/flight';
 import { DESTINATIONS, type DestinationId } from '../src/engine/navdata';
 import { createTerrain } from '../src/engine/terrain';
 import { flyWithTestPilot } from '../src/engine/test-pilot';
@@ -7,14 +7,19 @@ import { flyWithTestPilot } from '../src/engine/test-pilot';
 /**
  * Flies the scripted test pilot to every destination at every level and
  * prints what happened: the numbers behind "Balance" in
- * docs/games/flight-312.md.
+ * docs/games/flight-312.md. "all" stands for every level or destination;
+ * the 1982 Rules always fly the classic deck.
  *
- *   npx tsx ports/flight-312/scripts/balance.ts [level] [destination] [mode]
+ *   npx tsx ports/flight-312/scripts/balance.ts [level|all] [destination|all] [mode] [deck]
  */
-const [onlyLevel, onlyDestination, mode = 'flight'] = process.argv.slice(2);
+const [onlyLevel, onlyDestination, mode = 'flight', deck = 'classic'] = process.argv
+  .slice(2)
+  .map((arg) => (arg === 'all' ? undefined : arg));
 const levels: Level[] = onlyLevel
   ? [onlyLevel as Level]
-  : ['rules1982', 'arcade', 'pilot', 'captain'];
+  : deck === 'glass'
+    ? ['arcade', 'pilot', 'captain']
+    : ['rules1982', 'arcade', 'pilot', 'captain'];
 const destinations = onlyDestination
   ? [onlyDestination as DestinationId]
   : DESTINATIONS.map((d) => d.id);
@@ -23,7 +28,10 @@ const terrain = createTerrain(await loadTerrainSource());
 for (const level of levels) {
   for (const destination of destinations) {
     const started = performance.now();
-    const flight = createFlight({ mode: mode as Mode, level, destination, seed: 312 }, terrain);
+    const flight = createFlight(
+      { mode: mode as Mode, level, destination, seed: 312, deck: deck as Deck },
+      terrain,
+    );
     const outcome = flyWithTestPilot(flight);
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     const touchdown = outcome?.touchdown;

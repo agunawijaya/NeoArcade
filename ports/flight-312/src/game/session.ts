@@ -2,12 +2,13 @@ import { createLoop, type GameLoop } from '@shared/loop';
 import type { Input } from '@shared/input';
 import { RadioVoices } from '../audio/radio-voices';
 import type { Soundscape, SoundState } from '../audio/soundscape';
-import type { CockpitAction, CockpitView } from '../cockpit/actions';
-import { Cockpit } from '../cockpit/cockpit';
+import type { CockpitView } from '../cockpit/actions';
+import { Cockpit, type CockpitOutput } from '../cockpit/cockpit';
 import { lightingFor, type Lighting } from '../cockpit/palette';
 import { cockpitModel } from '../cockpit/view-model';
 import { JUMBO } from '../engine/aircraft';
-import { answerReadback, type ReadbackChoice } from '../engine/atc';
+import type { ReadbackChoice } from '../engine/atc';
+import type { CrewCommand } from '../engine/crew';
 import {
   allowedTimeScale,
   NO_INPUT,
@@ -18,39 +19,40 @@ import {
   type FlightInput,
   type Outcome,
 } from '../engine/flight';
-import { flapLeverDegrees, setLevers, setReverse } from '../engine/panel';
+import { flapLeverDegrees } from '../engine/panel';
+import { FlightRecorder, type Recording } from '../engine/recording';
 import type { Terrain } from '../engine/terrain';
 import { skyAt } from '../engine/weather';
-import { Hud, type HudHandlers } from '../ui/hud';
+import { Hud, type HudHandlers, type LessonPanel } from '../ui/hud';
 import type { Settings } from '../settings';
 import { WorldView, type AircraftPose } from '../world/world-view';
 import { clockText } from '../world/sun';
-import {
-  applyAction,
-  autoCourse,
-  cycleSpeedbrake,
-  nextStation,
-  stepFlaps,
-  stepThrust,
-  toggleProgramFlaps,
-  turnCourse,
-} from './controls';
-import { createFlightInput, rebindAll, VIEW_KEYS, type FlightKey } from './input';
+import { createFlightInput, rebindAll, VIEW_KEYS, viewsFor, type FlightKey } from './input';
+import type { ReplayDirector, ReplayShot } from './replay-director';
 
 /**
  * One flight being flown: the engine stepped at its fixed rate (faster in
  * the cruise when the player asks and the engine allows), the world and
  * the cockpit drawn every frame, the keys, pad and pointer read once a
  * frame, and the engine's events turned into sound, voices, subtitles and
- * hints. It keeps the last minute and a half of the flight for the
- * replay's chase camera.
+ * hints. Every command the player gives goes through the flight's recorder,
+ * which keeps what a replay needs. A lesson's demonstration hands the
+ * controls to a scripted crew instead, and the session can also show a
+ * replay from its cinematic cameras.
  */
 export interface SessionHooks {
-  ended(outcome: Outcome, replay: AircraftPose[]): void;
+  ended(outcome: Outcome): void;
   pause(): void;
   chart(): void;
   checklist(): void;
   event(event: FlightEvent): void;
+  /** After every step, with what it produced: the flight school's monitor. */
+  stepped?(flight: Flight, events: FlightEvent[]): void;
+}
+
+export interface SessionOptions {
+  /** A scripted crew flies instead of the player: a lesson's demonstration. */
+  pilot?: () => FlightInput;
 }
 
 const LEVEL_NAMES = {
@@ -60,8 +62,6 @@ const LEVEL_NAMES = {
   captain: 'Captain',
 } as const;
 const SCALES = [1, 2, 4, 8, 16];
-const REPLAY_SECONDS = 90;
-const REPLAY_EVERY = 0.1;
 /** How quickly a held key moves the stick, the levers and the knobs. */
 const KEY_STICK_RATE = 3.5;
 const KEY_LEVER_RATE = 0.35;
@@ -83,16 +83,20 @@ export class FlightSession {
   private held = { elevator: 0, aileron: 0, rudder: 0 };
   private stick = { pitch: 0, roll: 0 };
   private knobCarry = 0;
-  private replay: AircraftPose[] = [];
-  private lastReplayAt = -1;
   private lensKey = '';
   private ended = false;
-  private replaying: { frames: AircraftPose[]; time: number } | null = null;
+  /** Steps stop: the flight ended, or the lesson that runs it is over. */
+  private halted = false;
+  private replay: ReplayDirector | null = null;
+  private replayFrame: ((shot: ReplayShot) => void) | null = null;
   /** For the screenshot runs: the flight has drawn its first frames. */
   private announced = false;
   /** Whether the gear was travelling last frame, so its lock is heard when it arrives. */
   private gearTravelling = false;
   private size = { width: 1, height: 1, ratio: 1 };
+  /** Writes down the player's flight for its replay; a demonstration has none. */
+  readonly recorder: FlightRecorder | null;
+  private readonly pilot: (() => FlightInput) | null;
 
   constructor(
     private root: HTMLElement,
@@ -102,8 +106,11 @@ export class FlightSession {
     private hooks: SessionHooks,
     sound: Soundscape,
     private reducedMotion: boolean,
+    options: SessionOptions = {},
   ) {
     this.sound = sound;
+    this.pilot = options.pilot ?? null;
+    this.recorder = this.pilot ? null : new FlightRecorder(flight);
     this.worldCanvas = document.createElement('canvas');
     this.worldCanvas.className = 'world';
     root.append(this.worldCanvas);
@@ -113,8 +120,9 @@ export class FlightSession {
       terrain,
       settings.detail,
       flight.setup.level === 'arcade',
+      flight.deck,
     );
-    this.cockpit = new Cockpit(root, (action) => this.act(action));
+    this.cockpit = new Cockpit(root, flight.deck, (action) => this.act(action));
     this.cockpit.onStick = (pitch, roll) => {
       this.stick = { pitch, roll };
     };
@@ -126,11 +134,12 @@ export class FlightSession {
         pause: () => hooks.pause(),
         chart: () => hooks.chart(),
         checklist: () => hooks.checklist(),
-        touchThrust: (value) => this.act({ kind: 'levers', value }),
+        touchThrust: (value) => this.command({ kind: 'levers', value }),
         touchButton: (button) => this.touchButton(button),
       },
       touch,
       flight.rules === 'program',
+      viewsFor(flight.deck),
     );
     root.append(this.hud.element);
     this.voices = new RadioVoices(sound);
@@ -172,13 +181,34 @@ export class FlightSession {
     if (paused) this.voices.silence();
   }
 
+  /** The steps stop for good, the picture stays: a lesson is over. */
+  halt() {
+    this.halted = true;
+    this.voices.silence();
+  }
+
   get currentView(): CockpitView {
     return this.view;
+  }
+
+  /** The player's flight as a recording, for the replays and the links. */
+  recording(): Recording | null {
+    return this.recorder?.recording() ?? null;
   }
 
   setView(view: CockpitView) {
     this.view = view;
     this.cockpit.setView(view, this.reducedMotion);
+  }
+
+  /** The flight instructor: their own voice, and their words always on screen. */
+  instructor(text: string) {
+    this.voices.instructor(text);
+    this.hud.instructor(text);
+  }
+
+  lessonPanel(panel: LessonPanel | null) {
+    this.hud.lesson(panel);
   }
 
   private resize = () => {
@@ -190,44 +220,44 @@ export class FlightSession {
     this.lensKey = '';
   };
 
-  private act(action: CockpitAction) {
+  /** A command from the player, carried out and written down; a demonstration ignores them. */
+  command(command: CrewCommand) {
+    if (!this.recorder || this.halted || this.replay) return;
+    this.recorder.command(command);
+  }
+
+  private act(action: CockpitOutput) {
     if (action.kind === 'view') {
       this.setView(action.view);
       return;
     }
-    if (action.kind === 'checklist') {
-      this.hooks.checklist();
-      return;
-    }
-    applyAction(this.flight, action);
+    this.command(action);
     this.sound.play('click');
   }
 
   private answer(choice: ReadbackChoice['id']) {
-    if (!this.flight.atc.pending) return;
-    answerReadback(this.flight.atc, this.flight.atcContext, choice, this.flight.time);
+    this.command({ kind: 'readback', choice });
   }
 
   private touchButton(button: Parameters<HudHandlers['touchButton']>[0]) {
-    const flight = this.flight;
     switch (button) {
       case 'gear':
         this.act({ kind: 'gear' });
         return;
       case 'flapsDown':
-        stepFlaps(flight, 1);
+        this.command({ kind: 'flapStep', direction: 1 });
         return;
       case 'flapsUp':
-        stepFlaps(flight, -1);
+        this.command({ kind: 'flapStep', direction: -1 });
         return;
       case 'brakes':
-        flight.panel.parkingBrake = !flight.panel.parkingBrake;
+        this.command({ kind: 'parkingBrake' });
         return;
       case 'reverse':
-        setReverse(flight.panel, flight.panel.reverse.some((lever) => lever > 0) ? 0 : 1);
+        this.command({ kind: 'reverseToggle' });
         return;
       case 'speedbrake':
-        cycleSpeedbrake(flight, 1);
+        this.command({ kind: 'speedbrakeStep', direction: 1 });
         return;
       case 'flare':
         this.presses.flare = true;
@@ -244,6 +274,7 @@ export class FlightSession {
     const scheme = this.settings.controls;
     const shift = input.isDown('shift');
     const pressed = (key: FlightKey) => input.wasPressed(key);
+    const command = (value: CrewCommand) => this.command(value);
 
     const pitchAxis = input.axis('pitchDown', 'pitchUp') * (this.settings.invertPitch ? -1 : 1);
     const rollAxis = input.axis('rollLeft', 'rollRight');
@@ -261,47 +292,48 @@ export class FlightSession {
       if (pressed('rudderLeft')) this.presses.rudderSteps -= 1;
       if (pressed('rudderRight')) this.presses.rudderSteps += 1;
       if (pressed('rudderCentre')) this.presses.rudderCentre = true;
-      if (pressed('thrustUp')) stepThrust(flight, 1);
-      if (pressed('thrustDown')) stepThrust(flight, -1);
-      if (pressed('flapsDown')) toggleProgramFlaps(flight.panel);
-      if (pressed('nextStation')) nextStation(flight);
-      if (pressed('courseUp')) turnCourse(flight, shift ? -10 : 10);
-      if (pressed('autoCourse')) autoCourse(flight);
+      if (pressed('thrustUp')) command({ kind: 'thrustStep', direction: 1 });
+      if (pressed('thrustDown')) command({ kind: 'thrustStep', direction: -1 });
+      if (pressed('flapsDown')) command({ kind: 'programFlaps' });
+      if (pressed('nextStation')) command({ kind: 'nextStation' });
+      if (pressed('courseUp')) command({ kind: 'knob', knob: 'course1', clicks: shift ? -10 : 10 });
+      if (pressed('autoCourse')) command({ kind: 'autoCourse' });
       if (pressed('flare')) this.presses.flare = true;
     } else {
       const thrust = input.value('thrustUp') - input.value('thrustDown');
       if (thrust !== 0) {
-        flight.afds.autothrottle = false;
-        if (shift) setLevers(flight.panel, thrust > 0 ? 1 : 0);
-        else
-          setLevers(
-            flight.panel,
-            (flight.panel.levers[0] ?? 0) + thrust * KEY_LEVER_RATE * frameSeconds,
-          );
+        const lever = flight.panel.levers[0] ?? 0;
+        command({
+          kind: 'levers',
+          value: shift ? (thrust > 0 ? 1 : 0) : lever + thrust * KEY_LEVER_RATE * frameSeconds,
+        });
       }
-      if (pressed('flapsDown')) stepFlaps(flight, 1);
-      if (pressed('flapsUp')) stepFlaps(flight, -1);
-      if (pressed('nextStation')) nextStation(flight);
+      if (pressed('flapsDown')) command({ kind: 'flapStep', direction: 1 });
+      if (pressed('flapsUp')) command({ kind: 'flapStep', direction: -1 });
+      if (pressed('nextStation')) command({ kind: 'nextStation' });
       if (pressed('commSwap')) this.act({ kind: 'swapComm' });
       if (pressed('flare')) this.presses.flare = true;
     }
     if (pressed('gear')) this.act({ kind: 'gear' });
-    if (pressed('speedbrake')) cycleSpeedbrake(flight, shift ? -1 : 1);
+    if (pressed('speedbrake')) command({ kind: 'speedbrakeStep', direction: shift ? -1 : 1 });
     if (pressed('parkingBrake')) this.act({ kind: 'parkingBrake' });
-    if (pressed('reverse')) {
-      setReverse(flight.panel, flight.panel.reverse.some((lever) => lever > 0) ? 0 : 1);
-    }
+    if (pressed('reverse')) command({ kind: 'reverseToggle' });
     if (pressed('goAround')) this.presses.missedApproach = true;
-    const buttons: [FlightKey, Parameters<typeof applyAction>[1]][] = [
+    // The glass deck's extra modes sit on the same keys with Shift: LNAV on N, SPD on J.
+    const glass = flight.deck === 'glass';
+    const buttons: [FlightKey, CrewCommand][] = [
       ['autopilot', { kind: 'button', button: 'autopilot' }],
       ['autothrottle', { kind: 'button', button: 'autothrottle' }],
       ['flightDirector', { kind: 'button', button: 'flightDirector' }],
       ['headingMode', { kind: 'button', button: 'heading' }],
-      ['navMode', { kind: 'button', button: 'navigation' }],
+      ['navMode', { kind: 'button', button: glass && shift ? 'lnav' : 'navigation' }],
       ['approachMode', { kind: 'button', button: 'approach' }],
       ['altitudeHold', { kind: 'button', button: 'altitudeHold' }],
       ['verticalSpeedMode', { kind: 'button', button: 'verticalSpeed' }],
-      ['speedMode', { kind: 'button', button: 'speed' }],
+      [
+        'speedMode',
+        { kind: 'button', button: glass ? (shift ? 'speedHold' : 'levelChange') : 'speed' },
+      ],
     ];
     for (const [key, action] of buttons) if (pressed(key)) this.act(action);
     // Held knob keys turn their knob a dozen clicks a second; Shift turns them ten times as far.
@@ -318,13 +350,9 @@ export class FlightSession {
     while (this.knobCarry >= 1) {
       this.knobCarry -= 1;
       if (heading !== 0)
-        applyAction(flight, { kind: 'knob', knob: 'heading', clicks: heading * (shift ? 10 : 1) });
+        command({ kind: 'knob', knob: 'heading', clicks: heading * (shift ? 10 : 1) });
       if (altitude !== 0)
-        applyAction(flight, {
-          kind: 'knob',
-          knob: 'altitude',
-          clicks: altitude * (shift ? 1 : 10),
-        });
+        command({ kind: 'knob', knob: 'altitude', clicks: altitude * (shift ? 1 : 10) });
     }
 
     if (flight.atc.pending) {
@@ -334,10 +362,11 @@ export class FlightSession {
         if (pressed(key) && choice) this.answer(choice.id);
       });
     } else {
-      for (const [key, view] of VIEW_KEYS) if (pressed(key)) this.setView(view);
+      for (const [key, view] of VIEW_KEYS)
+        if (pressed(key) && viewsFor(flight.deck).includes(view)) this.setView(view);
     }
     if (pressed('viewNext')) {
-      const order = VIEW_KEYS.map(([, view]) => view);
+      const order = viewsFor(flight.deck);
       this.setView(order[(order.indexOf(this.view) + 1) % order.length] ?? 'main');
     }
     if (pressed('timeFaster'))
@@ -365,24 +394,15 @@ export class FlightSession {
   }
 
   private update() {
-    if (this.ended) return;
-    const events = stepFlight(this.flight, this.currentInput());
+    if (this.ended || this.halted || this.replay) return;
+    const flight = this.flight;
+    const events = this.pilot
+      ? stepFlight(flight, this.pilot())
+      : (this.recorder as FlightRecorder).step(this.currentInput());
     // Presses belong to the frame's first step only.
     this.presses = { ...NO_INPUT };
     for (const event of events) this.handle(event);
-    if (this.flight.time - this.lastReplayAt >= REPLAY_EVERY) {
-      this.lastReplayAt = this.flight.time;
-      const r = this.flight.readout;
-      this.replay.push({
-        position: r.position,
-        altitudeFt: r.altitudeFt,
-        headingTrue: r.headingTrue,
-        pitchDeg: r.pitchDeg,
-        bankDeg: r.bankDeg,
-        gear: r.gear,
-      });
-      if (this.replay.length > REPLAY_SECONDS / REPLAY_EVERY) this.replay.shift();
-    }
+    this.hooks.stepped?.(flight, events);
   }
 
   private handle(event: FlightEvent) {
@@ -422,7 +442,7 @@ export class FlightSession {
       case 'ending':
         this.ended = true;
         this.voices.silence();
-        this.hooks.ended(event.outcome, [...this.replay]);
+        this.hooks.ended(event.outcome);
         break;
       default:
         break;
@@ -432,6 +452,8 @@ export class FlightSession {
 
   private wantsHints(): boolean {
     const level = this.flight.setup.level;
+    // A lesson has its instructor instead.
+    if (this.flight.setup.radio !== undefined || this.pilot) return false;
     if (level === 'arcade') return true;
     if (level === 'captain') return false;
     return this.settings.hints;
@@ -442,71 +464,51 @@ export class FlightSession {
     return choice === 'auto' ? lightingFor(this.world.night) : choice;
   }
 
-  /** The last minute and a half again, from a chase camera circling slowly round the jumbo. */
-  playReplay(frames: AircraftPose[]) {
-    if (frames.length < 2) return;
-    this.replaying = { frames, time: 0 };
-    this.cockpit.canvas.hidden = true;
+  /** Shows a replay from its cameras; the flight itself stays as it ended. */
+  playReplay(director: ReplayDirector, onFrame: (shot: ReplayShot) => void) {
+    this.replay = director;
+    this.replayFrame = onFrame;
+    this.voices.silence();
     this.hud.element.hidden = true;
+    director.attach(this.world);
     this.lensKey = '';
   }
 
   stopReplay() {
-    this.replaying = null;
+    this.replay?.detach();
+    this.replay = null;
+    this.replayFrame = null;
     this.cockpit.canvas.hidden = false;
     this.hud.element.hidden = false;
+    this.cockpit.setView(this.view, true);
     this.lensKey = '';
   }
 
-  private renderReplay(frameSeconds: number) {
-    const replay = this.replaying;
-    if (!replay) return;
-    replay.time = (replay.time + frameSeconds) % ((replay.frames.length - 1) * REPLAY_EVERY);
-    const at = replay.time / REPLAY_EVERY;
-    const index = Math.floor(at);
-    const from = replay.frames[index] as AircraftPose;
-    const to = replay.frames[Math.min(index + 1, replay.frames.length - 1)] as AircraftPose;
-    const t = at - index;
-    const mix = (a: number, b: number) => a + (b - a) * t;
-    const turn = ((((to.headingTrue - from.headingTrue) % 360) + 540) % 360) - 180;
-    const pose: AircraftPose = {
-      position: {
-        lat: mix(from.position.lat, to.position.lat),
-        lon: mix(from.position.lon, to.position.lon),
-      },
-      altitudeFt: mix(from.altitudeFt, to.altitudeFt),
-      headingTrue: from.headingTrue + turn * t,
-      pitchDeg: mix(from.pitchDeg, to.pitchDeg),
-      bankDeg: mix(from.bankDeg, to.bankDeg),
-      gear: mix(from.gear, to.gear),
-    };
-    const lensKey = `replay:${this.size.width}x${this.size.height}`;
-    if (lensKey !== this.lensKey) {
-      this.lensKey = lensKey;
-      this.world.setSize(this.size.width, this.size.height, this.size.ratio, {
-        horizontalFov: 60,
-        boresight: 0.5,
+  private renderReplay(director: ReplayDirector, frameSeconds: number) {
+    const shot = director.frame(frameSeconds);
+    this.replayFrame?.(shot);
+    const flight = shot.flight;
+    this.cockpit.canvas.hidden = !shot.cockpit;
+    if (shot.cockpit) {
+      this.cockpit.setView('main', true);
+      this.renderCockpitView(flight, 0);
+    } else {
+      if (this.lensKey !== 'replay') {
+        this.lensKey = 'replay';
+        this.world.setSize(this.size.width, this.size.height, this.size.ratio, shot.lens);
+      } else this.world.setLens(shot.lens);
+      this.world.render({
+        pose: poseOf(flight),
+        view: shot.view,
+        clock: flight.clockStart + flight.time,
+        time: flight.time,
       });
     }
-    const orbit = this.reducedMotion ? 25 : 25 + replay.time * 3;
-    this.world.render({
-      pose,
-      view: { kind: 'chase', distanceM: 120, heightM: 24, orbitDeg: orbit },
-      clock: this.flight.clockStart + this.flight.time,
-      time: this.flight.time,
-    });
+    this.updateSound(flight, frameSeconds);
   }
 
-  private render(frameSeconds: number) {
-    if (this.replaying) {
-      this.renderReplay(frameSeconds);
-      return;
-    }
-    const flight = this.flight;
-    // Read now, flown from the next frame's first step: one frame of latency, never a lost key.
-    this.poll(frameSeconds);
-    this.loop.timeScale =
-      this.paused || this.ended ? 0 : allowedTimeScale(flight, this.requestedScale);
+  /** The world through the windows and the flight deck over it, for this flight. */
+  private renderCockpitView(flight: Flight, frameSeconds: number) {
     const eye = this.cockpit.eye(frameSeconds, this.reducedMotion);
     const lensKey = `${eye.horizontalFov}:${eye.boresight.toFixed(3)}:${this.size.width}x${this.size.height}`;
     if (lensKey !== this.lensKey) {
@@ -517,20 +519,11 @@ export class FlightSession {
       });
     }
     const r = flight.readout;
-    const pose: AircraftPose = {
-      position: r.position,
-      altitudeFt: r.altitudeFt,
-      headingTrue: r.headingTrue,
-      pitchDeg: r.pitchDeg,
-      bankDeg: r.bankDeg,
-      gear: r.gear,
-    };
-    const clock = flight.clockStart + flight.time;
     if (eye.world) {
       this.world.render({
-        pose,
+        pose: poseOf(flight),
         view: { kind: 'cockpit', headYawDeg: eye.headYawDeg, headPitchDeg: eye.headPitchDeg },
-        clock,
+        clock: flight.clockStart + flight.time,
         time: flight.time,
       });
     }
@@ -542,48 +535,46 @@ export class FlightSession {
       this.reducedMotion,
       raining,
     );
-    this.hud.readback(flight.atc.pending, flight.time);
+  }
+
+  private render(frameSeconds: number) {
+    if (this.replay) {
+      this.renderReplay(this.replay, frameSeconds);
+      return;
+    }
+    const flight = this.flight;
+    // Read now, flown from the next frame's first step: one frame of latency, never a lost key.
+    this.poll(frameSeconds);
+    this.loop.timeScale =
+      this.paused || this.ended || this.halted ? 0 : allowedTimeScale(flight, this.requestedScale);
+    this.renderCockpitView(flight, frameSeconds);
+    this.hud.readback(this.pilot ? null : flight.atc.pending, flight.time);
     const scale = this.loop.timeScale;
+    const clock = flight.clockStart + flight.time;
     const status = `${clockText(clock)} · ${LEVEL_NAMES[flight.setup.level]}${scale > 1 ? ` · ×${scale}` : this.requestedScale > 1 ? ` · ×${this.requestedScale} held` : ''}${this.paused ? ' · paused' : ''}`;
     this.hud.update(frameSeconds, flight.time, status, this.view);
-    const sound = this.soundState();
-    if (this.gearTravelling && !sound.gearMoving) this.sound.play('gearLock');
-    this.gearTravelling = sound.gearMoving;
-    this.sound.update(sound, frameSeconds);
+    this.updateSound(flight, frameSeconds);
     if (!this.announced && flight.time > 1) {
       this.announced = true;
       document.body.dataset.ready = 'flight';
     }
   }
 
-  private soundState(): SoundState {
-    const r = this.flight.readout;
-    const warnings = this.flight.warnings;
-    const thrust = r.engines.reduce((sum, engine) => sum + Math.max(0, engine.thrust), 0);
-    const airframe = this.flight.airframe;
-    return {
-      n1: r.engines.map((engine) => engine.n1),
-      n2: r.engines.map((engine) => engine.n2),
-      thrustShare: Math.min(1, thrust / (4 * JUMBO.staticThrustLbf)),
-      airspeedKt: r.onGround ? r.iasKt * 0.6 : r.iasKt,
-      rollingKt: r.onGround ? r.groundSpeedKt : 0,
-      gearMoving: r.gear > 0.01 && r.gear < 0.99,
-      flapsMoving: airframe
-        ? Math.abs(airframe.flaps - flapLeverDegrees(this.flight.panel)) > 0.05
-        : false,
-      marker: this.flight.marker,
-      stall: warnings.stall,
-      gearHorn: warnings.gearHorn,
-      takeoffConfig: warnings.takeoffConfig,
-      overspeed: warnings.overspeed,
-      radioBusy: this.voices.busy || this.flight.time < this.flight.atc.busyUntil,
-      trimming: this.currentInput().trim !== 0,
-    };
+  private updateSound(flight: Flight, frameSeconds: number) {
+    const sound = soundStateOf(
+      flight,
+      this.voices.busy,
+      !this.replay && this.currentInput().trim !== 0,
+    );
+    if (this.gearTravelling && !sound.gearMoving) this.sound.play('gearLock');
+    this.gearTravelling = sound.gearMoving;
+    this.sound.update(sound, frameSeconds);
   }
 
   dispose() {
     this.loop.stop();
     removeEventListener('resize', this.resize);
+    this.replay?.detach();
     this.voices.silence();
     this.input.dispose();
     this.world.dispose();
@@ -591,4 +582,41 @@ export class FlightSession {
     this.hud.element.remove();
     this.worldCanvas.remove();
   }
+}
+
+export function poseOf(flight: Flight): AircraftPose {
+  const r = flight.readout;
+  return {
+    position: r.position,
+    altitudeFt: r.altitudeFt,
+    headingTrue: r.headingTrue,
+    pitchDeg: r.pitchDeg,
+    bankDeg: r.bankDeg,
+    gear: r.gear,
+  };
+}
+
+function soundStateOf(flight: Flight, voicesBusy: boolean, trimming: boolean): SoundState {
+  const r = flight.readout;
+  const warnings = flight.warnings;
+  const thrust = r.engines.reduce((sum, engine) => sum + Math.max(0, engine.thrust), 0);
+  const airframe = flight.airframe;
+  return {
+    n1: r.engines.map((engine) => engine.n1),
+    n2: r.engines.map((engine) => engine.n2),
+    thrustShare: Math.min(1, thrust / (4 * JUMBO.staticThrustLbf)),
+    airspeedKt: r.onGround ? r.iasKt * 0.6 : r.iasKt,
+    rollingKt: r.onGround ? r.groundSpeedKt : 0,
+    gearMoving: r.gear > 0.01 && r.gear < 0.99,
+    flapsMoving: airframe
+      ? Math.abs(airframe.flaps - flapLeverDegrees(flight.panel)) > 0.05
+      : false,
+    marker: flight.marker,
+    stall: warnings.stall,
+    gearHorn: warnings.gearHorn,
+    takeoffConfig: warnings.takeoffConfig,
+    overspeed: warnings.overspeed,
+    radioBusy: voicesBusy || flight.time < flight.atc.busyUntil,
+    trimming,
+  };
 }

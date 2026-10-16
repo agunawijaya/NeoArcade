@@ -1,0 +1,27 @@
+{
+  "id": "check-ride",
+  "number": 13,
+  "title": "The check-ride",
+  "summary": "The whole of Flight 312, Philadelphia to Kennedy: the clearance, the takeoff, the airways, the ILS and the landing.",
+  "level": "pilot",
+  "setup": { "mode": "flight", "destination": "jfk", "seed": 1313 },
+  "briefing": [
+    "This is your check-ride: Flight 312 to Kennedy, all of it. The clearance, the takeoff, the climb, the cruise, the ILS and the landing.",
+    "You work the radio this time, and I only watch. Fly it the way you've been taught, and I'll sign your book at the gate."
+  ],
+  "tasks": [
+    {
+      "kind": "flight",
+      "goal": "Fly Flight 312 to Kennedy and land.",
+      "say": "Whenever you're ready, Captain. Tune clearance delivery: they'll call us first.",
+      "done": "Down and stopped at Kennedy."
+    }
+  ],
+  "grade": { "measure": "landingPoints", "three": 800, "two": 600 },
+  "debrief": {
+    "three": "A flight I'd put my family on. Congratulations, Captain: you've passed with distinction.",
+    "two": "A good, safe flight. You've passed. Polish the approach and the landing will follow.",
+    "one": "You've passed: safely there, if not prettily. Fly the approach practice, then come back.",
+    "failed": "Not this time. Every check pilot has seen a bad day: come back and fly it again."
+  }
+}

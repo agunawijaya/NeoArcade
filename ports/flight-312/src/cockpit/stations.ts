@@ -1,4 +1,5 @@
 import { TANK_CAPACITY, TANK_ORDER, type TankId } from '../engine/aircraft';
+import type { Deck } from '../engine/flight';
 import type { Region } from './actions';
 import {
   annunciator,
@@ -22,9 +23,11 @@ import type { CockpitModel } from './view-model';
  * engine start and ignition, anti-ice, window heat, wipers, the yaw
  * dampers, the exterior lights and the passenger signs, with the circuit
  * breakers aft. Its landing-light and wiper switches work; the others
- * follow the phase of flight. The engineer's panel reads the aircraft
- * live: the seven fuel tanks, the crossfeed valves (which work), engine
- * oil, generators, hydraulics and the cabin's pressure.
+ * follow the phase of flight. The glass deck's overhead has three IRSs in
+ * place of the inertial navigators and, with no engineer aboard, the fuel
+ * crossfeed valves, which its fuel system works by itself. The engineer's
+ * panel reads the aircraft live: the seven fuel tanks, the crossfeed valves
+ * (which work), engine oil, generators, hydraulics and the cabin's pressure.
  */
 function toggle(
   context: Context,
@@ -137,10 +140,12 @@ export function drawOverhead(
   height: number,
   palette: Palette,
   regions: Region[],
+  deck: Deck = 'classic',
 ) {
   const flight = model.flight;
   const panel = flight.panel;
   const readout = flight.readout;
+  const glass = deck === 'glass';
   context.fillStyle = palette.panel;
   context.fillRect(0, 0, width, height);
   const unit = Math.min(width / 160, height / 100);
@@ -153,7 +158,7 @@ export function drawOverhead(
   const icing = flight.world.weather.destination.temperatureC < 3;
 
   // Forward row: the three inertial navigators' mode selectors and the engine start panel.
-  group(context, X(3), Y(5), u(66), u(26), 'INERTIAL NAVIGATION', unit, palette);
+  group(context, X(3), Y(5), u(66), u(26), glass ? 'IRS' : 'INERTIAL NAVIGATION', unit, palette);
   for (let index = 0; index < 3; index++) {
     const cx = X(15 + index * 21);
     rotary(
@@ -161,12 +166,21 @@ export function drawOverhead(
       cx,
       Y(18),
       u(2.6),
-      ['OFF', 'STBY', 'ALN', 'NAV', 'ATT'],
-      3,
-      `INS ${index + 1}`,
+      glass ? ['OFF', 'ALIGN', 'NAV', 'ATT'] : ['OFF', 'STBY', 'ALN', 'NAV', 'ATT'],
+      glass ? 2 : 3,
+      glass ? `IRS ${['L', 'C', 'R'][index]}` : `INS ${index + 1}`,
       palette,
     );
-    annunciator(context, cx + u(5), Y(11), u(6), u(3), 'BATT', false, palette.caution);
+    annunciator(
+      context,
+      cx + u(5),
+      Y(11),
+      u(6),
+      u(3),
+      glass ? 'ON BAT' : 'BATT',
+      false,
+      palette.caution,
+    );
   }
   group(context, X(72), Y(5), u(85), u(26), 'ENGINE START', unit, palette);
   readout.engines.forEach((engine, index) => {
@@ -192,12 +206,22 @@ export function drawOverhead(
     annunciator(context, cx - u(4), Y(41), u(8), u(3.4), 'VALVE', icing, palette.caution);
     toggle(context, cx, Y(51), u(2.4), icing, label, palette);
   });
-  group(context, X(60), Y(37), u(36), u(23), 'WINDOW HEAT', unit, palette);
-  ['L SIDE', 'L FWD', 'R FWD', 'R SIDE'].forEach((label, index) => {
-    const cx = X(66 + index * 8);
-    annunciator(context, cx - u(3.2), Y(41), u(6.4), u(3.4), 'ON', true, palette.green);
-    toggle(context, cx, Y(51), u(2.2), true, label, palette);
-  });
+  if (glass) {
+    // The dark cockpit: a light here means something wants attention.
+    group(context, X(60), Y(37), u(36), u(23), 'FUEL XFEED', unit, palette);
+    ['1', '2', '3', '4'].forEach((label, index) => {
+      const cx = X(66 + index * 8);
+      annunciator(context, cx - u(3.2), Y(41), u(6.4), u(3.4), 'VALVE', false, palette.caution);
+      toggle(context, cx, Y(51), u(2.2), panel.crossfeed, label, palette);
+    });
+  } else {
+    group(context, X(60), Y(37), u(36), u(23), 'WINDOW HEAT', unit, palette);
+    ['L SIDE', 'L FWD', 'R FWD', 'R SIDE'].forEach((label, index) => {
+      const cx = X(66 + index * 8);
+      annunciator(context, cx - u(3.2), Y(41), u(6.4), u(3.4), 'ON', true, palette.green);
+      toggle(context, cx, Y(51), u(2.2), true, label, palette);
+    });
+  }
   group(context, X(99), Y(37), u(30), u(23), 'WIPERS', unit, palette);
   const wiper = ['off', 'low', 'high'].indexOf(panel.wipers);
   for (const [index, side] of ['L', 'R'].entries())

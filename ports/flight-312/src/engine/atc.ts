@@ -156,6 +156,8 @@ export interface AtcContext {
   crew: AtcCrew;
   rules: 'program' | 'real';
   practice: 'flight' | 'takeoff' | 'approach';
+  /** A lesson in the air with the radio off: nobody calls. */
+  quiet: boolean;
   facilities: Facilities;
   destinationName: string;
   arrivalCity: string;
@@ -255,7 +257,18 @@ export function startAtc(context: AtcContext): AtcState {
     missedReadbacks: 0,
     wrongReadbacks: 0,
   };
-  if (context.practice === 'takeoff') {
+  if (context.quiet) {
+    // Nobody on the radio: the flight is cleared for whatever the lesson asks.
+    state.stage = 'done';
+    state.workingWith = 'approach';
+    state.cleared = {
+      takeoff: true,
+      altitudeFt: context.practice === 'approach' ? context.interceptAltitudeFt : 3000,
+      heading: null,
+      approach: true,
+      landing: true,
+    };
+  } else if (context.practice === 'takeoff') {
     // Cleared at the gate already; the crew calls the tower from the runway.
     state.stage = 'takeoff';
     state.handedTo = 'tower';

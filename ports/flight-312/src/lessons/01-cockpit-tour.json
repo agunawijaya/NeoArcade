@@ -1,0 +1,58 @@
+{
+  "id": "cockpit-tour",
+  "number": 1,
+  "title": "Cockpit tour",
+  "summary": "Find your way round the flight deck: the flaps, the heading and altitude windows, the NAV radio and the parking brake.",
+  "level": "pilot",
+  "setup": { "mode": "takeoff", "destination": "jfk", "seed": 101, "radio": "quiet" },
+  "briefing": [
+    "Welcome aboard. I'm your instructor, and today we just look round. Nothing moves until you move it.",
+    "Ahead of you is the main panel: speed on the left, the attitude in the middle, altitude on the right, heading below. Above it, on the glareshield, the autopilot's panel."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "flaps", "degrees": 10 },
+      "goal": "Set the flaps to 10.",
+      "say": "First the flap lever. It's on the pedestal between the seats: drag it, or press F to go down a notch. Set flaps 10 for takeoff.",
+      "done": "Flaps ten. Watch the indicator follow the lever."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "headingBug", "heading": 120 },
+      "goal": "Set the heading window to 120.",
+      "say": "Now the heading window on the glareshield. Turn its knob with the mouse wheel, or hold the semicolon and quote keys, until it reads one two zero.",
+      "sayGlass": "Now the heading window on the mode control panel, above the displays. Turn its knob with the mouse wheel, or hold the semicolon and quote keys, until it reads one two zero. The magenta bug on the navigation display moves with it.",
+      "done": "Heading one two zero. That's where the autopilot would turn to."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "altitudeWindow", "altitudeFt": 5000 },
+      "goal": "Set the altitude window to 5,000 ft.",
+      "say": "Next to it, the altitude window: the height the autopilot climbs or descends to and stops. Set five thousand: Insert and Delete move it a thousand feet a click, or a hundred with Shift.",
+      "done": "Five thousand. Good."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "nav1", "frequency": 115.9 },
+      "goal": "Tune NAV 1 to 115.9, the Kennedy VOR.",
+      "say": "The navigation radio. Look down at the pedestal, view two, and turn the NAV 1 knobs to one one five point niner: the outer ring for the megahertz, the inner one for the decimals.",
+      "sayGlass": "On this deck the radios are tuned from the flight management computer. Look down at the pedestal, view two, press NAV RAD on the CDU, type one one five point niner and press the key beside VOR L.",
+      "done": "Kennedy VOR. You'll fly to stations like that one."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "parkingBrake", "set": false },
+      "goal": "Release the parking brake.",
+      "say": "Last, the parking brake: the handle on the pedestal, or the B key. Release it, and that is the end of the tour.",
+      "done": "Brake off. You know your way round."
+    }
+  ],
+  "grade": { "measure": "seconds", "three": 150, "two": 300 },
+  "debrief": {
+    "three": "Quick and sure: you found everything without a search. Next time, we roll.",
+    "two": "All found. It gets quicker every time you sit here.",
+    "one": "Done, if not quickly. Have another look round whenever you like.",
+    "failed": "We ran out of time. Let's take the tour again, slowly."
+  }
+}

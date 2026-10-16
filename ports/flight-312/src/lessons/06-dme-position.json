@@ -1,0 +1,71 @@
+{
+  "id": "dme-position",
+  "number": 6,
+  "title": "DME and position",
+  "summary": "A radial and a distance make a point in the sky: fly the 090 radial out to the 25 DME fix.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "ssm",
+    "seed": 606,
+    "radio": "quiet",
+    "sky": "clear",
+    "start": {
+      "place": { "kind": "radial", "station": "RBV", "radial": 90, "dmeNm": 8 },
+      "altitudeFt": 7000,
+      "heading": 90,
+      "speedKt": 250,
+      "flaps": 0,
+      "gearDown": false,
+      "autopilot": true
+    }
+  },
+  "briefing": [
+    "We're on Robbinsville's zero niner zero radial, eight miles out. The DME tells us how far from the station we are.",
+    "Radial and distance together are a position: the zero niner zero radial at twenty-five DME is a fix you could find in any weather."
+  ],
+  "tasks": [
+    {
+      "kind": "track",
+      "station": "RBV",
+      "radial": 90,
+      "withinDots": 1,
+      "holdSeconds": 15,
+      "goal": "Track the 090 radial outbound.",
+      "say": "Keep the needle centred on the zero niner zero radial. The DME is on the HSI's corner.",
+      "sayGlass": "Keep the course bar centred on the zero niner zero radial. The DME distance is in the corner of the navigation display.",
+      "done": "On the radial.",
+      "cues": [
+        { "when": "courseLeft", "value": 1.5, "say": "Needle left: correct left.", "every": 12 },
+        { "when": "courseRight", "value": 1.5, "say": "Needle right: correct right.", "every": 12 }
+      ]
+    },
+    {
+      "kind": "dme",
+      "station": "RBV",
+      "radial": 90,
+      "dmeNm": 25,
+      "withinNm": 0.5,
+      "goal": "Fly to the 25 DME fix on the 090 radial.",
+      "say": "Now watch the DME count up, and tell me when we reach twenty-five. Stay on the radial all the way: the fix is on the line, not beside it.",
+      "done": "Twenty-five DME on the zero niner zero. That's the fix.",
+      "cues": [
+        {
+          "when": "courseLeft",
+          "value": 1.5,
+          "say": "We're drifting off the radial: needle left.",
+          "every": 12
+        },
+        { "when": "courseRight", "value": 1.5, "say": "Off the radial: needle right.", "every": 12 }
+      ],
+      "limitSeconds": 600
+    }
+  ],
+  "grade": { "measure": "fixErrorNm", "three": 0.3, "two": 0.8 },
+  "debrief": {
+    "three": "Right on the fix. You could hold there in cloud and nobody would worry.",
+    "two": "Close to the fix. Keep the needle centred all the way to it.",
+    "one": "We got to twenty-five, a little to one side. The radial matters as much as the distance.",
+    "failed": "We didn't make the fix. Radial first, then the distance. Again?"
+  }
+}

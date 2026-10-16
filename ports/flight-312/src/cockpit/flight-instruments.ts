@@ -192,7 +192,8 @@ export function drawAdi(
     context.closePath();
     context.fill();
   };
-  scale(cx + radius * 0.92, data.glideslopeDots === null ? null : -data.glideslopeDots, 'GS');
+  // The pointer shows where the glideslope lies: above it, the pointer sits low and says fly down.
+  scale(cx + radius * 0.92, data.glideslopeDots, 'GS');
   scale(cx - radius * 0.92, clampValue(-data.speedError / 10, -2.4, 2.4), '');
   text(context, 'F', cx - radius * 0.92, cy - ball * 0.68, radius * 0.08, palette.dim);
   text(context, 'S', cx - radius * 0.92, cy + ball * 0.68, radius * 0.08, palette.dim);
@@ -361,7 +362,7 @@ export function drawHsi(
     text(context, 'NAV', cx - radius * 0.38, cy - radius * 0.365, radius * 0.08, '#fff');
   }
   if (data.glideslopeDots !== null) {
-    const y = cy - clampValue(data.glideslopeDots, -2.4, 2.4) * radius * 0.17;
+    const y = cy + clampValue(data.glideslopeDots, -2.4, 2.4) * radius * 0.17;
     context.fillStyle = AIRCRAFT_SYMBOL;
     context.beginPath();
     context.moveTo(cx + radius * 0.82, y);

@@ -1,6 +1,7 @@
 import { checklistById, CHECKLISTS, type ChecklistId } from '../engine/checklists';
 import {
   checklistView,
+  type Deck,
   type Flight,
   type FlightSetup,
   type Level,
@@ -8,6 +9,7 @@ import {
   type Outcome,
   type TimeOfDay,
 } from '../engine/flight';
+import { starsText, type LandingScore } from '../engine/landing-score';
 import { DEPARTURE, DESTINATIONS, destinationById, type DestinationId } from '../engine/navdata';
 import { phrase } from '../engine/phraseology';
 import { facilitiesFor, planFlight } from '../engine/plan';
@@ -50,6 +52,9 @@ export const LEVELS: { id: Level; name: string; blurb: string }[] = [
   },
 ];
 
+/** What the title offers: the three flights of part one, the school and the daily. */
+export type TitleChoice = Mode | 'school' | 'daily';
+
 const MODES: { id: Mode; name: string; blurb: string }[] = [
   {
     id: 'flight',
@@ -82,9 +87,23 @@ const TIMES: { id: TimeOfDay; name: string }[] = [
   { id: 'night', name: 'Night' },
 ];
 
+const EXTRAS: { id: TitleChoice; name: string; blurb: string }[] = [
+  {
+    id: 'school',
+    name: 'Flight school',
+    blurb: 'Thirteen lessons with an instructor, from the cockpit tour to a check-ride.',
+  },
+  {
+    id: 'daily',
+    name: 'Daily Approach',
+    blurb: 'One ILS a day, the same for everyone. One scored attempt, and a line to share.',
+  },
+];
+
 export function titleScreen(
-  choose: (mode: Mode) => void,
+  choose: (choice: TitleChoice) => void,
   settings: () => void,
+  replays: () => void,
   hall: string,
 ): HTMLElement {
   return h(
@@ -104,16 +123,25 @@ export function titleScreen(
     h(
       'nav',
       { class: 'title-menu', 'aria-label': 'Modes' },
-      ...MODES.map((mode) =>
+      ...[...MODES, ...EXTRAS].map((mode) =>
         h(
           'button',
-          { type: 'button', class: 'menu-card', onclick: () => choose(mode.id) },
+          {
+            type: 'button',
+            class: EXTRAS.includes(mode) ? 'menu-card menu-card-wide' : 'menu-card',
+            onclick: () => choose(mode.id),
+          },
           h('strong', {}, mode.name),
           h('span', {}, mode.blurb),
         ),
       ),
-      h('button', { type: 'button', class: 'menu-link', onclick: settings }, 'Settings'),
-      h('a', { class: 'menu-link', href: hall }, 'Back to the Hall'),
+      h(
+        'div',
+        { class: 'title-links' },
+        h('button', { type: 'button', class: 'menu-link', onclick: replays }, 'Saved replays'),
+        h('button', { type: 'button', class: 'menu-link', onclick: settings }, 'Settings'),
+        h('a', { class: 'menu-link', href: hall }, 'Back to the Hall'),
+      ),
     ),
     h(
       'p',
@@ -138,13 +166,28 @@ function briefText(level: Level, destinationName: string, squawk: string): strin
   }).written;
 }
 
+const DECKS: { id: Deck; name: string; blurb: string }[] = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    blurb: 'The three-crew deck of 1982: dials, needles and a flight engineer.',
+  },
+  {
+    id: 'glass',
+    name: 'Glass',
+    blurb: 'The two-crew deck of the later jumbo: screens, LNAV and a flight management computer.',
+  },
+];
+
 export function briefingScreen(
   mode: Mode,
   last: Partial<FlightSetup>,
+  defaultDeck: Deck,
   start: (setup: FlightSetup) => void,
   back: () => void,
 ): HTMLElement {
   let level: Level = last.level ?? 'arcade';
+  let deck: Deck = last.deck ?? defaultDeck;
   let destination: DestinationId = last.destination ?? 'jfk';
   let sky: DestinationSky = last.sky ?? 'minimums';
   let timeOfDay: TimeOfDay = last.timeOfDay ?? 'morning';
@@ -155,6 +198,11 @@ export function briefingScreen(
   let fuelLb: number | undefined = last.fuelLb;
 
   const plan = h('div', { class: 'brief-plan', 'aria-live': 'polite' });
+  const deckNote = h(
+    'p',
+    { class: 'brief-note', hidden: true },
+    'The 1982 Rules fly the classic deck: the program knew nothing of screens or flight management computers.',
+  );
   const root = h('section', { class: 'screen briefing', 'aria-labelledby': 'brief-title' });
 
   const setup = (): FlightSetup => ({
@@ -162,6 +210,7 @@ export function briefingScreen(
     level,
     destination,
     seed,
+    deck: level === 'rules1982' ? 'classic' : deck,
     programSky: level === 'rules1982' && programSky,
     ...(mode === 'approach'
       ? {
@@ -178,6 +227,7 @@ export function briefingScreen(
   });
 
   const refresh = () => {
+    deckNote.hidden = level !== 'rules1982';
     const chosen = destinationById(destination);
     const departure = runway(DEPARTURE.airport, DEPARTURE.runway);
     const ils = ilsFor(chosen, 'real');
@@ -365,6 +415,11 @@ export function briefingScreen(
           radios('level', LEVELS, level, (value) => (level = value)),
         ),
         group(
+          'Flight deck',
+          radios('deck', DECKS, deck, (value) => (deck = value)),
+          deckNote,
+        ),
+        group(
           'Destination',
           radios(
             'destination',
@@ -418,6 +473,7 @@ const LIVERY_NAMES: Record<Livery, string> = {
   sunrise: 'Sunrise',
   silver: 'Silver jet',
   night: 'Night blue',
+  academy: 'Academy trainer',
 };
 
 export function settingsScreen(
@@ -475,6 +531,10 @@ export function settingsScreen(
     h(
       'div',
       { class: 'settings-grid' },
+      select('flightDeck', 'Flight deck (the briefings start with it)', [
+        ['classic', 'Classic: three crew, dials and needles'],
+        ['glass', 'Glass: two crew, screens and LNAV'],
+      ]),
       select('controls', 'Keyboard', [
         ['modern', 'Modern'],
         ['singleFile', '1982 keys — single-file listing (U/D pitch, C flare)'],
@@ -606,9 +666,63 @@ export function checklistPanel(
   return { element, refresh };
 }
 
+export interface ReportExtras {
+  /** The landing in points, for an approach, the Daily Approach and a challenge. */
+  score: LandingScore | null;
+  /** The challenge's other side, flown again on this machine. */
+  rival: { who: string; score: LandingScore } | null;
+}
+
+export interface ReportActions {
+  replay(): void;
+  again(): void;
+  brief(): void;
+  title(): void;
+  /** Hands over a challenge link; absent for a flight too long for one. */
+  share: (() => void) | null;
+}
+
+function scoreBlock(score: LandingScore, rival: ReportExtras['rival']): HTMLElement {
+  const verdict = rival
+    ? score.points > rival.score.points
+      ? `You beat ${rival.who} by ${score.points - rival.score.points} points.`
+      : score.points === rival.score.points
+        ? `A tie with ${rival.who}, to the point.`
+        : `${rival.who} won by ${rival.score.points - score.points} points.`
+    : null;
+  return h(
+    'div',
+    { class: 'report-score' },
+    h(
+      'p',
+      { class: 'report-score-total' },
+      h('strong', {}, `${score.points}`),
+      ' of 1,000 · ',
+      h('span', { class: 'debrief-stars' }, starsText(score.stars)),
+    ),
+    h(
+      'dl',
+      { class: 'report-numbers' },
+      ...score.parts.flatMap((part) => [
+        h('dt', {}, part.label),
+        h('dd', {}, part.of > 0 ? `${part.points} / ${part.of}` : `${part.points}`),
+      ]),
+    ),
+    rival
+      ? h(
+          'p',
+          { class: 'report-rival' },
+          `${rival.who}: ${rival.score.points} ${starsText(rival.score.stars)}. `,
+          h('strong', {}, verdict),
+        )
+      : null,
+  );
+}
+
 export function reportScreen(
   outcome: Outcome,
-  actions: { replay(): void; again(): void; brief(): void; title(): void },
+  actions: ReportActions,
+  extras: ReportExtras = { score: null, rival: null },
 ): HTMLElement {
   const report = outcome.report;
   return h(
@@ -625,6 +739,7 @@ export function reportScreen(
       h('h2', { id: 'report-title' }, report.headline),
       h('p', { class: 'report-where' }, report.where),
       h('div', { class: 'report-story' }, ...report.story.map((line) => h('p', {}, line))),
+      extras.score?.landed ? scoreBlock(extras.score, extras.rival) : null,
       h(
         'dl',
         { class: 'report-numbers' },
@@ -647,6 +762,13 @@ export function reportScreen(
           { type: 'button', class: 'menu-link', onclick: actions.replay },
           'Watch the replay',
         ),
+        actions.share
+          ? h(
+              'button',
+              { type: 'button', class: 'menu-link', onclick: actions.share },
+              'Challenge a friend',
+            )
+          : null,
         h('button', { type: 'button', class: 'primary', onclick: actions.again }, 'Fly it again'),
         h(
           'button',

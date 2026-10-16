@@ -36,6 +36,9 @@ const PITCH: Record<Controller, number> = {
   captain: 0.88,
 };
 const RATE: Record<SpeakingRate, number> = { slow: 0.92, normal: 1.08, fast: 1.25 };
+/** The flight instructor speaks in the cockpit, a little slower than the radio, in a voice of their own. */
+const INSTRUCTOR_PITCH = 1.0;
+const INSTRUCTOR_RATE = 0.96;
 
 /** What the GPWS says for each of its alerts and the height callouts. */
 export function calloutWords(callout: Callout): string {
@@ -60,9 +63,11 @@ export function calloutWords(callout: Callout): string {
   return words[callout] ?? callout;
 }
 
+type Speaker = Controller | 'gpws' | 'instructor';
+
 export class RadioVoices {
   private voices: SpeechSynthesisVoice[] = [];
-  private queue: { text: string; speaker: Controller | 'gpws' }[] = [];
+  private queue: { text: string; speaker: Speaker }[] = [];
   private speaking = false;
   enabled = true;
   rate: SpeakingRate = 'normal';
@@ -86,9 +91,14 @@ export class RadioVoices {
     return this.voices.length > 0;
   }
 
-  private voiceFor(speaker: Controller | 'gpws'): SpeechSynthesisVoice | null {
+  private voiceFor(speaker: Speaker): SpeechSynthesisVoice | null {
     if (this.voices.length === 0) return null;
-    const index = speaker === 'gpws' ? this.voices.length - 1 : ORDER.indexOf(speaker);
+    const index =
+      speaker === 'gpws'
+        ? this.voices.length - 1
+        : speaker === 'instructor'
+          ? ORDER.length
+          : ORDER.indexOf(speaker);
     return this.voices[Math.max(0, index) % this.voices.length] ?? null;
   }
 
@@ -103,6 +113,13 @@ export class RadioVoices {
       return;
     }
     this.queue.push({ text: transmission.text.spoken, speaker: transmission.speaker });
+    this.next();
+  }
+
+  /** The flight instructor, beside you in the cockpit: no radio clicks, and always in turn. */
+  instructor(text: string) {
+    if (!this.enabled || !this.available) return;
+    this.queue.push({ text, speaker: 'instructor' });
     this.next();
   }
 
@@ -128,10 +145,18 @@ export class RadioVoices {
     const voice = this.voiceFor(item.speaker);
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang ?? 'en-US';
-    utterance.pitch = item.speaker === 'gpws' ? 0.6 : PITCH[item.speaker];
-    utterance.rate = item.speaker === 'gpws' ? 1.1 : RATE[this.rate];
+    utterance.pitch =
+      item.speaker === 'gpws'
+        ? 0.6
+        : item.speaker === 'instructor'
+          ? INSTRUCTOR_PITCH
+          : PITCH[item.speaker];
+    utterance.rate =
+      item.speaker === 'gpws'
+        ? 1.1
+        : RATE[this.rate] * (item.speaker === 'instructor' ? INSTRUCTOR_RATE : 1);
     utterance.volume = this.volume;
-    const radio = item.speaker !== 'gpws';
+    const radio = item.speaker !== 'gpws' && item.speaker !== 'instructor';
     utterance.onstart = () => {
       if (radio) this.sound.play('radioKey');
     };

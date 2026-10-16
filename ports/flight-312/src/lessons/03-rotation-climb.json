@@ -1,0 +1,77 @@
+{
+  "id": "rotation-climb",
+  "number": 3,
+  "title": "Rotation and climb-out",
+  "summary": "Rotate at VR, hold V2 + 10 on the climb, gear up with a positive rate, and away to 3,000 ft.",
+  "level": "pilot",
+  "setup": { "mode": "takeoff", "destination": "jfk", "seed": 303, "radio": "quiet" },
+  "briefing": [
+    "Today she flies. The bugs on the airspeed show V1, VR and V2: rotate at VR.",
+    "Rotate smoothly toward ten degrees, no further: the tail is close to the runway. Then hold V2 plus ten with the pitch to a thousand feet, and gear up as soon as the climb is positive."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "flaps", "degrees": 10 },
+      "goal": "Flaps 10.",
+      "say": "Flaps ten.",
+      "done": "Flaps ten."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "parkingBrake", "set": false },
+      "goal": "Release the parking brake.",
+      "say": "Brake off.",
+      "done": "Brake released."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "thrust", "atLeast": 0.9 },
+      "goal": "Takeoff thrust.",
+      "say": "Takeoff thrust: levers all the way up.",
+      "done": "Thrust set. Eyes on the speed."
+    },
+    {
+      "kind": "liftoff",
+      "goal": "Rotate at VR and lift off.",
+      "say": "At VR, ease back on the stick: the down arrow, or pull on the yoke. Smoothly, toward ten degrees.",
+      "done": "And we're flying.",
+      "cues": [
+        {
+          "when": "pitchOver",
+          "value": 12,
+          "say": "Easy: not so far, or the tail touches.",
+          "every": 5
+        }
+      ]
+    },
+    {
+      "kind": "climb",
+      "heightFt": 2900,
+      "goal": "Climb to 3,000 ft at V2 + 10, gear up.",
+      "say": "Positive climb: gear up, G. Hold V2 plus ten with the pitch to a thousand feet: nose up if you're fast, down if you're slow. Then lower the nose a little and let her accelerate.",
+      "done": "Three thousand feet and clean. Nicely done.",
+      "cues": [
+        {
+          "when": "speedAbove",
+          "value": 200,
+          "say": "We're fast: raise the nose a little.",
+          "every": 10
+        },
+        {
+          "when": "pitchOver",
+          "value": 20,
+          "say": "Too steep: lower the nose, keep the speed.",
+          "every": 8
+        }
+      ]
+    }
+  ],
+  "grade": { "measure": "speedErrorKt", "three": 10, "two": 20 },
+  "debrief": {
+    "three": "A textbook climb: the speed nailed to the bug the whole way.",
+    "two": "A safe climb-out. Chase the speed a little less: small pitch changes, then wait.",
+    "one": "Up and away. The speed wandered: pitch for the speed, and give it time to settle.",
+    "failed": "That takeoff didn't go to plan. Rotate at VR, gently, toward ten degrees. Again?"
+  }
+}

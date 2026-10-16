@@ -1,9 +1,10 @@
 import { FLAP_DETENTS } from '../engine/aircraft';
-import type { SpeedbrakeLever } from '../engine/panel';
+import type { Panel, SpeedbrakeLever } from '../engine/panel';
 import type { CockpitAction, Region } from './actions';
 import { annunciator, counter, knob, roundRect, text, type Context } from './canvas-kit';
 import type { Palette } from './palette';
 import { stationName, type CockpitModel } from './view-model';
+import type { Flight } from '../engine/flight';
 
 /**
  * Looking down at the centre pedestal: the four thrust levers with their
@@ -50,99 +51,7 @@ export function drawPedestal(
   roundRect(context, X(128), Y(2), u(30), u(96), u(3));
   context.fill();
 
-  // Thrust levers: forward is up the screen. Each lever's travel is 40 units.
-  const travelTop = Y(8);
-  const travelBottom = Y(48);
-  text(context, 'THRUST', X(80), Y(5), u(2.6), palette.marking);
-  for (let lever = 0; lever < 4; lever++) {
-    const cx = X(57 + lever * 15.5);
-    context.fillStyle = '#0d0e0f';
-    roundRect(context, cx - u(1.4), travelTop, u(2.8), travelBottom - travelTop, u(1));
-    context.fill();
-    const value = panel.levers[lever] ?? 0;
-    const reverse = panel.reverse[lever] ?? 0;
-    const y = travelBottom - value * (travelBottom - travelTop);
-    context.fillStyle = '#c9c7bf';
-    roundRect(context, cx - u(5), y - u(2.2), u(10), u(4.4), u(1.2));
-    context.fill();
-    text(context, String(lever + 1), cx, y, u(2.6), '#1b1b1b');
-    // The reverse lever folds up from the front of the thrust lever.
-    context.fillStyle = reverse > 0 ? palette.caution : '#77756f';
-    roundRect(context, cx - u(2.2), y + u(2.4), u(4.4), u(2 + reverse * 6), u(0.8));
-    context.fill();
-  }
-  regions.push({
-    x: X(48),
-    y: travelTop - u(3),
-    width: u(64),
-    height: travelBottom - travelTop + u(6),
-    label: 'Thrust levers',
-    drag: (fraction) => ({ kind: 'levers', value: fraction }),
-  });
-  regions.push({
-    x: X(48),
-    y: travelBottom + u(3),
-    width: u(64),
-    height: u(8),
-    label: 'Reverse thrust',
-    drag: (fraction) => ({ kind: 'reverse', value: 1 - fraction }),
-  });
-  // The quadrant's scale sits in the gap between levers 2 and 3.
-  text(context, 'FULL', X(80.25), travelTop, u(1.9), palette.dim);
-  text(context, 'IDLE', X(80.25), travelBottom, u(1.9), palette.dim);
-  text(context, 'REV', X(80.25), travelBottom + u(7), u(1.9), palette.caution);
-
-  // Speedbrake on the left, flaps on the right.
-  const gate = (
-    x: number,
-    title: string,
-    labels: string[],
-    selected: number,
-    drag: (fraction: number) => CockpitAction,
-  ) => {
-    text(context, title, X(x), Y(5), u(2.6), palette.marking);
-    context.fillStyle = '#0d0e0f';
-    roundRect(context, X(x) - u(1.2), travelTop, u(2.4), travelBottom - travelTop, u(1));
-    context.fill();
-    labels.forEach((label, index) => {
-      const y = travelTop + (index / (labels.length - 1)) * (travelBottom - travelTop);
-      context.fillStyle = palette.marking;
-      context.fillRect(X(x) + u(2), y - u(0.15), u(2), u(0.3));
-      text(context, label, X(x) + u(5), y, u(2.2), palette.marking, 'left');
-    });
-    const y = travelTop + (selected / (labels.length - 1)) * (travelBottom - travelTop);
-    context.fillStyle = '#dcdad2';
-    roundRect(context, X(x) - u(4.5), y - u(2), u(9), u(4), u(1));
-    context.fill();
-    regions.push({
-      x: X(x) - u(6),
-      y: travelTop - u(3),
-      width: u(16),
-      height: travelBottom - travelTop + u(6),
-      label: title,
-      drag: (fraction) => drag(1 - fraction),
-    });
-  };
-  gate(
-    38,
-    'SPEEDBRAKE',
-    ['DOWN', 'ARM', 'FLT', 'UP'],
-    SPEEDBRAKE_POSITIONS.indexOf(panel.speedbrake),
-    (fraction) => ({
-      kind: 'speedbrake',
-      lever: SPEEDBRAKE_POSITIONS[Math.round(fraction * 3)] ?? 'down',
-    }),
-  );
-  gate(
-    114,
-    'FLAPS',
-    FLAP_DETENTS.map((detent) => detent.label),
-    panel.flapLever,
-    (fraction) => ({
-      kind: 'flapLever',
-      index: Math.round(fraction * (FLAP_DETENTS.length - 1)),
-    }),
-  );
+  drawQuadrant(context, panel, X, Y, u, palette, regions);
 
   // Radio heads.
   const head = (
@@ -269,7 +178,137 @@ export function drawPedestal(
     palette.green,
   );
 
-  // The parking brake, and the stabiliser trim indicator in units of airplane nose up.
+  drawParkingBrakeAndTrim(context, flight, X, Y, u, palette, regions);
+  drawFuelControl(context, X(4), Y(6), u(1), flight.readout.engines, palette);
+  drawTrimControls(context, X(130), Y(6), u(1), palette);
+}
+
+/** Panel units and their place on the screen, for a pedestal drawn in its own grid. */
+export interface PedestalGrid {
+  X: (value: number) => number;
+  Y: (value: number) => number;
+  u: (value: number) => number;
+}
+
+/**
+ * The throttle quadrant: four thrust levers with their reversers, the
+ * speedbrake lever on the left and the flap lever in its gates on the
+ * right, in the pedestal's units from 34 to 126 across. Both decks share it.
+ */
+export function drawQuadrant(
+  context: Context,
+  panel: Panel,
+  X: PedestalGrid['X'],
+  Y: PedestalGrid['Y'],
+  u: PedestalGrid['u'],
+  palette: Palette,
+  regions: Region[],
+) {
+  // Thrust levers: forward is up the screen. Each lever's travel is 40 units.
+  const travelTop = Y(8);
+  const travelBottom = Y(48);
+  text(context, 'THRUST', X(80), Y(5), u(2.6), palette.marking);
+  for (let lever = 0; lever < 4; lever++) {
+    const cx = X(57 + lever * 15.5);
+    context.fillStyle = '#0d0e0f';
+    roundRect(context, cx - u(1.4), travelTop, u(2.8), travelBottom - travelTop, u(1));
+    context.fill();
+    const value = panel.levers[lever] ?? 0;
+    const reverse = panel.reverse[lever] ?? 0;
+    const y = travelBottom - value * (travelBottom - travelTop);
+    context.fillStyle = '#c9c7bf';
+    roundRect(context, cx - u(5), y - u(2.2), u(10), u(4.4), u(1.2));
+    context.fill();
+    text(context, String(lever + 1), cx, y, u(2.6), '#1b1b1b');
+    // The reverse lever folds up from the front of the thrust lever.
+    context.fillStyle = reverse > 0 ? palette.caution : '#77756f';
+    roundRect(context, cx - u(2.2), y + u(2.4), u(4.4), u(2 + reverse * 6), u(0.8));
+    context.fill();
+  }
+  regions.push({
+    x: X(48),
+    y: travelTop - u(3),
+    width: u(64),
+    height: travelBottom - travelTop + u(6),
+    label: 'Thrust levers',
+    drag: (fraction) => ({ kind: 'levers', value: fraction }),
+  });
+  regions.push({
+    x: X(48),
+    y: travelBottom + u(3),
+    width: u(64),
+    height: u(8),
+    label: 'Reverse thrust',
+    drag: (fraction) => ({ kind: 'reverse', value: 1 - fraction }),
+  });
+  // The quadrant's scale sits in the gap between levers 2 and 3.
+  text(context, 'FULL', X(80.25), travelTop, u(1.9), palette.dim);
+  text(context, 'IDLE', X(80.25), travelBottom, u(1.9), palette.dim);
+  text(context, 'REV', X(80.25), travelBottom + u(7), u(1.9), palette.caution);
+
+  // Speedbrake on the left, flaps on the right.
+  const gate = (
+    x: number,
+    title: string,
+    labels: string[],
+    selected: number,
+    drag: (fraction: number) => CockpitAction,
+  ) => {
+    text(context, title, X(x), Y(5), u(2.6), palette.marking);
+    context.fillStyle = '#0d0e0f';
+    roundRect(context, X(x) - u(1.2), travelTop, u(2.4), travelBottom - travelTop, u(1));
+    context.fill();
+    labels.forEach((label, index) => {
+      const y = travelTop + (index / (labels.length - 1)) * (travelBottom - travelTop);
+      context.fillStyle = palette.marking;
+      context.fillRect(X(x) + u(2), y - u(0.15), u(2), u(0.3));
+      text(context, label, X(x) + u(5), y, u(2.2), palette.marking, 'left');
+    });
+    const y = travelTop + (selected / (labels.length - 1)) * (travelBottom - travelTop);
+    context.fillStyle = '#dcdad2';
+    roundRect(context, X(x) - u(4.5), y - u(2), u(9), u(4), u(1));
+    context.fill();
+    regions.push({
+      x: X(x) - u(6),
+      y: travelTop - u(3),
+      width: u(16),
+      height: travelBottom - travelTop + u(6),
+      label: title,
+      drag: (fraction) => drag(1 - fraction),
+    });
+  };
+  gate(
+    38,
+    'SPEEDBRAKE',
+    ['DOWN', 'ARM', 'FLT', 'UP'],
+    SPEEDBRAKE_POSITIONS.indexOf(panel.speedbrake),
+    (fraction) => ({
+      kind: 'speedbrake',
+      lever: SPEEDBRAKE_POSITIONS[Math.round(fraction * 3)] ?? 'down',
+    }),
+  );
+  gate(
+    114,
+    'FLAPS',
+    FLAP_DETENTS.map((detent) => detent.label),
+    panel.flapLever,
+    (fraction) => ({
+      kind: 'flapLever',
+      index: Math.round(fraction * (FLAP_DETENTS.length - 1)),
+    }),
+  );
+}
+
+/** The parking brake, and the stabiliser trim indicator in units of airplane nose up, from 131 across and 56 down. */
+export function drawParkingBrakeAndTrim(
+  context: Context,
+  flight: Flight,
+  X: PedestalGrid['X'],
+  Y: PedestalGrid['Y'],
+  u: PedestalGrid['u'],
+  palette: Palette,
+  regions: Region[],
+) {
   annunciator(
     context,
     X(131),
@@ -277,7 +316,7 @@ export function drawPedestal(
     u(24),
     u(8),
     'PARK BRAKE',
-    panel.parkingBrake,
+    flight.panel.parkingBrake,
     palette.warning,
   );
   regions.push({
@@ -296,8 +335,6 @@ export function drawPedestal(
     trimUnits(flight.airframe?.trimAlphaDeg ?? 6, flight.readout.flapsDeg),
     palette,
   );
-  drawFuelControl(context, X(4), Y(6), u(1), flight.readout.engines, palette);
-  drawTrimControls(context, X(130), Y(6), u(1), palette);
 }
 
 const TRIM_UNITS = 15;

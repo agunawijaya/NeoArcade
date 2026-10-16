@@ -1,0 +1,78 @@
+{
+  "id": "vor-radial",
+  "number": 5,
+  "title": "Tracking a VOR radial",
+  "summary": "Tune Robbinsville, set the 090 radial, intercept it and fly it outbound with the needle centred.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "ssm",
+    "seed": 505,
+    "radio": "quiet",
+    "sky": "clear",
+    "start": {
+      "place": { "kind": "radial", "station": "RBV", "radial": 50, "dmeNm": 18 },
+      "altitudeFt": 7000,
+      "heading": 130,
+      "speedKt": 250,
+      "flaps": 0,
+      "gearDown": false,
+      "autopilot": true
+    }
+  },
+  "briefing": [
+    "Eighteen miles north-east of Robbinsville at seven thousand feet. A VOR station sends out a radial in every direction, like the spokes of a wheel.",
+    "We'll fly out along the zero niner zero radial: tune the station, set the course, and the needle shows which way the radial lies."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "nav1", "frequency": 113.8 },
+      "goal": "Tune NAV 1 to Robbinsville, 113.8.",
+      "say": "Tune NAV 1 to Robbinsville, one one three point eight, on the pedestal's NAV radio.",
+      "sayGlass": "Tune Robbinsville, one one three point eight: on the CDU, NAV RAD, type it and press the key beside VOR L.",
+      "done": "Robbinsville tuned. The needle comes alive."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "course1", "course": 90 },
+      "goal": "Set course 090.",
+      "say": "Now set the course to zero niner zero: the CRS 1 knob on the glareshield, or the course knob under the HSI.",
+      "sayGlass": "Now the course: on the NAV RAD page type zero niner zero after a slash, slash zero niner zero, and press the key beside VOR L again.",
+      "done": "Course zero niner zero."
+    },
+    {
+      "kind": "track",
+      "station": "RBV",
+      "radial": 90,
+      "withinDots": 1,
+      "holdSeconds": 30,
+      "goal": "Intercept the 090 radial and track it outbound.",
+      "say": "The needle is to the right, so the radial is to the right. We're on an intercept heading already: as the needle moves in, turn onto zero niner zero and keep it centred. The VOR LOC mode, N, will do it for you if you like.",
+      "sayGlass": "The course bar is to the right, so the radial is to the right. As it moves in, turn onto zero niner zero and keep it centred. The LOC mode, N, will capture it for you.",
+      "done": "Established on the zero niner zero radial outbound. That's tracking.",
+      "cues": [
+        {
+          "when": "courseLeft",
+          "value": 1.5,
+          "say": "The needle's gone left: turn a few degrees left.",
+          "every": 12
+        },
+        {
+          "when": "courseRight",
+          "value": 1.5,
+          "say": "Needle to the right: a little right turn.",
+          "every": 12
+        }
+      ],
+      "limitSeconds": 600
+    }
+  ],
+  "grade": { "measure": "needleDots", "three": 0.5, "two": 1 },
+  "debrief": {
+    "three": "Needle centred, dead on the radial. That's how the airways are flown.",
+    "two": "On the radial. Small corrections, and give each one time to show.",
+    "one": "You found it. Chase the needle less: a few degrees, then wait.",
+    "failed": "We never settled on the radial. Tune, set the course, then follow the needle. Again?"
+  }
+}

@@ -1,4 +1,11 @@
-import type { CockpitAction, CockpitView, Region } from './actions';
+import type { CrewCommand } from '../engine/crew';
+import type { Deck, Flight } from '../engine/flight';
+import type { CockpitAction, CockpitView, DisplayChange, Region } from './actions';
+import { Cdu } from './glass/cdu';
+import { displayColours } from './glass/glass-kit';
+import { defaultDisplays, glassModel, ND_RANGES, type GlassDisplays } from './glass/glass-model';
+import { drawGlassMainView } from './glass/glass-panel';
+import { drawGlassPedestal } from './glass/glass-pedestal';
 import { drawMainView, mainBoresight, mainLayout } from './main-panel';
 import { PALETTES, type Lighting } from './palette';
 import { drawPedestal } from './pedestal';
@@ -8,12 +15,16 @@ import { Windscreen } from './windscreen';
 
 /**
  * The flight deck drawn over the 3D view: one canvas, redrawn each frame
- * for the view the player has chosen. It turns pointer gestures on its
- * regions into actions — a click on a button, a wheel or a drag on a
- * knob, a drag on a lever — and tells the world view where to point the
- * eye and how wide to make the lens. A double click on the panel zooms in
- * on the instruments under it, for small screens.
+ * for the view the player has chosen, on the classic deck or the glass
+ * one. It turns pointer gestures on its regions into actions — a click on
+ * a button, a wheel or a drag on a knob, a drag on a lever — and tells the
+ * world view where to point the eye and how wide to make the lens. A
+ * double click on the panel zooms in on the instruments under it, for
+ * small screens. The glass deck's screens keep their own settings here
+ * (the map's range and mode, the lower EICAS page), and its CDU takes the
+ * keyboard while it has the focus.
  */
+export type CockpitOutput = CrewCommand | { kind: 'view'; view: CockpitView };
 export interface Eye {
   /** Draw the world at all: the full-screen panels cover it. */
   world: boolean;
@@ -58,10 +69,16 @@ export class Cockpit {
   /** The Captain's Hat cosmetic: a cap left on the glareshield. */
   showCap = false;
   private blinkClock = 0;
+  private displays: GlassDisplays = defaultDisplays();
+  readonly cdu = new Cdu();
+  /** A hidden text field that takes the keyboard for the CDU, so typing never flies the jumbo. */
+  private cduKeys: HTMLInputElement | null = null;
+  private flight: Flight | null = null;
 
   constructor(
     container: HTMLElement,
-    private onAction: (action: CockpitAction) => void,
+    readonly deck: Deck,
+    private onAction: (action: CockpitOutput) => void,
   ) {
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'cockpit';
@@ -75,6 +92,58 @@ export class Cockpit {
     this.canvas.addEventListener('pointercancel', this.pointerUp);
     this.canvas.addEventListener('wheel', this.wheel, { passive: false });
     this.canvas.addEventListener('dblclick', this.doubleClick);
+    if (deck === 'glass') {
+      this.cduKeys = document.createElement('input');
+      this.cduKeys.className = 'cdu-keys';
+      this.cduKeys.setAttribute(
+        'aria-label',
+        'CDU keyboard: type, Enter to execute, Escape to leave',
+      );
+      this.cduKeys.autocomplete = 'off';
+      this.cduKeys.addEventListener('keydown', this.cduKey);
+      container.append(this.cduKeys);
+    }
+  }
+
+  /** While the CDU has the keyboard, keys go to it; Escape gives them back to the flight. */
+  private cduKey = (event: KeyboardEvent) => {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      this.cduKeys?.blur();
+      return;
+    }
+    event.preventDefault();
+    if (!this.flight) return;
+    for (const command of this.cdu.type(event.key, this.flight)) this.onAction(command);
+  };
+
+  get cduFocused(): boolean {
+    return this.cduKeys !== null && document.activeElement === this.cduKeys;
+  }
+
+  /** A click on a panel: the cockpit keeps the display settings and the CDU's keys to itself. */
+  private act(action: CockpitAction) {
+    if (action.kind === 'display') {
+      this.changeDisplay(action.change);
+      return;
+    }
+    if (action.kind === 'cdu') {
+      this.cduKeys?.focus({ preventScroll: true });
+      if (this.flight)
+        for (const command of this.cdu.press(action.key, this.flight)) this.onAction(command);
+      return;
+    }
+    this.onAction(action);
+  }
+
+  private changeDisplay(change: DisplayChange) {
+    const displays = this.displays;
+    if ('ndRange' in change) {
+      const index = ND_RANGES.indexOf(displays.ndRange) + change.ndRange;
+      displays.ndRange = ND_RANGES[Math.max(0, Math.min(ND_RANGES.length - 1, index))] ?? 40;
+    } else if ('ndMode' in change) displays.ndMode = change.ndMode;
+    else if ('lowerPage' in change) displays.lowerPage = change.lowerPage;
+    else displays.minimums = change.minimums;
   }
 
   resize(width: number, height: number, ratio: number) {
@@ -98,7 +167,7 @@ export class Cockpit {
     const ease = reducedMotion ? 1 : Math.min(1, dt * 6);
     this.head.yaw += (target.yaw - this.head.yaw) * ease;
     this.head.pitch += (target.pitch - this.head.pitch) * ease;
-    const layout = mainLayout(this.size.width, this.size.height);
+    const layout = mainLayout(this.size.width, this.size.height, this.deck);
     const full = FULL_PANELS.includes(this.view) && this.fade >= 1;
     return {
       world: !full,
@@ -124,12 +193,19 @@ export class Cockpit {
     this.fade = Math.min(1, this.fade + dt * 4);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
+    this.flight = model.flight;
     const airspeed = model.flight.readout.iasKt;
     this.windscreen.update(raining, airspeed, model.flight.panel.wipers, dt, reducedMotion);
     const blink = this.blinkClock < 0.6;
 
+    const glass = this.deck === 'glass' ? glassModel(model.flight, this.displays) : null;
+    const colours = displayColours(lighting);
+    const drawMain = (layout: ReturnType<typeof mainLayout>) =>
+      glass
+        ? drawGlassMainView(context, glass, layout, palette, colours, this.regions, blink)
+        : drawMainView(context, model, layout, palette, this.regions, blink, this.showCap);
     if (this.view === 'main') {
-      const layout = mainLayout(width, height);
+      const layout = mainLayout(width, height, this.deck);
       this.windscreen.draw(context, width, layout.glareTop, palette, airspeed);
       if (this.zoom) {
         const { x, y } = this.zoom;
@@ -137,7 +213,7 @@ export class Cockpit {
         context.translate(x, y);
         context.scale(ZOOM, ZOOM);
         context.translate(-x, -y);
-        drawMainView(context, model, layout, palette, this.regions, blink, this.showCap);
+        drawMain(layout);
         context.restore();
         this.regions = this.regions.map((region) => ({
           ...region,
@@ -147,7 +223,7 @@ export class Cockpit {
           height: region.height * ZOOM,
         }));
       } else {
-        drawMainView(context, model, layout, palette, this.regions, blink, this.showCap);
+        drawMain(layout);
       }
     } else if (this.view === 'left' || this.view === 'right') {
       this.windscreen.draw(context, width, height * 0.82, palette, airspeed);
@@ -155,18 +231,28 @@ export class Cockpit {
       context.fillRect(0, height * 0.82, width, height * 0.18);
     } else if (FULL_PANELS.includes(this.view)) {
       context.globalAlpha = this.fade;
-      const draw =
-        this.view === 'pedestal'
-          ? drawPedestal
-          : this.view === 'overhead'
-            ? drawOverhead
-            : drawEngineer;
       const gutter = width > 640 ? PANEL_GUTTER : 0;
       context.fillStyle = palette.frame;
       context.fillRect(0, 0, width, height);
       context.translate(gutter, 0);
       const regions: Region[] = [];
-      draw(context, model, width - gutter * 2, height, palette, regions);
+      const inner = width - gutter * 2;
+      if (this.view === 'pedestal' && glass)
+        drawGlassPedestal(
+          context,
+          model.flight,
+          this.cdu,
+          inner,
+          height,
+          palette,
+          colours,
+          regions,
+        );
+      else if (this.view === 'pedestal')
+        drawPedestal(context, model, inner, height, palette, regions);
+      else if (this.view === 'overhead')
+        drawOverhead(context, model, inner, height, palette, regions, this.deck);
+      else drawEngineer(context, model, inner, height, palette, regions);
       context.translate(-gutter, 0);
       this.regions = regions.map((region) => ({ ...region, x: region.x + gutter }));
       context.globalAlpha = 1;
@@ -207,7 +293,7 @@ export class Cockpit {
       return;
     }
     this.gesture = { region, lastY: y, moved: 0, travelled: 0 };
-    if (region.drag) this.onAction(region.drag(this.fractionIn(region, y)));
+    if (region.drag) this.act(region.drag(this.fractionIn(region, y)));
   };
 
   private pointerMove = (event: PointerEvent) => {
@@ -225,7 +311,7 @@ export class Cockpit {
     }
     const { region } = this.gesture;
     if (region.drag) {
-      this.onAction(region.drag(this.fractionIn(region, y)));
+      this.act(region.drag(this.fractionIn(region, y)));
       return;
     }
     if (region.knob) {
@@ -236,7 +322,7 @@ export class Cockpit {
       const clicks = Math.trunc(this.gesture.moved / DRAG_PER_CLICK);
       if (clicks !== 0) {
         this.gesture.moved -= clicks * DRAG_PER_CLICK;
-        this.onAction({ kind: 'knob', knob: region.knob, clicks });
+        this.act({ kind: 'knob', knob: region.knob, clicks });
       }
     }
   };
@@ -252,11 +338,11 @@ export class Cockpit {
     if (this.canvas.hasPointerCapture(event.pointerId))
       this.canvas.releasePointerCapture(event.pointerId);
     const { region } = gesture;
-    if (region.click) this.onAction(region.click);
+    if (region.click) this.act(region.click);
     // A tap on a knob turns it one click: up from its top half, down from its bottom half.
     if (region.knob && gesture.travelled < 4) {
       const { y } = this.local(event);
-      this.onAction({
+      this.act({
         kind: 'knob',
         knob: region.knob,
         clicks: y < region.y + region.height / 2 ? 1 : -1,
@@ -269,13 +355,13 @@ export class Cockpit {
     const region = this.regionAt(x, y);
     if (!region?.knob) return;
     event.preventDefault();
-    this.onAction({ kind: 'knob', knob: region.knob, clicks: event.deltaY < 0 ? 1 : -1 });
+    this.act({ kind: 'knob', knob: region.knob, clicks: event.deltaY < 0 ? 1 : -1 });
   };
 
   private doubleClick = (event: MouseEvent) => {
     if (this.view !== 'main') return;
     const { x, y } = this.local(event);
-    const layout = mainLayout(this.size.width, this.size.height);
+    const layout = mainLayout(this.size.width, this.size.height, this.deck);
     if (y < layout.panelTop && !this.zoom) return;
     this.zoom = this.zoom ? null : { x, y };
   };
@@ -286,5 +372,6 @@ export class Cockpit {
 
   dispose() {
     this.canvas.remove();
+    this.cduKeys?.remove();
   }
 }

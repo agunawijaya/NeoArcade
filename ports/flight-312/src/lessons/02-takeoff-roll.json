@@ -1,0 +1,58 @@
+{
+  "id": "takeoff-roll",
+  "number": 2,
+  "title": "The takeoff roll",
+  "summary": "Flaps, brakes, thrust, and a hundred and thirty knots down the centreline in a gusting crosswind.",
+  "level": "pilot",
+  "setup": { "mode": "takeoff", "destination": "jfk", "seed": 202, "radio": "quiet" },
+  "briefing": [
+    "Runway nine right at Philadelphia, and a gusty wind across it. Today we only roll: no flying yet.",
+    "The rudder pedals steer: Z and X, or the right stick on a gamepad. Small, early corrections keep you on the centreline."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "flaps", "degrees": 10 },
+      "goal": "Flaps 10.",
+      "say": "Flaps ten first: F, or the lever on the pedestal.",
+      "done": "Flaps ten."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "parkingBrake", "set": false },
+      "goal": "Release the parking brake.",
+      "say": "Parking brake off: B.",
+      "done": "Brake off."
+    },
+    {
+      "kind": "set",
+      "check": { "check": "thrust", "atLeast": 0.9 },
+      "goal": "Thrust levers forward to takeoff thrust.",
+      "say": "Now the thrust levers, all the way forward: the equals key, or Shift and equals to push them straight up. Feel her start to roll.",
+      "done": "Takeoff thrust set."
+    },
+    {
+      "kind": "roll",
+      "speedKt": 130,
+      "withinFt": 60,
+      "goal": "Accelerate to 130 kt on the centreline.",
+      "say": "Keep the nose on the centreline with the rudder all the way to a hundred and thirty knots. The rudder works better as the speed builds.",
+      "done": "A hundred and thirty. That's as far as we go today.",
+      "cues": [
+        {
+          "when": "offCentreline",
+          "value": 18,
+          "say": "You're drifting: a little rudder back to the centreline."
+        },
+        { "when": "offCentreline", "value": 40, "say": "Further off! Rudder, now.", "every": 6 }
+      ]
+    }
+  ],
+  "grade": { "measure": "centrelineFt", "three": 12, "two": 28 },
+  "debrief": {
+    "three": "Right down the middle, gusts and all. You're ready to rotate.",
+    "two": "Safely on the runway, if a little wandering. Earlier, smaller rudder.",
+    "one": "We stayed on the concrete. Next time catch the drift before it grows.",
+    "failed": "We left the centreline too far. The trick is small rudder, early. Again?"
+  }
+}

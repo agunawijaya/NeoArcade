@@ -1,3 +1,4 @@
+import type { Deck } from '../engine/flight';
 import type { Region } from './actions';
 import { annunciator, counter, knob, roundRect, text, type Context } from './canvas-kit';
 import {
@@ -43,10 +44,16 @@ export interface MainLayout {
 /** Panel units the captain's instruments, the centre panel and the gear need side by side. */
 const CORE_WIDTH = 290;
 
-export function mainLayout(width: number, height: number): MainLayout {
+/**
+ * The glass deck sits the glareshield a little higher: its six screens need
+ * the height more than the windscreen does, and they hold the picture of the
+ * world the classic deck's pilots looked out for.
+ */
+export function mainLayout(width: number, height: number, deck: Deck = 'classic'): MainLayout {
   const compact = height < 520 || width < 900;
-  const glareTop = height * (compact ? 0.43 : 0.455);
-  const glareBottom = height * (compact ? 0.52 : 0.56);
+  const glass = deck === 'glass';
+  const glareTop = height * (compact ? (glass ? 0.4 : 0.43) : glass ? 0.39 : 0.455);
+  const glareBottom = height * (compact ? 0.52 : glass ? 0.49 : 0.56);
   const panelTop = glareBottom;
   const unit = compact
     ? (height - panelTop) / 100

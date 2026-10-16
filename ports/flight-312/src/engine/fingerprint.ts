@@ -1,15 +1,27 @@
+import { addDays, dailyChallenge } from '@shared/daily';
 import { loadTerrainSource } from '../data/unpack';
+import { lessonById } from '../lessons';
+import { DAILY_APPROACH_LAUNCH, dailyApproach, dailySetup } from './daily-approach';
 import { createFlight, stepFlight, type Flight, type FlightSetup } from './flight';
+import { createLessonPilot, lessonPilotInput } from './lesson-pilot';
+import { startLesson, stepLesson } from './lesson-monitor';
+import { createPracticePlayer, stepPracticePlayer } from './practice-player';
+import { FlightRecorder, replayRecording } from './recording';
+import { encodeRecording } from './recording-codec';
+import type { Terrain } from './terrain';
 import { createTerrain } from './terrain';
 import { createTestPilot, testPilotInput } from './test-pilot';
 import { generateWeather } from './weather';
 
 /**
  * The engine's fingerprint: the weather of many seeds, and flights flown by
- * the scripted test pilot at every level, written down every half minute to
- * the last bit with the radio's transcript and the report at the end. A
- * replay, a shared seed or a daily flight is the same flight everywhere
- * only if Node and every browser write exactly these lines.
+ * the scripted test pilot at every level and on both decks, written down
+ * every half minute to the last bit with the radio's transcript and the
+ * report at the end; two lessons as the instructor flies them; two months
+ * of Daily Approaches, the first of them flown; and an approach recorded
+ * command by command, its bytes and its replay. A replay, a shared seed or
+ * a daily flight is the same flight everywhere only if Node and every
+ * browser write exactly these lines.
  */
 const FLIGHTS: FlightSetup[] = [
   { mode: 'takeoff', level: 'arcade', destination: 'jfk', seed: 1 },
@@ -18,8 +30,11 @@ const FLIGHTS: FlightSetup[] = [
   { mode: 'approach', level: 'captain', destination: 'ssm', seed: 5, sky: 'low' },
   { mode: 'approach', level: 'rules1982', destination: 'buf', seed: 4 },
   { mode: 'flight', level: 'rules1982', destination: 'jfk', seed: 312, programSky: true },
+  { mode: 'flight', level: 'captain', destination: 'jfk', seed: 312, deck: 'glass' },
 ];
+const LESSON_IDS = ['vor-radial', 'crosswind-landing'];
 
+const DAILY_DAYS = 60;
 const WEATHER_SEEDS = 40;
 const SAMPLE_SECONDS = 30;
 /** Long enough for the 1982 flight to Kennedy; the others end sooner. */
@@ -47,7 +62,59 @@ export async function determinismTrace(): Promise<string[]> {
       ...traceFlight(createFlight(setup, terrain), `${index} ${setup.mode} ${setup.level}`),
     );
   });
+  for (const id of LESSON_IDS) lines.push(...traceLesson(id, terrain));
+  lines.push(...traceDailies(terrain));
+  lines.push(...traceRecording(terrain));
   return lines;
+}
+
+/** Every player's Daily Approach is the same field, weather and wind: the days as they come, and the first flown. */
+function traceDailies(terrain: Terrain): string[] {
+  const lines: string[] = [];
+  const days = dailyChallenge({ game: 'flight-312', launch: DAILY_APPROACH_LAUNCH });
+  for (let index = 0; index < DAILY_DAYS; index++) {
+    const daily = dailyApproach(days.forKey(addDays(DAILY_APPROACH_LAUNCH, index)));
+    const flight = createFlight(dailySetup(daily, 'pilot', 'glass'), terrain);
+    lines.push(
+      `daily ${JSON.stringify(daily)} ${JSON.stringify(flight.world.weather.destination)}`,
+    );
+    if (index === 0) lines.push(...traceFlight(flight, 'daily 1'));
+  }
+  return lines;
+}
+
+function traceLesson(id: string, terrain: Terrain): string[] {
+  const lesson = lessonById(id);
+  if (!lesson) return [`lesson ${id} missing`];
+  const flight = createFlight({ ...lesson.setup, deck: 'glass' }, terrain);
+  const run = startLesson(lesson, flight);
+  const pilot = createLessonPilot(flight, run);
+  const lines: string[] = [];
+  while (run.status !== 'passed' && run.status !== 'failed' && flight.time < LIMIT_SECONDS) {
+    for (const event of stepLesson(run, flight, stepFlight(flight, lessonPilotInput(pilot))))
+      lines.push(`lesson ${id} ${flight.time} ${JSON.stringify(event)}`);
+    if (flight.outcome && run.status === 'flying') break;
+  }
+  lines.push(`lesson ${id} end ${run.status} ${run.stars} ${run.measure} ${sample(flight)}`);
+  return lines;
+}
+
+/** An approach flown by commands, its bytes, and the same approach flown again from them. */
+function traceRecording(terrain: Terrain): string[] {
+  const flight = createFlight(
+    { mode: 'approach', level: 'pilot', destination: 'bos', seed: 77, sky: 'low' },
+    terrain,
+  );
+  const recorder = new FlightRecorder(flight);
+  const player = createPracticePlayer(recorder);
+  while (!flight.outcome && flight.time < LIMIT_SECONDS) stepPracticePlayer(player);
+  const bytes = encodeRecording(recorder.recording());
+  const again = replayRecording(recorder.recording(), terrain);
+  return [
+    `recording bytes ${bytes.length} ${Array.from(bytes.subarray(-8)).join(',')}`,
+    `recording flown ${sample(flight)}`,
+    `recording again ${sample(again)}`,
+  ];
 }
 
 function traceFlight(flight: Flight, name: string): string[] {

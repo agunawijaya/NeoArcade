@@ -49,9 +49,10 @@ export function atcContextFor(
   const cruise = plan.cruiseAltitudeFt;
   const intercept = destination.interceptAltitudeFt;
   return {
-    crew: CREW[setup.level],
+    crew: setup.radio === 'firstOfficer' ? 'firstOfficer' : CREW[setup.level],
     rules: world.style,
     practice: setup.mode,
+    quiet: setup.radio === 'quiet',
     facilities,
     destinationName: AIRPORT_SPOKEN[destination.airport] ?? destination.city,
     arrivalCity: destination.city,

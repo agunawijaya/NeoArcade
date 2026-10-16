@@ -1,0 +1,53 @@
+{
+  "id": "ils-capture",
+  "number": 8,
+  "title": "Capturing the ILS",
+  "summary": "Arm the approach on a 30° intercept and let the localizer and the glideslope come to you.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "jfk",
+    "seed": 808,
+    "radio": "quiet",
+    "sky": "low",
+    "timeOfDay": "morning",
+    "wind": { "direction": 50, "speedKt": 8, "gustKt": 0 }
+  },
+  "briefing": [
+    "Fifteen miles from Kennedy's runway four right, at two thousand feet, on a thirty-degree intercept to the localizer. The autopilot is holding our heading and altitude.",
+    "An ILS has two beams: the localizer, which lines you up with the runway, and the glideslope, which brings you down to it at three degrees."
+  ],
+  "tasks": [
+    {
+      "kind": "set",
+      "check": { "check": "approachArmed" },
+      "goal": "Arm the approach: ILS, or I.",
+      "say": "Arm the approach: the ILS button on the glareshield, or the I key. The localizer and the glideslope will be captured as they come.",
+      "sayGlass": "Arm the approach: the APP button on the mode control panel, or the I key. Watch the flight mode annunciations on the PFD: LOC and G/S in white, armed.",
+      "done": "Approach armed."
+    },
+    {
+      "kind": "localizer",
+      "withinDots": 0.5,
+      "goal": "Capture the localizer.",
+      "say": "Here it comes: the localizer needle moving in from the side. The autopilot turns onto the runway's course as it centres.",
+      "done": "Localizer captured. We're lined up with the runway.",
+      "limitSeconds": 420
+    },
+    {
+      "kind": "glideslope",
+      "withinDots": 0.5,
+      "goal": "Capture the glideslope.",
+      "say": "Now the glideslope, coming down from above on the scale. As it centres the nose comes down and we start down the slope. Gear down when it's alive, and landing flaps.",
+      "done": "Established on the ILS: localizer and glideslope both centred.",
+      "limitSeconds": 420
+    }
+  ],
+  "grade": { "measure": "beamDots", "three": 0.3, "two": 0.6 },
+  "debrief": {
+    "three": "Captured cleanly and right on both beams. That's the hardest part of an approach, done.",
+    "two": "Established. Keep the configuration ahead of the airplane and the beams stay centred.",
+    "one": "We got there. Arm early, and let the autopilot settle on the beams before you change anything.",
+    "failed": "The ILS slipped away from us. Arm the approach early, on the intercept heading. Again?"
+  }
+}

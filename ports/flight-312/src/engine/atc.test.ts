@@ -19,6 +19,7 @@ function contextFor(crew: AtcCrew, over: Partial<AtcContext> = {}): AtcContext {
     crew,
     rules: 'real',
     practice: 'flight',
+    quiet: false,
     facilities: facilitiesFor('bos'),
     destinationName: 'Boston Logan',
     arrivalCity: 'Boston',

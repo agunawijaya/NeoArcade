@@ -1,10 +1,12 @@
 import type { AfdsState } from './afds';
+import type { ApproachLog } from './approach-log';
 import type { referenceSpeeds } from './aircraft';
 import type { AirframeState } from './airframe';
 import type { AtcContext, AtcEvent, AtcState } from './atc';
 import { distanceNm, type LatLon } from './geo';
 import { toMagnetic, variationAt } from './magnetic';
 import type { DestinationId } from './navdata';
+import type { FmsState } from './fms';
 import type { Ending, Report } from './outcome';
 import type { Panel } from './panel';
 import type { FlightPlan, Facilities } from './plan';
@@ -26,6 +28,27 @@ import type { FlightWorld } from './world';
 export type Level = 'rules1982' | 'arcade' | 'pilot' | 'captain';
 export type Mode = 'flight' | 'takeoff' | 'approach';
 export type TimeOfDay = 'morning' | 'dusk' | 'night';
+/** The classic three-crew flight deck, or the glass two-crew one of the -400 era. */
+export type Deck = 'classic' | 'glass';
+
+/** Where a lesson begins in the air: on a station's radial, or out on the destination's final. */
+export type AirStartPlace =
+  | { kind: 'radial'; station: string; radial: number; dmeNm: number }
+  | { kind: 'final'; outNm: number; offsetNm: number };
+
+export interface AirStart {
+  place: AirStartPlace;
+  /** Feet above sea level on a radial; above the runway on a final, where it defaults to the glideslope. */
+  altitudeFt?: number;
+  /** Magnetic; on a final it defaults to the runway's course. */
+  heading?: number;
+  speedKt: number;
+  flaps: number;
+  gearDown: boolean;
+  /** The autopilot holding the heading, the altitude and the speed at the start. */
+  autopilot: boolean;
+  fuelLb?: number;
+}
 
 export interface FlightSetup {
   mode: Mode;
@@ -40,6 +63,12 @@ export interface FlightSetup {
   timeOfDay?: TimeOfDay;
   /** Captain: the fuel the crew orders; otherwise the plan's block fuel. */
   fuelLb?: number;
+  /** The flight deck; the 1982 Rules always fly the classic one. */
+  deck?: Deck;
+  /** A lesson's own starting point, in place of the mode's. */
+  start?: AirStart;
+  /** A lesson may silence the radio, or hand it to the first officer. */
+  radio?: 'quiet' | 'firstOfficer';
 }
 
 /** What the crew does in one step: the stick, pedals and brakes, and the keys pressed since the last step. */
@@ -148,6 +177,7 @@ export interface TrackPoint {
 export interface Flight {
   setup: FlightSetup;
   rules: 'program' | 'real';
+  deck: Deck;
   world: FlightWorld;
   plan: FlightPlan;
   facilities: Facilities;
@@ -158,6 +188,8 @@ export interface Flight {
   clockStart: number;
   panel: Panel;
   afds: AfdsState;
+  /** The glass deck's flight management; null on the classic deck. */
+  fms: FmsState | null;
   /** Where the flight director's bars point, while it is switched on. */
   director: { pitch: number; bank: number } | null;
   program: ProgramState | null;
@@ -165,6 +197,8 @@ export interface Flight {
   programGate: ProgramGate | null;
   /** Presses of pitch built up from a stick under the 1982 rules. */
   pitchPresses: number;
+  /** The stick and pedals of the last step, for the glass deck's flight controls page. */
+  controls: { elevator: number; aileron: number; rudder: number };
   airframe: AirframeState | null;
   readout: Readout;
   nav: [NavReading, NavReading];
@@ -175,6 +209,8 @@ export interface Flight {
   warnings: Warnings;
   procedures: Procedures;
   approach: ApproachWatch;
+  /** How the last approach was flown, for the landing's score. */
+  approachLog: ApproachLog;
   hintsGiven: HintId[];
   brakesReleasedAt: number | null;
   liftoffAt: number | null;

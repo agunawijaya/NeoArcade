@@ -1,0 +1,56 @@
+{
+  "id": "flare-touchdown",
+  "number": 10,
+  "title": "Flare and touchdown",
+  "summary": "Two and a half miles out at Philadelphia in clear air: fly it down, flare at 30 ft and touch down gently.",
+  "level": "pilot",
+  "setup": {
+    "mode": "approach",
+    "destination": "phl",
+    "seed": 1010,
+    "radio": "quiet",
+    "sky": "clear",
+    "timeOfDay": "morning",
+    "wind": { "direction": 90, "speedKt": 6, "gustKt": 0 },
+    "start": {
+      "place": { "kind": "final", "outNm": 2.5, "offsetNm": 0 },
+      "speedKt": 138,
+      "flaps": 30,
+      "gearDown": true,
+      "autopilot": false
+    }
+  },
+  "briefing": [
+    "Two and a half miles from Philadelphia's nine right, landing flaps, gear down, and a clear morning. Just the last part.",
+    "Keep the descent going to about thirty feet. Then raise the nose two or three degrees and close the thrust levers, and let her settle onto the runway. Reverse thrust and brakes once the wheels are down."
+  ],
+  "tasks": [
+    {
+      "kind": "land",
+      "goal": "Flare at 30 ft and touch down gently.",
+      "say": "Aim for the big white markers a thousand feet down the runway. Listen for the callouts: fifty, forty, thirty: flare.",
+      "done": "Down. Reverse and brakes.",
+      "cues": [
+        {
+          "when": "sinkOver",
+          "value": 1000,
+          "say": "Sinking fast: a little less descent.",
+          "every": 6
+        },
+        {
+          "when": "pitchOver",
+          "value": 8,
+          "say": "Not too much flare, or she floats and the tail gets close.",
+          "every": 5
+        }
+      ]
+    }
+  ],
+  "grade": { "measure": "sinkFpm", "three": 200, "two": 350 },
+  "debrief": {
+    "three": "Beautifully soft. The passengers would be asking when we land.",
+    "two": "A good, firm landing. Start the flare a moment earlier for a softer one.",
+    "one": "Safely down, if solidly. Hold the flare a little longer before the wheels touch.",
+    "failed": "That one didn't end on the runway the way it should. Flare at thirty feet, gently. Again?"
+  }
+}
