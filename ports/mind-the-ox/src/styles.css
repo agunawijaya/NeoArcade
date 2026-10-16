@@ -1,0 +1,1012 @@
+:root {
+  color-scheme: dark;
+  --page: #0e1430;
+  --card: rgb(24 18 14 / 0.9);
+  --card-solid: #1d1611;
+  --card-edge: #c9a458;
+  --card-edge-soft: rgb(201 164 88 / 0.45);
+  --ink: #f3ead2;
+  --ink-soft: #d8ccae;
+  --ink-faint: #a8997a;
+  --accent: #d24f33;
+  --accent-ink: #fff7e8;
+  --focus: #ffd978;
+  --star: #f2c23c;
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --edge-left: max(16px, env(safe-area-inset-left));
+  --edge-right: max(16px, env(safe-area-inset-right));
+  --edge-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #a9d1ea;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-serif);
+}
+
+.game {
+  position: fixed;
+  inset: 0;
+}
+
+/* The battlefield: one pane, or two stacked for a split screen. */
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  touch-action: none;
+}
+
+.stage__pane {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.stage[data-panes='2'] .stage__pane + .stage__pane {
+  border-top: 3px solid var(--card-edge);
+}
+
+.stage__layers {
+  position: absolute;
+  inset: 0;
+}
+
+.stage__pane canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stage__hud {
+  pointer-events: none;
+}
+
+/* Screens float over the battle; the demo flies on behind them. */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) var(--edge-right) var(--edge-bottom) var(--edge-left);
+  overflow-y: auto;
+  background: radial-gradient(ellipse at center, rgb(10 8 6 / 0.15), rgb(10 8 6 / 0.55));
+}
+
+.screen--overlay {
+  background: rgb(10 8 6 / 0.45);
+}
+
+/* Silent-film intertitles: a dark card with a brass rule and a fine outer line. */
+.card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(16px, 3.5vw, 32px);
+  background: var(--card);
+  border: 2px solid var(--card-edge);
+  outline: 1px solid var(--card-edge-soft);
+  outline-offset: 5px;
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.5);
+  scrollbar-color: var(--card-edge) transparent;
+}
+
+.card--wide {
+  width: min(880px, 100%);
+}
+
+.card--title {
+  width: min(620px, 100%);
+}
+
+.card__kicker {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.card__title {
+  margin: 0;
+  font-size: clamp(2.2rem, 7vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+}
+
+.card__title--small {
+  font-size: clamp(1.5rem, 4.5vw, 2.3rem);
+  margin-bottom: 8px;
+}
+
+.card__tagline {
+  margin: 8px auto 18px;
+  max-width: 36ch;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.card__button {
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 10px 28px;
+  border-radius: 999px;
+  border: 2px solid var(--card-edge);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+.card__button:hover {
+  filter: brightness(1.08);
+}
+
+.card__credit {
+  margin: 16px 0 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+
+.card__note {
+  margin: 12px auto 0;
+  max-width: 60ch;
+  font-size: 0.88rem;
+  color: var(--ink-faint);
+}
+
+.card__score {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 12px 0 0;
+}
+
+.card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.panel__subtitle {
+  margin: 0 auto 14px;
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, a, input, select):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Small pill buttons for choices and secondary actions. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 6px 14px;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--card-edge-soft);
+  background: transparent;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--card-edge);
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--card-edge);
+  color: #22180e;
+}
+
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chip--arrow {
+  min-width: 36px;
+  justify-content: center;
+  font-size: 1.2rem;
+  padding: 2px 10px;
+}
+
+.chip--quiet {
+  border-color: transparent;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.chip--key {
+  min-width: 5.5ch;
+  justify-content: center;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+/* The title card. */
+.title__ox {
+  display: block;
+  width: 92px;
+  margin: 2px auto 0;
+  cursor: pointer;
+  transform-origin: 50% 90%;
+}
+
+.title__ox-hide {
+  fill: #a8784e;
+}
+
+.title__ox-line {
+  fill: none;
+  stroke: #5a3c26;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.title__ox-horn {
+  fill: none;
+  stroke: #efe3c4;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.title__ox-shine {
+  fill: none;
+  stroke: rgb(255 240 210 / 0.45);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.title__ox-eye {
+  fill: #2c2418;
+}
+
+.title__ox--moo {
+  animation: moo 0.5s ease-out;
+}
+
+@keyframes moo {
+  30% {
+    transform: rotate(-4deg) scale(1.06);
+  }
+
+  60% {
+    transform: rotate(3deg);
+  }
+}
+
+.modes {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.mode {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name status'
+    'blurb status';
+  align-items: center;
+  gap: 2px 14px;
+  width: 100%;
+  padding: 10px 16px;
+  font: inherit;
+  color: var(--ink);
+  background: rgb(255 248 230 / 0.04);
+  border: 1px solid var(--card-edge-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mode:hover,
+.mode:focus-visible {
+  background: rgb(201 164 88 / 0.16);
+  border-color: var(--card-edge);
+}
+
+.mode__name {
+  grid-area: name;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.mode__blurb {
+  grid-area: blurb;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.mode__status {
+  grid-area: status;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.mode__flag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+
+.title__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.title__theme-name {
+  min-width: 15ch;
+  font-weight: 700;
+}
+
+/* Choice rows in settings and mode screens. */
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 10px 0;
+  text-align: left;
+}
+
+.choice__label {
+  flex: 0 0 13rem;
+  color: var(--ink-soft);
+}
+
+.choice__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Custom Sortie: a code box that sits with the chips beside it. */
+.sortie__code {
+  font: inherit;
+  font-size: 0.95rem;
+  width: min(16rem, 100%);
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--card-edge-soft);
+  background: rgb(255 248 230 / 0.05);
+  color: var(--ink);
+}
+
+.sortie__code::placeholder {
+  color: var(--ink-faint);
+}
+
+/* The campaign: chapter list beside the briefing. */
+.campaign {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 18px;
+  text-align: left;
+}
+
+.chapters {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chapter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name stars'
+    'twist stars';
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--ink);
+  background: rgb(255 248 230 / 0.04);
+  border: 1px solid var(--card-edge-soft);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chapter[aria-current='true'] {
+  border-color: var(--card-edge);
+  background: rgb(201 164 88 / 0.18);
+}
+
+.chapter:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chapter__name {
+  grid-area: name;
+  font-weight: 700;
+}
+
+.chapter__number {
+  display: inline-block;
+  min-width: 1.6em;
+  color: var(--card-edge);
+}
+
+.chapter__twist {
+  grid-area: twist;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+.stars {
+  grid-area: stars;
+  align-self: center;
+  letter-spacing: 0.1em;
+}
+
+.star {
+  color: rgb(243 234 210 / 0.22);
+}
+
+.star--earned {
+  color: var(--star);
+}
+
+.briefing {
+  padding: 14px 16px;
+  border: 1px dashed var(--card-edge-soft);
+  border-radius: 6px;
+  background: rgb(255 248 230 / 0.03);
+}
+
+.briefing__kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.briefing__title {
+  margin: 4px 0 8px;
+  font-size: 1.5rem;
+}
+
+.briefing__text {
+  margin: 0 0 12px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.goals {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.goal {
+  color: var(--ink-faint);
+}
+
+.goal--earned {
+  color: var(--star);
+}
+
+.goals--results {
+  display: inline-grid;
+  text-align: left;
+  margin: 8px auto 4px;
+}
+
+/* Dogfight's pilots. */
+.pilots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pilot {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  background: rgb(255 248 230 / 0.04);
+  border: 1px solid var(--card-edge-soft);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pilot[aria-pressed='true'] {
+  border-color: var(--card-edge);
+  background: rgb(201 164 88 / 0.2);
+}
+
+.pilot__level {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--card-edge);
+}
+
+.pilot__name {
+  font-weight: 700;
+}
+
+.pilot__style,
+.pilot__wins {
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+/* Two players' keys. */
+.pair-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  text-align: left;
+}
+
+.pair-keys__card {
+  padding: 10px 14px;
+  border: 1px solid var(--card-edge-soft);
+  border-radius: 6px;
+}
+
+.pair-keys__card h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.pair-keys__card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.pair-keys__card li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+kbd {
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--focus);
+}
+
+/* The Daily Sortie. */
+.daily__number {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.daily__when,
+.daily__streak {
+  margin: 6px auto;
+  max-width: 60ch;
+  color: var(--ink-soft);
+}
+
+.daily__done {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.share__text {
+  margin: 0;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-size: 0.9rem;
+  background: rgb(0 0 0 / 0.3);
+  border-radius: 6px;
+}
+
+.share__status {
+  font-size: 0.85rem;
+  color: var(--focus);
+}
+
+.calendar {
+  margin: 16px auto 0;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.calendar caption {
+  margin-bottom: 6px;
+  color: var(--ink-soft);
+}
+
+.calendar th {
+  padding: 2px 6px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.calendar td {
+  width: 2.4em;
+  height: 2.2em;
+  text-align: center;
+  vertical-align: top;
+  border: 1px solid rgb(201 164 88 / 0.15);
+}
+
+.calendar__day {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.calendar__mark {
+  color: var(--star);
+}
+
+.calendar__today {
+  outline: 2px solid var(--card-edge);
+}
+
+/* The hangar. */
+.hangar {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.hangar__preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: radial-gradient(ellipse at 50% 70%, rgb(201 164 88 / 0.25), rgb(0 0 0 / 0.25));
+}
+
+.hangar__rows .choice__label {
+  flex-basis: 7rem;
+}
+
+.hangar__secret {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--card-edge);
+  border-radius: 6px;
+  background: rgb(210 79 51 / 0.12);
+}
+
+.hangar__secret h3 {
+  margin: 0 0 6px;
+}
+
+.hangar__secret p {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+/* Settings. */
+.settings {
+  text-align: left;
+}
+
+.settings h3 {
+  margin: 18px 0 6px;
+  font-size: 1.1rem;
+}
+
+.keys {
+  margin: 10px 0 14px;
+}
+
+.keys h4 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.keys__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px 14px;
+}
+
+.keys__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.volumes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume input {
+  accent-color: var(--card-edge);
+}
+
+/* Results. */
+.tally {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 4px 24px;
+  margin: 12px 0 0;
+  text-align: left;
+}
+
+.tally dt {
+  color: var(--ink-soft);
+}
+
+.tally dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+}
+
+/* Captions over the picture. */
+.caption {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 26px;
+  font-size: clamp(1.5rem, 5vw, 3rem);
+  font-style: italic;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: #fff4dc;
+  text-shadow: 0 2px 18px rgb(80 30 0 / 0.6);
+  pointer-events: none;
+}
+
+.caption[data-phase='playing'] {
+  font-style: normal;
+  font-size: clamp(1.2rem, 3.5vw, 2rem);
+  background: var(--card);
+  border: 2px solid var(--card-edge);
+  border-radius: 6px;
+  text-shadow: none;
+}
+
+.caption[data-phase='the-end'] {
+  top: 40%;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--card);
+  border: 2px solid var(--card-edge);
+  border-radius: 6px;
+}
+
+/* A pause button for mice and thumbs, beside the Hall button. */
+.pause-button {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: calc(var(--edge-right) + 104px);
+  width: 40px;
+  height: 40px;
+  font: 700 0.95rem var(--font-serif);
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: var(--card);
+  border: 2px solid var(--card-edge);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* On-screen controls. */
+.touch {
+  position: absolute;
+  inset: auto 0 calc(58px + var(--edge-bottom)) 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 var(--edge-right) 0 var(--edge-left);
+  pointer-events: none;
+}
+
+.touch__stick {
+  position: relative;
+  width: clamp(110px, 22vmin, 160px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgb(243 234 210 / 0.45);
+  background: rgb(24 18 14 / 0.28);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42%;
+  aspect-ratio: 1;
+  margin: -21% 0 0 -21%;
+  border-radius: 50%;
+  background: rgb(201 164 88 / 0.75);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+.touch__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.touch__button {
+  min-width: 64px;
+  min-height: 52px;
+  padding: 6px 10px;
+  font: 700 0.85rem var(--font-serif);
+  color: var(--ink);
+  background: rgb(24 18 14 / 0.55);
+  border: 2px solid rgb(201 164 88 / 0.7);
+  border-radius: 14px;
+  touch-action: none;
+  user-select: none;
+}
+
+.touch__button--fire {
+  grid-row: span 2;
+  min-width: 84px;
+  background: rgb(210 79 51 / 0.75);
+}
+
+@media (max-width: 720px) {
+  .campaign,
+  .hangar {
+    grid-template-columns: 1fr;
+  }
+
+  .choice__label {
+    flex-basis: 100%;
+  }
+
+  .mode {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'name' 'blurb' 'status';
+  }
+
+  .mode__status {
+    text-align: left;
+  }
+}
+
+@media (max-height: 520px) {
+  .card {
+    padding: 14px 18px;
+  }
+
+  .card__title {
+    font-size: 2rem;
+  }
+
+  /* Out of the way in the card's corner, but still there to be patted: it is the touch way into the Secret Hangar. */
+  .title__ox {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    width: 52px;
+    margin: 0;
+  }
+
+  .card__tagline {
+    margin: 4px auto 10px;
+  }
+
+  .modes {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Half a phone's width each: the name and where the player stands, without the blurb. */
+  .mode {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'name' 'status';
+    padding: 6px 12px;
+  }
+
+  .mode__blurb {
+    display: none;
+  }
+
+  .mode__status {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

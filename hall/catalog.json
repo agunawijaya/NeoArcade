@@ -391,5 +391,118 @@
         }
       ]
     }
+  },
+  {
+    "slug": "mind-the-ox",
+    "title": "Mind the Ox",
+    "tagline": "Bomb the depots. Dodge the birds. Whatever you do, mind the ox.",
+    "pitch": "A biplane, a summer morning over the fields, and a war that has wandered into a farming valley. Take off from a grass strip, put five bombs on the enemy’s depots, duel the pilots who come up to stop you and limp home on fumes to refuel, all without hitting a bird, a balloon or, above all, an ox. The 1984 game’s stalls, craters, faster rounds and flight into the sun, painted in gouache in three themes, from the side or as a 3D diorama. And out past the beach, a carrier: launch off its deck, torpedo battleships, break up Zeppelin raids and catch a wire coming home.",
+    "highlights": [
+      "An eight-chapter campaign: fog, a night raid, a convoy, an enemy ace and a herd to protect",
+      "Carrier Ops: eight missions at sea and Custom Sorties from a shareable seed",
+      "Great War 1917, Cyan vs Magenta or an Airshow; side view or Diorama 3D",
+      "Dogfights, Classic 1984 in four CGA colours, a Daily Sortie and two players on one screen"
+    ],
+    "screens": [
+      {
+        "image": "media/hero/dogfight-side-day.jpg",
+        "caption": "On the tail of a smoking enemy scout over the farmland."
+      },
+      {
+        "image": "media/hero/bombing-side-day.jpg",
+        "caption": "A low pass: the first bomb has found the depot, the second is on its way."
+      },
+      {
+        "image": "media/hero/sun-side-day.jpg",
+        "caption": "The round is won: the winner climbs away into the sun."
+      },
+      {
+        "image": "media/hero/launch-diorama-day.jpg",
+        "caption": "Carrier Ops: a squadron launching off the deck at dawn."
+      },
+      {
+        "image": "media/hero/torpedo-side-day.jpg",
+        "caption": "A torpedo running for a battleship as the plane breaks away."
+      },
+      {
+        "image": "media/hero/trap-side-night.jpg",
+        "caption": "Home by the deck lights: a night landing in a swell."
+      },
+      {
+        "image": "media/hero/dogfight-diorama-day.jpg",
+        "caption": "The same fight as a diorama, the valley receding behind it."
+      },
+      {
+        "image": "media/night.jpg",
+        "caption": "Lantern Raid: searchlights sweep the sky over the enemy airfield."
+      },
+      {
+        "image": "media/cyan-magenta.jpg",
+        "caption": "Cyan vs Magenta, a cartoon war named after the 1984 colours."
+      },
+      {
+        "image": "media/airshow.jpg",
+        "caption": "The Airshow: paint guns, flour bags and a rival tagged out."
+      },
+      {
+        "image": "media/classic-cga.jpg",
+        "caption": "Classic 1984, its rules and its sixteen headings, in four colours."
+      },
+      {
+        "image": "media/campaign.jpg",
+        "caption": "Eight chapters, each with its own twist and three stars to earn."
+      },
+      {
+        "image": "media/phone.jpg",
+        "caption": "On a phone, with a stick and buttons on the glass."
+      }
+    ],
+    "origin": {
+      "title": "Sopwith",
+      "author": "David L. Clark",
+      "publisher": "BMB Compuscience Canada",
+      "year": 1984,
+      "platform": "IBM PC and compatibles with CGA graphics",
+      "language": "C and x86 assembler",
+      "machine": "ibm-pc"
+    },
+    "category": "arcade",
+    "genres": ["Flying", "Shoot ’em up"],
+    "players": {
+      "min": 1,
+      "max": 2
+    },
+    "accent": "#c8412f",
+    "path": "mind-the-ox/",
+    "cover": "mind-the-ox",
+    "docs": {
+      "howToPlay": "docs/HOW-TO-PLAY.md",
+      "about": "docs/ABOUT.md",
+      "architecture": "docs/ARCHITECTURE.md"
+    },
+    "added": "2026-10-16",
+    "daily": {
+      "name": "Daily Sortie",
+      "launch": "2026-10-15",
+      "mode": "daily",
+      "results": [
+        {
+          "when": {
+            "won": true,
+            "oxSafe": true
+          },
+          "text": "Into the sun, every ox safe, {score|number}"
+        },
+        {
+          "when": {
+            "won": true
+          },
+          "text": "Into the sun, {score|number}"
+        },
+        {
+          "text": "The End, {score|number}"
+        }
+      ]
+    }
   }
 ]

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Mind the Ox · NeoArcade</title>
+    <meta
+      name="description"
+      content="Bomb the depots. Dodge the birds. Whatever you do, mind the ox. A side-scrolling biplane game inspired by Sopwith by David L. Clark, BMB Compuscience Canada, 1984."
+    />
+    <meta name="theme-color" content="#1b2a52" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#a9d1ea" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Light is a summer morning, dark a night raid; follow the player's choice, else the device.
+      let choice = 'auto';
+      try {
+        choice = JSON.parse(localStorage.getItem('neoarcade:mind-the-ox:theme')) ?? 'auto';
+      } catch {
+        // Storage blocked or unreadable: follow the device.
+      }
+      const light =
+        choice === 'light' ||
+        (choice !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    </script>
+  </head>
+  <body>
+    <main id="game" class="game">
+      <noscript>
+        <p class="card">Mind the Ox needs JavaScript to fly.</p>
+      </noscript>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
