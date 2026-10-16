@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DONKEY_DEPTH, WINNING_CLIMB } from '../engine/constants';
+import {
+  CAR_LENGTH,
+  DONKEY_DEPTH,
+  PRESS_SECONDS,
+  REACTION_SECONDS,
+  WINNING_CLIMB,
+} from '../engine/constants';
+import { AHEAD_DISTANCE, rivalPlan } from '../engine/rival';
 import { laneLateral, LANE_POSITIONS } from '../engine/road';
 import { revealGap } from '../engine/sight';
 import { chaseLayout } from './chase-view';
@@ -49,6 +56,7 @@ const VIEWS: [string, (viewport: Viewport, climb: number) => ViewLayout][] = [
   ['chase', chaseLayout],
   ['chase, two cars', (viewport, climb) => chaseLayout(viewport, climb, true)],
   ['iso', isoLayout],
+  ['iso, two cars', (viewport, climb) => isoLayout(viewport, climb, true)],
 ];
 
 describe.each(VIEWS)('the %s view', (_, layoutOf) => {
@@ -135,6 +143,85 @@ describe('each view marks the sight line itself', () => {
         return Math.min(viewport.width - (box.x + box.width), box.y - viewport.insetTop);
       });
       expect(Math.min(...gaps)).toBeLessThan(layout.projection.unit * 4);
+    }
+  });
+});
+
+describe('beside the car, a metre is a metre in every view', () => {
+  // The car is drawn at true length, so a donkey passing it must be too, or it
+  // would look past the car's tail while it is still beside it.
+  it('Chase', () => {
+    for (const viewport of viewports) {
+      const layout = chaseLayout(viewport, 0);
+      for (const gap of [-0.5, -2, -CAR_LENGTH, -(CAR_LENGTH + DONKEY_DEPTH)]) {
+        expect(layout.depthOf(gap)).toBeCloseTo(layout.noseDepth + gap);
+      }
+    }
+  });
+
+  it('Isometric', () => {
+    for (const viewport of viewports) {
+      const layout = isoLayout(viewport, 0);
+      for (const gap of [-0.5, -2, -CAR_LENGTH, -(CAR_LENGTH + DONKEY_DEPTH)]) {
+        expect(layout.along(gap)).toBeCloseTo(gap);
+      }
+      // Ahead, the road is still stretched to reach the edge of the screen.
+      expect(layout.along(layout.sightAhead)).toBeCloseTo(layout.sightAhead * layout.stretch);
+    }
+  });
+});
+
+describe('a car riding Ahead, in Rival Driver', () => {
+  // Rival Driver never climbs; its cars may sit anywhere across the lane band.
+  const TWO_CARS: [string, (viewport: Viewport) => ViewLayout][] = [
+    ['Classic', (viewport) => classicLayout(viewport, 0)],
+    ['Chase', (viewport) => chaseLayout(viewport, 0, true)],
+    ['Isometric', (viewport) => isoLayout(viewport, 0, true)],
+  ];
+  const overlaps = (a: Box, b: Box) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  it('still has a reaction and a press to spare at top speed, in every view', () => {
+    const topSpeed = rivalPlan(1, { first: 0, count: 3 }).speed.max;
+    for (const [, layoutOf] of TWO_CARS) {
+      for (const viewport of viewports) {
+        const seen = layoutOf(viewport).sightAhead - AHEAD_DISTANCE;
+        expect(seen / topSpeed).toBeGreaterThan(REACTION_SECONDS + PRESS_SECONDS + 0.1);
+      }
+    }
+  });
+
+  it.each(TWO_CARS)(
+    '%s: is whole on screen, and never hides a donkey on the sight line',
+    (_, layoutOf) => {
+      for (const viewport of viewports) {
+        const layout = layoutOf(viewport);
+        for (const lateral of LATERALS) {
+          const where = `${viewport.width}×${viewport.height}, lateral ${lateral}`;
+          const car = layout.carBox(lateral, AHEAD_DISTANCE);
+          expectInside(car, viewport, `car Ahead, ${where}`);
+          for (const other of LATERALS) {
+            const donkey = layout.donkeyBox(layout.sightAhead, other);
+            expect(overlaps(car, donkey), `${where}, donkey at ${other}`).toBe(false);
+          }
+        }
+      }
+    },
+  );
+
+  it('is drawn beside the road exactly where the engine counts it: a metre is a metre', () => {
+    // A donkey alongside a car Ahead, from its nose back past its tail.
+    const gaps = [AHEAD_DISTANCE, 2, 0, AHEAD_DISTANCE - CAR_LENGTH - DONKEY_DEPTH];
+    for (const viewport of viewports) {
+      const chase = chaseLayout(viewport, 0, true);
+      const iso = isoLayout(viewport, 0, true);
+      for (const gap of gaps) {
+        expect(chase.depthOf(gap)).toBeCloseTo(chase.noseDepth + gap);
+        expect(iso.along(gap)).toBeCloseTo(gap);
+      }
+      // Beyond it the road still reaches the sight line where it should.
+      expect(chase.depthOf(chase.sightAhead)).toBeCloseTo(chase.crestDepth, 6);
+      expect(chase.gapAt(chase.depthOf(9))).toBeCloseTo(9);
     }
   });
 });

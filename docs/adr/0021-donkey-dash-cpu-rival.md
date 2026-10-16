@@ -1,8 +1,8 @@
 # ADR 0021 — Rival Driver's CPU: human limits, different intentions
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-10-16 by the surge (decisions 6 to 8)
 - **Date:** 2026-10-15
-- **Context:** Donkey Dash (prompt 007, backlog DD-01)
+- **Context:** Donkey Dash (prompt 007, backlog DD-01; prompt 015, DD-03)
 
 ## Context
 
@@ -67,15 +67,91 @@ Normal should feel fair; Brutal sharp, not cheating.
 
 ## Consequences
 
-- Behaviour tests (`rival.test.ts`) play each level against Easy over 16
+- Behaviour tests (`rival.test.ts`) play each level against Easy over 32
   seeded matches: Easy never goes for a trap; Normal tries a few a minute
   and Hard more; crash rates fall level by level and never reach zero; and
   wins against Easy rise with the level. Each level alone, without its
   mistakes, drives a whole road without a crash.
 - The playtests race every level against every other, and two scripted
-  humans against each level. A casual phone player wins about 70 % against
-  Easy, 38 % against Normal, 23 % against Hard and hardly ever against
-  Brutal; a quick player who holds the middle lane beats Brutal about 60 %
-  of the time. Brutal can be beaten by playing well, which is the point.
+  humans against each level. A casual phone player wins about 65 % against
+  Easy, 38 % against Normal, 20 % against Hard and 10 % against Brutal; a
+  quick player who holds the middle lane beats Brutal about half the time.
+  Brutal can be beaten by playing well, which is the point.
 - The CPU reuses `reach.ts`, so any change to the press rules or the road's
   shape reaches the planner, the autopilot and the CPU together.
+
+## Amendment: the CPU and the surge (2026-10-16, prompt 015, DD-03)
+
+### Context
+
+With the surge (ADR 0020, decisions 8 to 13) a car can ride Ahead, cut
+across a Level car's bonnet and drop back, and a Level car can shut the
+door behind a car Ahead. The owner decided that Hard and Brutal surge
+too: to slip past a block, to take a lane the player wants, and to sit in
+the player's Level slot so the player cannot drop back. Easy never
+surges; Normal rarely, and only to escape.
+
+### Decision
+
+6. **The same eyes, from its own nose.** The CPU sees the road from where
+   its car is (`viewFrom`): riding Ahead, a donkey comes into view no
+   earlier but nearer, as it would for a person, and its search treats the
+   other car as a wall only when they share a row. It does nothing while
+   its own surge or drop back is under way.
+7. **Surging is a style.** `surging` is `never` (Easy), `escape` (Normal)
+   or `tactical` (Hard, Brutal), and `surgeChance` (0, 30, 60, 85 %) is
+   rolled once per chance. With nothing in view, in this order:
+   - Ahead: carry on **cutting across** to the lane it surged for, one
+     lane at a time while that lane is free Ahead, then go **back to
+     Level**, trying once even when the door is shut, as a person would,
+     and then waiting. Hard and Brutal stay Ahead while the rival rides
+     Ahead beside them, where they can still box it in.
+   - Level: **shut the door** (tactical: move into the lane behind a rival
+     riding Ahead, when it can), **follow** the rival Ahead (tactical),
+     **unpin** (escape and tactical: beside the rival against the edge of
+     the road, surge, cut across and drop back on the far side), then, for
+     a wary driver, the middle lane.
+   With a row in view, a trap and an escape come first as before; a
+   tactical driver that is safe where it is past everything in view
+   follows a rival Ahead even then.
+8. **Two knobs for people, not for the CPU.** `reactionSpread` (up to
+   that much longer, at random, to react to each thing) and `ridesAhead`
+   (how much it likes riding Ahead for the bonus) are 0 for every CPU
+   level and exist for the scripted humans of the playtests: people are
+   not metronomes, and some like the bonus.
+
+| Level | Surging | Surge chance | Surges a minute against Easy | Rows passed Ahead |
+|---|---|---|---|---|
+| Easy | never | — | 0 | 0 % |
+| Normal | to escape | 30 % | about 1.6 | 4 % |
+| Hard | tactical | 60 % | about 3.2 | 15 % |
+| Brutal | tactical | 85 % | about 4.1 | 14 % |
+
+Against a player who rides Ahead much of the time, Hard and Brutal surge
+six or seven times a minute, and the player's crashes straight after a
+refused drop back (doors shut) come about two and a half times as often
+as against Easy, who only ever sits there by chance (60 and 58 against
+24 over 32 matches).
+
+### Alternatives considered
+
+- **A CPU that rides Ahead for the bonus.** It made the CPU levels harder
+  to tell apart and gave the player nobody to shut a door on. The CPU
+  surges for a reason, and comes back.
+- **Letting the CPU surge in the middle of a row.** A person who surges
+  just as donkeys appear is punished by the 0.4 s commitment; a CPU that
+  timed it perfectly would be cheating by another name. It surges with
+  nothing in view, or, when following, only when already safe past
+  everything in view.
+
+### Consequences
+
+- The behaviour tests add: no surges on Easy, some on Normal, at least
+  half as many again on Hard and Brutal; Hard and Brutal pass between 5 %
+  and 50 % of their rows Ahead; no CPU ever presses a lane change mid-surge
+  or off the road (`busy` and `edge` bumps); Hard and Brutal shut the door
+  on a rider more than half as often again as Easy does by chance.
+- A scripted phone player who never surges wins about 63 % against Easy,
+  39 % against Normal, 25 % against Hard and 7 % against Brutal over 100
+  matches, close to the numbers before the surge; the full table is in
+  ADR 0020 and the game notes.

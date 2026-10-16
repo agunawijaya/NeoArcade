@@ -1,4 +1,5 @@
 import { CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
+import { AHEAD_DISTANCE } from '../engine/rival';
 import { laneLateral, LANE_POSITIONS } from '../engine/road';
 import { revealGap } from '../engine/sight';
 import { drawCrash } from './crash';
@@ -30,7 +31,7 @@ import {
 } from './lanes';
 import { coatFor, DRIVER_COLOURS, mix, withAlpha, type Palette, type PropKind } from './palette';
 import { hash, hasFence, polesBetween, propsBetween } from './scenery';
-import { drawCarrot, drawLaneEndsSign, drawSign } from './sprites/bits';
+import { drawCarrot, drawDriverTag, drawLaneEndsSign, drawSign } from './sprites/bits';
 import {
   ghostAlpha,
   summitProgress,
@@ -52,7 +53,8 @@ import { drawWeather } from './weather';
  *
  * The car stays put in the lower left. Donkeys appear where the road leaves
  * the screen, which is exactly the sight line; the view stretches distance
- * ahead so that line lands on the edge of any screen. Only low things stand
+ * ahead so that line lands on the edge of any screen, but not beside or
+ * behind the car, where donkeys pass it at true scale. Only low things stand
  * on the viewer's side of the road, so nothing can hide a lane. The camera
  * stays over the lane band, so a shifting road visibly snakes across the
  * model world.
@@ -62,6 +64,14 @@ export interface IsoLayout extends ViewLayout {
   projection: IsoProjection;
   /** Metres along the diorama per metre of road ahead. */
   stretch: number;
+  /**
+   * Metres along the diorama for a gap from the nose. Only the road ahead is
+   * stretched; alongside and behind the car, which is drawn at the length the
+   * engine counts, a metre is a metre, so a donkey has passed the car exactly
+   * when it looks it. With two cars that holds up to AHEAD_DISTANCE, beside a
+   * car riding Ahead too.
+   */
+  along(gap: number): number;
   /** Where the nose is on screen. */
   nose: { x: number; y: number };
   width: number;
@@ -69,8 +79,10 @@ export interface IsoLayout extends ViewLayout {
 }
 
 const DONKEY_TALL = 1.95;
+/** How much road the iso donkey covers, standing across it (see drawIsoDonkey). */
+const ISO_DONKEY_DEPTH = 0.5;
 
-export function isoLayout(viewport: Viewport, climb: number): IsoLayout {
+export function isoLayout(viewport: Viewport, climb: number, twoCars = false): IsoLayout {
   const { width, height, insetTop, insetBottom } = viewport;
   const portrait = height > width;
   const unit = Math.max(9, Math.min(34, Math.min(width, height * 1.3) / (portrait ? 26 : 38)));
@@ -81,8 +93,11 @@ export function isoLayout(viewport: Viewport, climb: number): IsoLayout {
   };
   const projection: IsoProjection = { originX: nose.x, originY: nose.y, unit };
   const sightAhead = revealGap(climb);
+  const trueAhead = twoCars ? AHEAD_DISTANCE : 0;
+  const alongFor = (stretch: number) => (gap: number) =>
+    gap <= trueAhead ? gap : trueAhead + (gap - trueAhead) * stretch;
   const boxAt = (stretch: number, gap: number, lateral: number): Box => {
-    const foot = iso(projection, (gap + DONKEY_DEPTH / 2) * stretch, lateral * LANE_METRES);
+    const foot = iso(projection, alongFor(stretch)(gap + DONKEY_DEPTH / 2), lateral * LANE_METRES);
     return {
       x: foot.x - unit * 1.3,
       y: foot.y - unit * DONKEY_TALL * 1.25,
@@ -97,25 +112,28 @@ export function isoLayout(viewport: Viewport, climb: number): IsoLayout {
       const box = boxAt(stretch, sightAhead, lateral);
       return box.x + box.width <= width - 2 && box.y >= insetTop + 2;
     });
-  let low = 1;
+  // How far along the diorama the sight line may stand, and the stretch that puts it there.
+  const stretchFor = (reach: number) => (reach - trueAhead) / (sightAhead - trueAhead);
+  let low = trueAhead + 1;
   let high = (width + height) / unit;
   for (let step = 0; step < 32; step++) {
     const middle = (low + high) / 2;
-    if (fits(middle / sightAhead)) low = middle;
+    if (fits(stretchFor(middle))) low = middle;
     else high = middle;
   }
-  const stretch = low / sightAhead;
+  const stretch = stretchFor(low);
   return {
     viewport,
     projection,
     stretch,
+    along: alongFor(stretch),
     nose,
     width,
     height,
     sightAhead,
     donkeyBox: (gap, lateral) => boxAt(stretch, gap, lateral),
-    carBox(lateral) {
-      const front = iso(projection, 0, lateral * LANE_METRES);
+    carBox(lateral, ahead = 0) {
+      const front = iso(projection, alongFor(stretch)(ahead), lateral * LANE_METRES);
       return {
         x: front.x - unit * 5.2,
         y: front.y - unit * 2.4,
@@ -139,28 +157,32 @@ const LOW_PROPS = new Set<PropKind>(['bush', 'hay', 'rock', 'flowers', 'snowman'
 export class IsoView implements RoadView {
   readonly camera = 'iso' as const;
 
-  layout(viewport: Viewport, climb: number): IsoLayout {
-    return isoLayout(viewport, climb);
+  layout(viewport: Viewport, climb: number, twoCars = false): IsoLayout {
+    return isoLayout(viewport, climb, twoCars);
   }
 
   draw(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport) {
-    const layout = this.layout(viewport, frame.climb);
+    const layout = this.layout(viewport, frame.climb, frame.twoCars);
     const { projection, stretch } = layout;
     const { palette } = frame;
-    const u = (position: number) => (position - frame.nose) * stretch;
-    const behind =
-      frame.nose - (projection.originX + projection.unit * 40) / (projection.unit * stretch);
+    const u = (position: number) => layout.along(position - frame.nose);
+    const behind = frame.nose - (projection.originX + projection.unit * 40) / projection.unit;
     const ahead = frame.nose + (viewport.width * 1.2) / (projection.unit * stretch);
 
     this.drawBackground(ctx, frame, viewport);
     this.drawSlab(ctx, frame, layout, behind, ahead, u);
     this.drawRoad(ctx, frame, layout, behind, ahead, u);
+    for (const car of frame.cars) this.drawSightMarks(ctx, layout, car);
 
     const pieces: Piece[] = [];
     this.collectScenery(ctx, frame, layout, behind, ahead, u, pieces);
     for (const hazard of frame.hazards) {
       if (hazard.gap > layout.sightAhead + 0.01) continue;
-      const along = hazard.gap * stretch;
+      // A donkey stands across the road, thinner than the stretch of road it
+      // blocks: it is drawn in the middle of that stretch, as the other views do.
+      const along = layout.along(
+        hazard.kind === 'donkey' ? hazard.gap + (DONKEY_DEPTH - ISO_DONKEY_DEPTH) / 2 : hazard.gap,
+      );
       const across = hazard.lateral * LANE_METRES;
       pieces.push({
         depth: isoDepth(along, across),
@@ -213,14 +235,17 @@ export class IsoView implements RoadView {
     for (const piece of pieces) piece.draw();
 
     for (const particle of frame.particles) {
-      // Dust and trails start at the car, which is drawn at true length, so behind
-      // the nose they are placed unstretched.
-      const gap = particle.along - frame.nose;
-      const point = iso(projection, gap >= 0 ? gap * stretch : gap, particle.across, particle.up);
+      const point = iso(
+        projection,
+        layout.along(particle.along - frame.nose),
+        particle.across,
+        particle.up,
+      );
       drawParticle(ctx, particle, point.x, point.y, projection.unit);
     }
     drawSunlight(ctx, frame, viewport);
     this.drawNight(ctx, frame, viewport, layout);
+    this.drawTags(ctx, frame, layout);
     drawWeather(ctx, frame, viewport);
     for (const crash of frame.crashes) this.drawCrash(ctx, frame, crash, viewport, layout);
   }
@@ -235,11 +260,12 @@ export class IsoView implements RoadView {
     const { projection } = layout;
     const { palette } = frame;
     const across = car.lateral * LANE_METRES;
+    const nose = layout.along(car.ahead);
     pieces.push({
-      depth: isoDepth(-CAR_LENGTH / 2, across),
+      depth: isoDepth(nose - CAR_LENGTH / 2, across),
       draw: () => {
         // Reaching the top, the car zooms off up the road.
-        const ahead = summitProgress(frame) * layout.stretch * layout.sightAhead * 1.4;
+        const ahead = nose + summitProgress(frame) * layout.stretch * layout.sightAhead * 1.4;
         ctx.save();
         ctx.globalAlpha = ghostAlpha(car, frame);
         if (car.driver !== null) {
@@ -255,14 +281,58 @@ export class IsoView implements RoadView {
         }
         isoShadow(ctx, projection, ahead - CAR_LENGTH / 2, across, 2.2, palette.shadow);
         drawIsoCar(ctx, projection, ahead, across, car.hop + car.bounce, {
-          shape: car.look.shape,
+          // As long as the engine counts it, so it is clear of a donkey exactly when it looks it.
+          shape: { ...car.look.shape, length: CAR_LENGTH },
           paint: car.look.paint,
           daylight: palette.daylight,
           lean: car.lean,
+          braking: car.shifting < 0,
         });
         ctx.restore();
       },
     });
+  }
+
+  /**
+   * Riding Ahead, a car sees less of the road: a bracket in its colour runs
+   * up both sides of its lane from its nose to the sight line, where donkeys
+   * step out, so the shorter stretch is plain to see.
+   */
+  private drawSightMarks(ctx: CanvasRenderingContext2D, layout: IsoLayout, car: CarFrame) {
+    if (car.driver === null || car.ahead <= 0) return;
+    const { projection } = layout;
+    const near = layout.along(car.ahead);
+    const far = layout.along(layout.sightAhead);
+    const middle = car.lateral * LANE_METRES;
+    const half = LANE_METRES * 0.46;
+    const corners = [
+      iso(projection, near, middle - half),
+      iso(projection, far, middle - half),
+      iso(projection, far, middle + half),
+      iso(projection, near, middle + half),
+    ];
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, car.ahead / AHEAD_DISTANCE);
+    ctx.fillStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.12);
+    ctx.beginPath();
+    corners.forEach((point, index) =>
+      index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
+    );
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.9);
+    ctx.lineWidth = Math.max(2, projection.unit * 0.14);
+    ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) {
+      const from = iso(projection, near, middle + side * half);
+      const corner = iso(projection, far, middle + side * half);
+      const tick = iso(projection, far, middle + side * (half - LANE_METRES * 0.16));
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(corner.x, corner.y);
+      ctx.lineTo(tick.x, tick.y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** The cones and the "lane ends" sign of a lane that is ending, up to the sight line. */
@@ -670,11 +740,14 @@ export class IsoView implements RoadView {
       ctx.globalCompositeOperation = 'lighter';
       for (const car of frame.cars) {
         const across = car.lateral * LANE_METRES;
+        const nose = layout.along(car.ahead);
+        // The beams reach the sight line and no further: a car Ahead lights less road.
+        const far = layout.along(layout.sightAhead);
         const corners = [
-          iso(layout.projection, 0, across - 0.8),
-          iso(layout.projection, 12, across - 2.6),
-          iso(layout.projection, 12, across + 2.6),
-          iso(layout.projection, 0, across + 0.8),
+          iso(layout.projection, nose, across - 0.8),
+          iso(layout.projection, far, across - 2.6),
+          iso(layout.projection, far, across + 2.6),
+          iso(layout.projection, nose, across + 0.8),
         ];
         const start = corners[0] as { x: number; y: number };
         const end = corners[1] as { x: number; y: number };
@@ -690,6 +763,20 @@ export class IsoView implements RoadView {
       }
     }
     ctx.restore();
+  }
+
+  /** Rival Driver's labels, floating over each car's roof, over the night so nothing hides them. */
+  private drawTags(ctx: CanvasRenderingContext2D, frame: Frame, layout: IsoLayout) {
+    const { projection } = layout;
+    for (const car of frame.cars) {
+      if (car.tag === null || car.driver === null) continue;
+      const { shape } = car.look;
+      const above = car.hop + car.bounce + 0.3 + shape.height + shape.cabinHeight + 0.6;
+      const along = layout.along(car.ahead) - CAR_LENGTH / 2;
+      const point = iso(projection, along, car.lateral * LANE_METRES, above);
+      const height = Math.max(11, Math.min(18, projection.unit * 0.55));
+      drawDriverTag(ctx, car.tag, DRIVER_COLOURS[car.driver], point.x, point.y, height);
+    }
   }
 
   /** Chevrons and merge arrows painted down a lane that is ending, up to the sight line. */
@@ -729,8 +816,9 @@ export class IsoView implements RoadView {
     const { projection } = layout;
     const carAcross = crash.carLateral * LANE_METRES;
     const donkeyAcross = crash.donkeyLateral * LANE_METRES;
-    const carBox: Box = layout.carBox(crash.carLateral);
-    const donkeyBox: Box = layout.donkeyBox(0, crash.donkeyLateral);
+    const nose = layout.along(crash.carAhead);
+    const carBox: Box = layout.carBox(crash.carLateral, crash.carAhead);
+    const donkeyBox: Box = layout.donkeyBox(crash.carAhead, crash.donkeyLateral);
     drawCrash(
       ctx,
       crash.age,
@@ -738,8 +826,8 @@ export class IsoView implements RoadView {
       {
         box: carBox,
         draw: (context) =>
-          drawIsoCar(context, projection, 0, carAcross, 0, {
-            shape: crash.look.shape,
+          drawIsoCar(context, projection, nose, carAcross, 0, {
+            shape: { ...crash.look.shape, length: CAR_LENGTH },
             paint: crash.look.paint,
             daylight: frame.palette.daylight,
             lean: 0,
@@ -749,10 +837,10 @@ export class IsoView implements RoadView {
         box: donkeyBox,
         draw: (context, wobble = 0) => {
           if (crash.obstacle === 'barrier') {
-            drawIsoBarrier(context, projection, 0.4, donkeyAcross, frame.time, wobble);
+            drawIsoBarrier(context, projection, nose + 0.4, donkeyAcross, frame.time, wobble);
             return;
           }
-          drawIsoDonkey(context, projection, 0.4, donkeyAcross, {
+          drawIsoDonkey(context, projection, nose + 0.4, donkeyAcross, {
             coat: coatFor(crash.donkeySeed),
             facing: crash.donkeyFacing,
             time: frame.time,

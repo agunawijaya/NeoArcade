@@ -37,33 +37,37 @@ describe('settings', () => {
 });
 
 describe('Rival Driver settings', () => {
-  it('start against a Normal CPU, first to three, with A and D against the arrow keys', () => {
+  it('start against a Normal CPU, first to three, with W A S D against the arrow keys', () => {
     expect(defaultSettings().rival).toEqual({
       opponent: 'cpu',
       cpu: 'normal',
       rounds: 3,
       keys: [
-        ['KeyA', 'KeyD'],
-        ['ArrowLeft', 'ArrowRight'],
+        ['KeyA', 'KeyD', 'KeyW', 'KeyS'],
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'],
       ],
     });
   });
 
-  it('keep rebound keys only when they are four different keys', () => {
+  it('keep rebound keys only when they are eight different keys', () => {
     const keys = [
-      ['KeyJ', 'KeyL'],
-      ['Numpad4', 'Numpad6'],
+      ['KeyJ', 'KeyL', 'KeyI', 'KeyK'],
+      ['Numpad4', 'Numpad6', 'Numpad8', 'Numpad5'],
     ];
     expect(sanitiseSettings({ rival: { keys } }).rival.keys).toEqual(keys);
     for (const broken of [
       [
-        ['KeyA', 'KeyA'],
-        ['KeyJ', 'KeyL'],
+        ['KeyA', 'KeyA', 'KeyW', 'KeyS'],
+        ['KeyJ', 'KeyL', 'KeyI', 'KeyK'],
       ],
-      [['KeyA', 'KeyD']],
+      [['KeyA', 'KeyD', 'KeyW', 'KeyS']],
       [
-        ['KeyA', 'KeyD'],
-        ['Key A', 'KeyL'],
+        ['KeyA', 'KeyD', 'KeyW', 'KeyS'],
+        ['Key A', 'KeyL', 'KeyI', 'KeyK'],
+      ],
+      [
+        ['KeyA', 'KeyD', 'KeyW'],
+        ['KeyJ', 'KeyL', 'KeyI', 'KeyK'],
       ],
       'KeyA',
     ]) {
@@ -71,6 +75,31 @@ describe('Rival Driver settings', () => {
         defaultSettings().rival.keys,
       );
     }
+    // Kept from before the surge: a left and a right each, completed with the default surge keys.
+    expect(
+      sanitiseSettings({
+        rival: {
+          keys: [
+            ['KeyJ', 'KeyL'],
+            ['Numpad4', 'Numpad6'],
+          ],
+        },
+      }).rival.keys,
+    ).toEqual([
+      ['KeyJ', 'KeyL', 'KeyW', 'KeyS'],
+      ['Numpad4', 'Numpad6', 'ArrowUp', 'ArrowDown'],
+    ]);
+    // ...unless that would give one key two jobs.
+    expect(
+      sanitiseSettings({
+        rival: {
+          keys: [
+            ['KeyW', 'KeyD'],
+            ['ArrowLeft', 'ArrowRight'],
+          ],
+        },
+      }).rival.keys,
+    ).toEqual(defaultSettings().rival.keys);
     expect(sanitiseSettings({ rival: { cpu: 'impossible', rounds: 12 } }).rival).toMatchObject({
       cpu: 'normal',
       rounds: 9,

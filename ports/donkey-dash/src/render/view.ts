@@ -17,7 +17,8 @@ export interface RoadView {
   draw(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport): void;
   /**
    * Where things land on screen; pure, so the fairness tests can check it
-   * without a canvas. `twoCars` asks for room for Rival Driver's two cars.
+   * without a canvas. `twoCars` asks for room for Rival Driver's two cars,
+   * one of which may ride Ahead.
    */
   layout(viewport: Viewport, climb: number, twoCars?: boolean): ViewLayout;
 }
@@ -43,8 +44,8 @@ export interface ViewLayout {
   sightAhead: number;
   /** The screen box a donkey covers, standing `gap` metres ahead at `lateral` lane widths from the middle. */
   donkeyBox(gap: number, lateral: number): Box;
-  /** The car's screen box, for the crash and the HUD. */
-  carBox(lateral: number): Box;
+  /** The car's screen box, for the crash and the HUD; `ahead` metres in front of the Level line in Rival Driver. */
+  carBox(lateral: number, ahead?: number): Box;
 }
 
 export interface CarFrame {
@@ -56,15 +57,25 @@ export interface CarFrame {
   hop: number;
   /** Suspension bounce, metres. */
   bounce: number;
-  /** Blinking after a crash, while donkeys wave it through; a Rival ghost. */
+  /** Blinking after a crash, while donkeys wave it through. */
   ghost: boolean;
   /** Wheels spinning in mud. */
   stuck: boolean;
   look: Look;
   /** Rival Driver: whose car it is, for its number plate. Null when there is only one. */
   driver: 0 | 1 | null;
-  /** A refused move: -1…1 towards the lane it could not take, fading. */
+  /** Rival Driver: the label riding on the car, YOU or CPU, P1 or P2. */
+  tag: string | null;
+  /** A refused move, fading: -1…1 towards the lane it could not take, or along the road for a surge or drop back. */
   bump: number;
+  /**
+   * Rival Driver: metres in front of the Level line, exactly as the engine
+   * counts it: AHEAD_DISTANCE riding Ahead, in between while it surges or
+   * drops back. 0 for every other car.
+   */
+  ahead: number;
+  /** Surging Ahead (1) or dropping back (-1) right now, else 0. */
+  shifting: -1 | 0 | 1;
 }
 
 export interface HazardFrame {
@@ -95,6 +106,8 @@ export interface CrashFrame {
   /** Seconds since impact. */
   age: number;
   carLateral: number;
+  /** Where the car was when it hit, in front of the Level line (see CarFrame.ahead). */
+  carAhead: number;
   /** The crashed car's own look: in Rival Driver, not necessarily the player's. */
   look: Look;
   /** What it hit: the split donkey, or a barrier and its cones. */
@@ -137,8 +150,8 @@ export interface Frame {
 }
 
 /**
- * How solid to draw a car: a ghost (shielded after a crash, or a Rival car
- * back on the road) pulses between faint and half there, and never vanishes.
+ * How solid to draw a car: one shielded after a crash pulses between faint
+ * and half there, and never vanishes.
  */
 export function ghostAlpha(car: CarFrame, frame: Frame): number {
   if (!car.ghost) return 1;

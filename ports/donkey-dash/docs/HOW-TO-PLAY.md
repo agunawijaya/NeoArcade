@@ -20,7 +20,8 @@ does in Rival Driver.
 
 ## Controls
 
-One button drives the car. Any of these will do:
+One button drives the car, in every mode but Rival Driver (below). Any of
+these will do:
 
 | | Keyboard | Mouse or touch | Gamepad |
 |---|---|---|---|
@@ -41,22 +42,28 @@ One button drives the car. Any of these will do:
 Only Esc and Start pause in Donkey vs Driver, since every letter belongs to
 a player.
 
-**Rival Driver** is the one mode with **two buttons**: steer left and steer
-right. Each press moves you one lane that way.
+**Rival Driver** is the one mode with more than one button: **four**. Two
+move you a lane left or right; **surge** takes your car a car length
+Ahead, and **drop back** brings it Level again (see Rival Driver, below).
+Your car carries a label in your colour, **YOU** against the CPU or **P1**
+and **P2** between friends, matching the dot on your plate at the top of
+the screen, so you can always tell which car is yours.
 
 | | Driver 1 (blue ring) | Driver 2 (pink ring) |
 |---|---|---|
-| **Keyboard** | A left, D right | ← left, → right |
-| **Touch, landscape** | Left half of the screen: its left side steers left, its right side steers right | Right half, split the same way |
-| **Touch, upright phone** | The bottom half: tap its left or right side | The top half |
-| **Gamepad** | The first pad: d-pad or stick left and right, or left and right bumpers and triggers | The second pad |
+| **Lane left / right** | A / D | ← / → |
+| **Surge Ahead** | W | ↑ |
+| **Drop back** | S | ↓ |
+| **Touch** | A pad of four arrows in the bottom-left corner | The same in the bottom-right corner (the top corner, phone upright) |
+| **Gamepad** | The first pad: d-pad or stick left and right for lanes (bumpers and triggers too), up to surge, down to drop back | The second pad |
 
-Against the CPU you are Driver 1 and get both sets of keys and the whole
-screen: tap the left half to steer left, the right half to steer right.
-The keys can be changed in Settings. Esc and Start pause, and so do P and
-M (mute) as long as no driver has taken them.
+Against the CPU you are Driver 1: you get both sets of keys, and your pad
+sits in the bottom-right corner. The keys can be changed in Settings. Esc
+and Start pause, and so do P and M (mute) as long as no driver has taken
+them. With a keyboard, the pads show which key does what for the first
+few seconds, then fade away.
 
-![Rival Driver on a phone held sideways, with the touch zones shown](../media/rival-touch.jpg)
+![Rival Driver on a phone held sideways: a pad of four arrows in each player's corner](../media/rival-touch.jpg)
 
 ## The shifting road
 
@@ -118,9 +125,13 @@ flowchart LR
 A closing lane never takes you back: once X has started to close, the
 presses in that last picture only ever go between Y and Z.
 
-In **Rival Driver** the two buttons simply move you one open lane left or
-right. Steering towards the edge of the road does nothing but bump. In a
-closing lane, only the button that points into the road works.
+In **Rival Driver** the left and right buttons simply move you one open
+lane left or right. A lane that is widening in beside you can be taken as soon as it
+is about half there; before that, steering towards it is a bump, like
+steering off the road. Every press either moves you straight away or
+bumps straight away: nothing happens later on its own.
+Steering towards the edge of the road does nothing but bump. In a closing
+lane, only the button that points into the road works.
 
 ```mermaid
 flowchart LR
@@ -211,25 +222,65 @@ Friend** or **vs CPU** on its card on the title screen.
   move is refused with a bump, a puff and a honk, and you stay put. If you
   both go for the same free lane at the same moment, neither of you moves.
   The cars never collide.
+- **Level and Ahead.** Each car rides **Level** (side by side with the
+  other) or **Ahead**: a car length and a little further up the road.
+  **Surge** takes you Ahead, **drop back** brings you Level again; either
+  takes 0.4 s, and meanwhile you keep your lane and fill both spots in
+  it. A car Ahead can change lanes right across the bonnet of a car that
+  is Level, and a Level car cannot block it. Only cars in the same row
+  (or on their way between rows) get in each other's way.
+- **The door can shut.** Dropping back needs the Level spot of your lane
+  to be free. If your rival sits there, the drop back is refused: change
+  lane first, then drop back. Both cars may ride Ahead at once; then they
+  are side by side again, just further up the road.
+- **Ahead sees less.** Donkeys come into view at the same line for both
+  cars, so a car Ahead has a car length less road to react in: about
+  0.8 s at the start of a round, 0.58 s at top speed, always enough to
+  react and change lane twice. A bracket in your colour runs up your lane
+  from your nose to that line while you are Ahead, and **▲ AHEAD** shows on
+  your plate.
 - **The race meter.** Every row of donkeys you get past cleanly fills one
-  box of your meter, at the top of the screen. Fill all eight to take the
-  round.
-- **A crash** (a donkey or a barrier) empties your meter. Your car is off
-  the road for a moment, then comes back as a see-through ghost in a free
-  lane. A ghost cannot crash and does not block anyone; it turns solid
-  again once it has a lane to itself.
-- **Traps.** Every row leaves each car a way through on its own, and a row
-  never fills all three lanes. The only way to be trapped is by the other
-  car: if your crash came right after it refused your move, or it was
-  sitting in the only way out, it counts as a trap sprung by your rival.
+  box of your meter, at the top of the screen; a row passed riding Ahead
+  fills a box and a quarter (**+¼** floats up from your plate). Fill all
+  eight to take the round.
+- **A crash** (a donkey or a barrier), Level, Ahead or half way through a
+  surge, empties your meter and takes your car off the road for about two
+  and a half seconds, while your rival has the road to themselves. Then it
+  drops back in, always Level, in a lane of its own:
+  never one the other car is in, never with trouble right in front of it,
+  and never in the lane your rival needs to get past the next donkeys. Two
+  cars never share a lane, not even for a moment.
+- **Traps.** Every row leaves each car a way through on its own, Level or
+  Ahead, and a row never fills all three lanes. The only way to be trapped
+  is by the other car: if your crash came right after it refused your move
+  (a lane change, a surge or a drop back), or it was sitting in the only
+  way out, it counts as a trap sprung by your rival. A crash after a
+  refused drop back is called out as **Door shut!**
 - **Dead heat.** If both meters fill on the same row, the road turns into
   a run of rows with one gap each: whoever is still racing when the other
   crashes takes the round.
 - **The match** is first to three rounds (one to nine, in Settings). The
-  results show each driver's dodges, crashes, traps sprung and longest
-  clean streak.
+  results show each driver's dodges (and how many of them Ahead), crashes,
+  traps sprung and longest clean streak.
 
-![Rival Driver's results: rounds, dodges, crashes, traps sprung and the longest clean streak](../media/rival-results.jpg)
+The owner's own example, the move the surge was made for: the CPU in the
+middle lane, you on the right, and you want the left lane.
+
+```mermaid
+flowchart LR
+  start["You: right lane<br/>CPU: middle lane<br/>both Level"] -- "◀: bump, the CPU is in the way" --> start
+  start -- "▲ surge" --> ahead["You: Ahead,<br/>right lane"]
+  ahead -- "◀ ◀ across the CPU's bonnet" --> left["You: Ahead,<br/>left lane"]
+  left -- "▼ drop back" --> done["You: Level,<br/>left lane"]
+  left -- "▼ refused: the CPU moved<br/>into the left lane" --> left
+  left -- "▶ to the middle first,<br/>then ▼" --> middle["You: Level,<br/>middle lane"]
+```
+
+![The surge from behind: Ahead of the CPU, across its bonnet, the bracket showing how much road you can see](../media/surge-cut.jpg)
+
+![A door shut, from above: riding Ahead, with The Baron sitting in the Level spot right behind](../media/surge-door-shut.jpg)
+
+![Rival Driver's results: rounds, dodges and how many of them Ahead, crashes, traps sprung and the longest clean streak](../media/rival-results.jpg)
 
 ## Settings
 
@@ -244,7 +295,7 @@ camera can also be changed from the pause menu.
 | **Points to win** | 1 to 11 (default 5) | The length of a Classic Duel or Donkey vs Driver match |
 | **Rival Driver: the CPU** | Easy, Normal, Hard, Brutal (default Normal) | Who you race when you pick vs CPU (below) |
 | **Rival Driver: rounds to win** | 1 to 9 (default 3) | The length of a Rival Driver match |
-| **Rival Driver: two buttons each** | Any key for each driver's left and right | Choose a key, then press the new one (Esc keeps the old one). **Reset keys** brings back A/D and ←/→ |
+| **Rival Driver: four buttons each** | Any key for each driver's lane left, lane right, surge Ahead and drop back, laid out like arrow keys | Choose a key, then press the new one (Esc keeps the old one; a key another button had swaps over). **Reset keys** brings back W A S D and the arrow keys |
 | **Hazards** | On or off, separately for Classic Duel, Donkey vs Driver, and Endless with Daily practice | Whether the new hazards join in. Off by default in both duels, like 1981. The road shifts either way |
 | **Rhythm** | On or off | The bonus for switching lanes on the beat |
 | **Screen filter** | None, CRT, CGA | CRT adds curved glass and scanlines; CGA redraws everything in the four colours of 1981 |
@@ -258,7 +309,8 @@ There is no switch for the shifting road: it is part of every mode.
 - **Chase**: behind the car, looking up the road to the crest of a hill.
   Donkeys come over the top, and the road bends round towards a new lane.
   In the duels, the crest draws nearer with every dodge. In Rival Driver
-  the camera pulls back a little so both cars fit.
+  the camera pulls back a little so both cars fit, and follows the road
+  rather than either car, so your car only moves when you move it.
 - **Classic**: from above, like the original, tilted a little into a
   tabletop diorama. Donkeys trot out from under the trees at the top, and
   the road snakes from side to side. In the duels, your car climbs the
@@ -281,7 +333,8 @@ Road Trip has its own curve, from 1.45 s on Farm Lanes to about 0.76 s on
 Snow Road. Classic Duel always plays the original's 0.67 s, shrinking to
 0.30 s near the top. The Daily Road is the same for everyone: 1.23 s,
 tightening to 0.73 s. Rival Driver starts at 1.14 s and tightens towards
-0.84 s. A lane that ends always gives you at least the same time again.
+0.84 s; riding Ahead, from 0.79 s to 0.58 s. A lane that ends always gives
+you at least the same time again.
 
 **The CPU drivers in Rival Driver** see exactly what you see, react a
 little after it appears, and press no faster than a thumb. What changes is
@@ -289,10 +342,13 @@ how they treat you:
 
 | Level | Driver | How they drive |
 |---|---|---|
-| **Easy** | Dotty Dawdle, mint beetle | Only gets out of the way of trouble, and never blocks you on purpose |
-| **Normal** | Rusty Rowe, butter-yellow pickup | Now and then steps into the lane next to it that you need |
-| **Hard** | Vera Vroom, cherry roadster | Reads the whole road, lane ends included, and parks in your way on purpose |
-| **Brutal** | The Baron, midnight camper | Sets traps like Vera, waits in the middle where it cannot be boxed in, and leaves a threatened lane at once. Still makes the odd mistake |
+| **Easy** | Dotty Dawdle, mint beetle | Only gets out of the way of trouble, never blocks you on purpose, and never surges |
+| **Normal** | Rusty Rowe, butter-yellow pickup | Now and then steps into the lane next to it that you need; once in a while, pinned against the edge, surges and cuts across to get out |
+| **Hard** | Vera Vroom, cherry roadster | Reads the whole road, lane ends included, and parks in your way on purpose. Surges to slip past you and take the lane you need; when you ride Ahead, follows you there or slips into your Level spot so you cannot drop back |
+| **Brutal** | The Baron, midnight camper | Does all that, more often, waits in the middle where it cannot be boxed in, and leaves a threatened lane at once. Still makes the odd mistake |
+
+Even riding Ahead the CPU sees only what you would see from there, which
+is less.
 
 ## Scoring
 
@@ -376,7 +432,23 @@ A road sign warns you the first time each one appears.
 - Going for the same lane at the same moment stops both of you. If you see
   your rival heading for it, it may be better to stay.
 
-**Rival Driver: escaping one**
+**Rival Driver: the surge**
+
+- Boxed in against the edge with your rival beside you? Surge, cross in
+  front of it, and drop back on the far side. Two presses of the arrow
+  get you across two lanes.
+- Surge while the road is quiet. For 0.4 s you cannot change lane, and a
+  donkey that appears meanwhile comes at you sooner than it would Level.
+- Riding Ahead pays a quarter of a box more per row, and Level cars cannot
+  block you. But you see less road, and against Hard and Brutal you will
+  not be Ahead alone for long.
+- Before you drop back, look behind you: if your rival is in your lane,
+  the door is shut. Change lane first, then drop back.
+- To shut a door yourself, move into the lane behind a car riding Ahead
+  just as trouble comes: it can still change lane, but it cannot drop
+  back to where it sees more.
+
+**Rival Driver: escaping a trap**
 
 - Hold the middle lane when the road is quiet: from there you have a way
   out on both sides, and nobody can box you in against the edge.
@@ -384,8 +456,8 @@ A road sign warns you the first time each one appears.
   car fills the gap.
 - If you are blocked, try the other way at once: a bump costs you nothing
   but time.
-- A crash is not the end of the round. Your ghost comes back in a free
-  lane, and eight clean rows can come quickly.
+- A crash is not the end of the round. Your car comes back in a safe lane
+  of its own, and eight clean rows can come quickly.
 
 ## FAQ
 
@@ -403,8 +475,24 @@ each car on its own; the only thing that can take your way out is the
 other car.
 
 **Why did my car not move in Rival Driver?** The lane you steered into was
-taken by the other car, or you both went for the same free lane at the
-same moment, or you steered off the edge of the road. Each makes a bump.
+taken by the other car in your row (even if it was just leaving it), or
+you both went for the same free spot at the same moment, or you steered
+off the edge of the road, or towards a lane that had only just begun to
+widen in, or you were half way through a surge or a drop back. Each makes
+a bump; try again once the way is clear.
+
+**Why can't I drop back?** Your rival is sitting in the Level spot of your
+lane, or about to move into it. Change lane, then drop back.
+
+**Is it worth riding Ahead all the time?** Against Easy and Normal it can
+be, if you are quick: they rarely come after you. Hard and Brutal follow
+you up there and shut doors behind you, and the shorter view catches out
+anyone who blinks. Most rounds are won by surging when it helps and
+dropping back when it doesn't.
+
+**Which car is mine?** The one with your label on it: YOU (or P1, P2) in
+the colour of your plate at the top of the screen, with a pool of the same
+colour under the car.
 
 **Does the CPU cheat?** No. It sees only what is on screen, reacts after a
 delay, and presses no faster than a person. Even The Baron sometimes
@@ -433,5 +521,5 @@ is for looks.
 data clears them too.
 
 **Does it work on a phone?** Yes, upright or sideways. Tap anywhere on the
-road to switch lanes. In Rival Driver, tap the left or right side of your
-half.
+road to switch lanes. In Rival Driver, use the pad of four arrows in your
+corner.

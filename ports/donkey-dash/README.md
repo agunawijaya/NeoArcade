@@ -9,7 +9,8 @@ and its gloriously silly crash, then opens the road up: a Road Trip across
 five routes, an Endless run that never stops getting faster, a Daily Road
 that everyone drives the same, a two-player mode where your friend gets to
 be the donkey, and Rival Driver, two cars side by side trying to box each
-other in, against a friend or one of four CPU drivers. Watch it from behind
+other in (or surging ahead to cut across), against a friend or one of four
+CPU drivers. Watch it from behind
 the car, from straight above like the original, or as a tiny model world.
 
 *Inspired by DONKEY.BAS, © IBM Corp. 1981, 1982.*

@@ -66,11 +66,26 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
   blue car, the arrow keys the pink one. Steer into the other car to see
   the bump and hear its horn. (Both steering into the same free lane in the
   same sixtieth of a second moves neither; that one is hard to hit by hand,
-  and the engine tests cover it.) Crash on purpose: the meter empties and
-  the car comes back as a pulsing, see-through ghost that the other car
-  drives through. Then try vs CPU at each level
-  (Settings, Rival Driver: the CPU), and rebind a key there. On a phone, each
-  half of the screen is one driver, split into left and right.
+  and the engine tests cover it.) Each car carries its label, P1 or P2
+  (YOU and CPU against the CPU). Crash on purpose: the meter empties, the
+  car is gone for about two and a half seconds and then drops back in with
+  a hop, in a lane of its own. The two cars must never share a lane. When a
+  lane widens in beside you, steer towards it once it is about half there:
+  the car should move over at once. Steering towards it earlier should
+  bump, and the car must never move later on its own. Then try vs CPU at
+  each level (Settings, Rival Driver: the CPU), and rebind a key there. On a
+  phone, each driver has a pad of four arrows in their corner.
+- **The surge.** W (or ↑) surges: for 0.4 s the car slides a car length up
+  the road, dust kicks up behind it, a lane press meanwhile only bumps, and
+  ▲ AHEAD lights on the plate. A bracket in the car's colour then runs from
+  its nose to the sight line. Cut across in front of the other car (it must
+  be Level), then S (or ↓) to drop back: brake lights, and the bracket
+  fades. Now let the other car sit Level in your lane while you are Ahead,
+  and drop back: refused, with a bump and a horn. Change lane, then drop
+  back. Pass a row of donkeys Ahead: +¼ floats off the plate and a notch
+  fills by a quarter. Crash while Ahead: the wreck is where the car was,
+  and the car comes back Level. Against Hard, ride Ahead for a while: it
+  follows you up, or slips into the lane behind you.
 - **Settings.** Try the CGA and CRT screen filters, the Daylight and Golden
   hour themes, Relaxed and Frantic, points to win, and Rival Driver's
   rounds to win.
@@ -122,9 +137,9 @@ add `ports/donkey-dash/` to the end. Try it upright and sideways.
 | Command | What it checks | Time |
 |---|---|---|
 | `npm test` | Every unit test in the repository: the engine (including the property tests that prove every road can be driven, and the CPU rival's behaviour at each level), the fairness of the three views, settings, progress, daily sharing, the Arcade Pass reporter, music | About a minute |
-| `npx playwright test -c ports/donkey-dash --project=smoke --project=phone` | The game in a desktop browser and a phone-sized one: start-up, input, pause, the Daily Road, the duels, two players, Rival Driver's two buttons and blocking, locked routes and garage parts, themes | 3 to 4 minutes |
+| `npx playwright test -c ports/donkey-dash --project=smoke --project=phone` | The game in a desktop browser and a phone-sized one: start-up, input, pause, the Daily Road, the duels, two players, Rival Driver's buttons and blocking, locked routes and garage parts, themes | 3 to 4 minutes |
 | `npx playwright test -c ports/donkey-dash --project=determinism-chromium` | The engine computes the same runs, duels and Rival matches in the browser as in Node, bit for bit | Seconds |
-| `npx playwright test -c ports/donkey-dash --project=playtest` | Scripted players with human reactions: survival times, finish rates, CPU against CPU at every pairing, a phone player and a quick player against each CPU level, and taps, keys and a Rival race on the real page ending exactly where Node says | A minute or two |
+| `npx playwright test -c ports/donkey-dash --project=playtest` | Scripted players with human reactions: survival times, finish rates, CPU against CPU at every pairing, a phone player and a quick player against each CPU level, a phone player who surges riding Ahead never, sometimes and always, and taps, keys and a Rival race on the real page ending exactly where Node says | A few minutes |
 | `npm run lint` | ESLint and Prettier over the whole repository | Under a minute |
 | `npm run docs:check` | Every Mermaid diagram in the docs renders | About a minute |
 
@@ -160,8 +175,11 @@ npx playwright show-report
 
 Every mode, camera, route and screen size, reached by really playing, in
 about 4 minutes. `rival.screens.ts` adds lane ends and barrier crashes in
-each view, Rival Driver mid-trap in each view and theme, the touch zones,
-the results and the settings:
+each view, Rival Driver mid-trap in each view and theme, the surge (boxed
+in, Ahead, across, dropping back) in each view at 1440×900 dark and
+1024×768 light, a door shut at 844×390 and a crash while Ahead in each
+view, the touch pads (two players, and against the CPU riding Ahead), the
+results and the settings:
 
 ```powershell
 $env:SCREENSHOT_DIR = 'E:\Projects\NeoArcade\screens-check'

@@ -151,6 +151,17 @@ export default definePassManifest({
       emblem: glyphs.target,
     },
     {
+      id: 'slip-through',
+      name: 'Slip Through',
+      description: 'Surged Ahead and cut across your rival’s bonnet. Excuse me, coming through.',
+      hint: 'In Rival Driver, surge Ahead and change lanes in front of the other car.',
+      tier: 'bronze',
+      emblem: (pen) => {
+        car(pen);
+        pen.path('M8 14h20M14 22h14', { stroke: 'accent', width: 3 });
+      },
+    },
+    {
       id: 'first-leg',
       name: 'Learner’s Permit',
       description: 'Finished your first Road Trip leg. The open road is yours.',
@@ -212,6 +223,29 @@ export default definePassManifest({
       emblem: (pen) => {
         pen.path('M32 9c11 15 17 23 17 31a17 17 0 0 1-34 0c0-8 6-16 17-31z');
         pen.path('M24 41a8 8 0 0 0 8 8', { stroke: 'face', width: 3 });
+      },
+    },
+    {
+      id: 'door-shut',
+      name: 'Door Shut',
+      description: 'Sat in your rival’s Level slot as trouble came. No way back, no hard feelings.',
+      hint: 'In Rival Driver, take the Level slot behind a car riding Ahead, and make it crash.',
+      tier: 'silver',
+      emblem: (pen) => {
+        pen.rect(18, 10, 28, 44, { fill: 'accent' });
+        pen.rect(23, 15, 18, 34, { fill: 'face' });
+        pen.circle(36, 33, 2.5);
+      },
+    },
+    {
+      id: 'front-runner',
+      name: 'Front Runner',
+      description: 'Ten rows passed riding Ahead in one round. Less road, more nerve.',
+      hint: 'In one round of Rival Driver, pass 10 rows of donkeys while riding Ahead.',
+      tier: 'silver',
+      emblem: (pen) => {
+        pen.path('M32 8 50 30H40v26H24V30H14z');
+        pen.path('M24 46h16', { stroke: 'accent', width: 4 });
       },
     },
     {
@@ -373,6 +407,7 @@ export default definePassManifest({
     { id: 'hat-crown', name: 'Golden crown', kind: 'Donkey hat', unlock: { badge: 'all-stars' } },
     { id: 'trail-cones', name: 'Traffic cones', kind: 'Trail', unlock: { badge: 'merge-master' } },
     { id: 'paint-racing', name: 'Racing green', kind: 'Paint', unlock: { badge: 'rival-ready' } },
+    { id: 'paint-lime', name: 'Turbo lime', kind: 'Paint', unlock: { badge: 'front-runner' } },
   ],
   stats: [
     { key: 'runs', label: 'Runs and duels played' },
@@ -385,6 +420,7 @@ export default definePassManifest({
     { key: 'bestStreak', label: 'Best Daily streak', unit: 'days' },
     { key: 'merges', label: 'Closing lanes left in time' },
     { key: 'traps', label: 'Rival traps sprung' },
+    { key: 'aheadRows', label: 'Rows passed riding Ahead' },
     { key: 'rivalWins', label: 'Rival Driver wins' },
   ],
 });

@@ -1,4 +1,5 @@
 import { WINNING_CLIMB } from '../engine/constants';
+import type { RivalMove } from '../game/controls';
 import { h, icon } from './dom';
 import { ICONS } from './icons';
 
@@ -9,6 +10,8 @@ import { ICONS } from './icons';
 export interface HudHandlers {
   pause(): void;
   mute(): void;
+  /** A tap on a Rival driver's touch pad. */
+  steer(driver: 0 | 1, move: RivalMove): void;
 }
 
 export interface RunReadout {
@@ -34,8 +37,11 @@ export interface DuelReadout {
 export interface RivalPlate {
   name: string;
   rounds: number;
+  /** In quarters, too: a row passed riding Ahead counts a little more. */
   meter: number;
-  state: 'racing' | 'crashed' | 'ghost';
+  state: 'racing' | 'crashed';
+  /** Riding Ahead, or on the way there. */
+  ahead: boolean;
 }
 
 export interface RivalReadout {
@@ -46,11 +52,18 @@ export interface RivalReadout {
   round: number;
 }
 
-/** How Rival Driver's buttons are laid out, for the zones along the bottom of the screen. */
+/** Rival Driver's touch pads: one for each driver, or one against the CPU, with their keys. */
 export interface SteerLayout {
-  /** Each driver's name and their left and right keys, or one driver against the CPU. */
-  drivers: readonly { name: string; keys: readonly [string, string] }[];
+  drivers: readonly { name: string; keys: Record<RivalMove, string> }[];
 }
+
+/** A pad's four keys, in the order of a cross: the arrow on each. */
+const PAD_KEYS: readonly { move: RivalMove; arrow: string; label: string }[] = [
+  { move: 'surge', arrow: '▲', label: 'Surge Ahead' },
+  { move: 'left', arrow: '◀', label: 'Lane left' },
+  { move: 'right', arrow: '▶', label: 'Lane right' },
+  { move: 'drop', arrow: '▼', label: 'Drop back' },
+];
 
 export type PopupTone = 'near' | 'carrot' | 'beat' | 'crash' | 'info';
 
@@ -78,7 +91,7 @@ export class Hud {
   private captionTimer: ReturnType<typeof setTimeout> | undefined;
   private bannerTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(handlers: HudHandlers) {
+  constructor(private readonly handlers: HudHandlers) {
     const pause = h(
       'button',
       { class: 'hud__button', type: 'button', 'aria-label': 'Pause' },
@@ -135,6 +148,14 @@ export class Hud {
             { class: 'hud__who' },
             h('span', { class: 'hud__dot' }),
             h('span', { class: 'hud__name', 'data-field': `${side}-name` }),
+            h(
+              'span',
+              {
+                class: 'hud__ahead',
+                title: 'Riding Ahead: each row counts a little more, but donkeys show up closer',
+              },
+              '▲ Ahead',
+            ),
           ),
           h('span', { class: 'hud__rounds', 'data-field': `${side}-rounds` }),
           h('span', { class: 'hud__meter', 'data-field': `${side}-meter` }),
@@ -239,7 +260,7 @@ export class Hud {
     for (const side of ['left', 'right'] as const) {
       const plate = readout[side];
       this.text(`${side}-name`, plate.name);
-      const key = `${plate.rounds}/${readout.roundsToWin}:${plate.meter}/${readout.meterTarget}:${plate.state}`;
+      const key = `${plate.rounds}/${readout.roundsToWin}:${plate.meter}/${readout.meterTarget}:${plate.state}:${plate.ahead}`;
       if (this.cache.get(`${side}-plate`) === key) continue;
       this.cache.set(`${side}-plate`, key);
       const rounds = this.field(`${side}-rounds`);
@@ -250,31 +271,64 @@ export class Hud {
         ),
       );
       const meter = this.field(`${side}-meter`);
-      meter?.setAttribute('aria-label', `Race meter ${plate.meter} of ${readout.meterTarget}`);
-      meter?.replaceChildren(
-        ...Array.from({ length: readout.meterTarget }, (_, index) =>
-          h('span', { class: `hud__notch${index < plate.meter ? ' is-full' : ''}` }),
-        ),
+      meter?.setAttribute(
+        'aria-label',
+        `Race meter ${fraction(plate.meter)} of ${readout.meterTarget}`,
       );
-      (side === 'left' ? this.left : this.right).dataset.state = plate.state;
+      meter?.replaceChildren(
+        ...Array.from({ length: readout.meterTarget }, (_, index) => {
+          const fill = Math.max(0, Math.min(1, plate.meter - index));
+          const notch = h('span', {
+            class: `hud__notch${fill === 1 ? ' is-full' : fill > 0 ? ' is-part' : ''}`,
+          });
+          if (fill > 0 && fill < 1) notch.style.setProperty('--fill', `${fill * 100}%`);
+          return notch;
+        }),
+      );
+      const element = side === 'left' ? this.left : this.right;
+      element.dataset.state = plate.state;
+      element.dataset.ahead = String(plate.ahead);
     }
     this.text('round', String(readout.round));
     this.text('first-to', `first to ${readout.roundsToWin}`);
   }
 
-  /** Lays out the zones along the bottom: one pair of arrows for each driver, with their keys. */
+  /**
+   * Lays out the touch pads: each driver's in the outer corner of their half
+   * of the screen, or one in the right-hand corner against the CPU. Each is a
+   * cross of four keys showing the keyboard key for it; a touch on one
+   * steers at once.
+   */
   steering(layout: SteerLayout) {
-    this.steer.dataset.drivers = String(layout.drivers.length);
+    const alone = layout.drivers.length === 1;
     this.steer.replaceChildren(
-      ...layout.drivers.map((driver, index) =>
-        h(
+      ...layout.drivers.map((driver, index) => {
+        const side = index as 0 | 1;
+        return h(
           'div',
-          { class: 'hud__steer-driver', 'data-driver': String(index) },
-          h('span', { class: 'hud__steer-zone' }, h('b', {}, '◀'), h('kbd', {}, driver.keys[0])),
-          h('span', { class: 'hud__steer-name' }, driver.name),
-          h('span', { class: 'hud__steer-zone' }, h('kbd', {}, driver.keys[1]), h('b', {}, '▶')),
-        ),
-      ),
+          {
+            class: 'hud__pad',
+            'data-driver': String(side),
+            'data-corner': alone || side === 1 ? 'right' : 'left',
+          },
+          ...PAD_KEYS.map(({ move, arrow, label }) => {
+            const key = h(
+              'span',
+              { class: 'hud__pad-key', 'data-move': move, title: label },
+              h('b', {}, arrow),
+              h('kbd', {}, driver.keys[move]),
+            );
+            key.addEventListener('pointerdown', (event) => {
+              // A thumb on a pad steers; it must not also count as a tap on the road.
+              event.preventDefault();
+              event.stopPropagation();
+              this.handlers.steer(side, move);
+            });
+            return key;
+          }),
+          h('span', { class: 'hud__pad-name' }, driver.name),
+        );
+      }),
     );
   }
 
@@ -307,6 +361,14 @@ export class Hud {
     while (this.popups.childElementCount > 3) this.popups.firstElementChild?.remove();
     setTimeout(() => popup.remove(), 1400);
     return popup;
+  }
+
+  /** A row passed riding Ahead: the extra it put on the meter floats up off the plate. */
+  aheadBonus(side: 'left' | 'right', extra: number) {
+    const plate = side === 'left' ? this.left : this.right;
+    const bonus = h('span', { class: 'hud__bonus', 'aria-hidden': 'true' }, `+${fraction(extra)}`);
+    plate.append(bonus);
+    setTimeout(() => bonus.remove(), 1000);
   }
 
   /** Carrots come in rows: one pop-up counts them up, rather than a stack of them. */
@@ -368,4 +430,14 @@ export class Hud {
     const target = this.field(name);
     if (target) target.textContent = value;
   }
+}
+
+const QUARTERS = ['', '¼', '½', '¾'];
+
+/** A meter reading as people write it: 3¼, ½, 8. */
+function fraction(value: number): string {
+  const quarters = Math.round(value * 4);
+  const whole = Math.floor(quarters / 4);
+  const part = QUARTERS[quarters % 4] ?? '';
+  return whole === 0 && part ? part : `${whole}${part}`;
 }

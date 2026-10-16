@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { DEFAULT_RIVAL_KEYS } from '../src/settings';
 import {
   openGame,
   run,
@@ -208,6 +209,8 @@ test('follows the device theme, and holds still for reduced motion', async ({ pa
 
 const lanes = async (page: Page) =>
   (await page.evaluate(() => document.body.dataset.lanes ?? '')).split(',').map(Number);
+const rows = async (page: Page) =>
+  (await page.evaluate(() => document.body.dataset.rows ?? '')).split(',');
 
 test('Rival Driver against the CPU: A and D steer, and the CPU drives itself', async ({ page }) => {
   const errors = watchForErrors(page);
@@ -241,6 +244,37 @@ test('Rival Driver with a friend: each driver has their own keys, and a taken la
   expect((await lanes(page))[0]).toBe(first);
 });
 
+test('Rival Driver: W surges Ahead, across the other car, and S drops back unless the spot is taken', async ({
+  page,
+}) => {
+  await openGame(page);
+  await page.locator('[data-rival="friend"]').click({ force: true });
+  await untilPlaying(page);
+  const [first, second] = await lanes(page);
+  // Player 1 surges Ahead and takes the middle lane up there…
+  await page.keyboard.press('KeyW');
+  await run(page, 50);
+  expect(await rows(page)).toEqual(['ahead', 'level']);
+  await run(page, 500);
+  await page.keyboard.press('KeyD');
+  await run(page, 50);
+  // …Player 2 slips into the middle lane behind, Level…
+  await page.keyboard.press('ArrowLeft');
+  await run(page, 50);
+  expect(await lanes(page)).toEqual([(first as number) + 1, (second as number) - 1]);
+  // …so Player 1's drop back is refused: the door is shut.
+  await page.keyboard.press('KeyS');
+  await run(page, 50);
+  expect(await rows(page)).toEqual(['ahead', 'level']);
+  // Back to the first lane, and the drop back goes through.
+  await page.keyboard.press('KeyA');
+  await run(page, 50);
+  await page.keyboard.press('KeyS');
+  await run(page, 50);
+  expect(await rows(page)).toEqual(['level', 'level']);
+  await expect(page.locator('.hud__plate--left')).toHaveAttribute('data-ahead', 'false');
+});
+
 test('Rival Driver plays a whole match and shows both drivers’ tally', async ({ page }) => {
   await longRun(page);
   await openGame(page, {
@@ -250,10 +284,7 @@ test('Rival Driver plays a whole match and shows both drivers’ tally', async (
         opponent: 'cpu',
         cpu: 'easy',
         rounds: 1,
-        keys: [
-          ['KeyA', 'KeyD'],
-          ['ArrowLeft', 'ArrowRight'],
-        ],
+        keys: DEFAULT_RIVAL_KEYS,
       },
     },
   });

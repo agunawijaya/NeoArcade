@@ -1,4 +1,5 @@
 import { BARRIER_DEPTH, CAR_LENGTH, DONKEY_DEPTH } from '../engine/constants';
+import { AHEAD_DISTANCE } from '../engine/rival';
 import { closingLaneAt, edgesAt, laneLateral, layoutAt, type Road } from '../engine/road';
 import { revealGap } from '../engine/sight';
 import { drawCrash } from './crash';
@@ -19,7 +20,14 @@ import {
 } from './lanes';
 import { coatFor, DRIVER_COLOURS, mix, withAlpha, type Palette } from './palette';
 import { hash, hasFence, polesBetween, propsBetween } from './scenery';
-import { drawBarrier, drawCarrot, drawCone, drawLaneEndsSign, drawSign } from './sprites/bits';
+import {
+  drawBarrier,
+  drawCarrot,
+  drawCone,
+  drawDriverTag,
+  drawLaneEndsSign,
+  drawSign,
+} from './sprites/bits';
 import { drawCarRear } from './sprites/car';
 import { DONKEY_HEIGHT, DONKEY_LENGTH, drawDonkey, drawDonkeyShadow } from './sprites/donkey';
 import { drawPole, drawProp, PROP_HEIGHT } from './sprites/props';
@@ -46,7 +54,8 @@ import { drawWeather } from './weather';
  *
  * Distances ahead are stretched by a factor so the crest can sit at a good
  * distance on screen; the time a donkey takes from the crest to the car is
- * exactly the engine's reaction window.
+ * exactly the engine's reaction window. Beside the car a metre stays a metre,
+ * and in Rival Driver beside a car riding Ahead too.
  *
  * When the road shifts, it bends towards its new lanes: the camera follows
  * the car across, and the road ahead curves off the way the lanes are going.
@@ -60,7 +69,7 @@ export interface ChaseLayout extends ViewLayout {
   noseDepth: number;
   crestDepth: number;
   crestHeight: number;
-  /** Metres of chase depth per metre of road ahead. */
+  /** Metres of chase depth per metre of road ahead, beyond the stretch kept true to scale. */
   stretch: number;
   centreX: number;
   width: number;
@@ -90,6 +99,13 @@ const CREST_DONKEY_PIXELS = 30;
  * stay on screen even on the outer lanes of a road four lanes wide.
  */
 const TWO_CAR_SHARE = 0.14;
+/**
+ * With two cars the road is true to scale up to a car riding Ahead; beyond
+ * it, the crest stands far enough back that the rest of the road is squeezed
+ * no more than this, or donkeys would seem to dawdle on the crest and then
+ * rush the cars.
+ */
+const TWO_CAR_LEAST_STRETCH = 0.45;
 
 export function chaseLayout(viewport: Viewport, climb: number, twoCars = false): ChaseLayout {
   const { width, height, insetTop, insetBottom } = viewport;
@@ -97,7 +113,14 @@ export function chaseLayout(viewport: Viewport, climb: number, twoCars = false):
   const oneCar = portrait ? 0.32 : Math.max(0.15, Math.min(0.21, 300 / width));
   const carShare = twoCars ? Math.min(oneCar, TWO_CAR_SHARE) : oneCar;
   const focal = (carShare * width * CAR_DEPTH) / CAR_WIDTH;
-  const crestDepth = Math.max(16, Math.min(46, (focal * DONKEY_LENGTH) / CREST_DONKEY_PIXELS));
+  const noseDepth = CAR_DEPTH + CAR_LENGTH;
+  const sightAhead = revealGap(climb);
+  const trueAhead = twoCars ? AHEAD_DISTANCE : 0;
+  const crestDepth = Math.max(
+    16,
+    Math.min(46, (focal * DONKEY_LENGTH) / CREST_DONKEY_PIXELS),
+    noseDepth + trueAhead + (sightAhead - trueAhead) * (twoCars ? TWO_CAR_LEAST_STRETCH : 0),
+  );
   const carBottom = height - Math.max(insetBottom + 24, height * 0.08);
   const available = carBottom - insetTop;
   // The crest, with a donkey standing on it, must clear the HUD.
@@ -105,9 +128,7 @@ export function chaseLayout(viewport: Viewport, climb: number, twoCars = false):
   const cameraHeight =
     (carBottom - crestY) / (focal * (1 / CAR_DEPTH - (1 - CREST_RISE) / crestDepth));
   const horizonY = carBottom - (cameraHeight * focal) / CAR_DEPTH;
-  const noseDepth = CAR_DEPTH + CAR_LENGTH;
-  const sightAhead = revealGap(climb);
-  const stretch = (crestDepth - noseDepth) / sightAhead;
+  const stretch = (crestDepth - noseDepth - trueAhead) / (sightAhead - trueAhead);
   const crestHeight = cameraHeight * CREST_RISE;
   const centreX = width / 2;
 
@@ -126,9 +147,12 @@ export function chaseLayout(viewport: Viewport, climb: number, twoCars = false):
   };
   // Only the road ahead is stretched; alongside the car, a metre is a metre,
   // so dust leaves the rear wheels and a passing donkey stays car-sized.
-  const depthOf = (gap: number) => noseDepth + (gap >= 0 ? gap * stretch : gap);
-  const gapAt = (depth: number) =>
-    depth >= noseDepth ? (depth - noseDepth) / stretch : depth - noseDepth;
+  const depthOf = (gap: number) =>
+    noseDepth + (gap <= trueAhead ? gap : trueAhead + (gap - trueAhead) * stretch);
+  const gapAt = (depth: number) => {
+    const gap = depth - noseDepth;
+    return gap <= trueAhead ? gap : trueAhead + (gap - trueAhead) / stretch;
+  };
 
   return {
     focal,
@@ -153,8 +177,8 @@ export function chaseLayout(viewport: Viewport, climb: number, twoCars = false):
       const tall = DONKEY_HEIGHT * foot.scale;
       return { x: foot.x - long / 2, y: foot.y - tall, width: long, height: tall };
     },
-    carBox(lateral) {
-      const rear = project(CAR_DEPTH, lateral * LANE_METRES);
+    carBox(lateral, ahead = 0) {
+      const rear = project(depthOf(ahead - CAR_LENGTH), lateral * LANE_METRES);
       const wide = CAR_WIDTH * 1.1 * rear.scale;
       const tall = 1.6 * rear.scale;
       return { x: rear.x - wide / 2, y: rear.y - tall, width: wide, height: tall };
@@ -197,22 +221,25 @@ export class ChaseView implements RoadView {
   draw(ctx: CanvasRenderingContext2D, frame: Frame, viewport: Viewport) {
     const layout = this.layout(viewport, frame.climb, frame.twoCars);
     const curve = bendOf(frame.road, frame.nose, layout.sightAhead);
-    // The camera follows the car across, but only part of the way, so the road sways.
+    // The camera follows the car (or, with two, the road) across, but only part of the way, so the road sways.
     this.cameraAcross = frame.focus * LANE_METRES * 0.6;
     const across = (metres: number) => metres - this.cameraAcross;
     const roadPosition = (depth: number) => frame.nose + layout.gapAt(depth);
 
     this.drawBackdrop(ctx, frame, viewport, layout, curve);
     this.drawRoad(ctx, frame, viewport, layout, curve, across, roadPosition);
+    for (const car of frame.cars) this.drawSightMarks(ctx, layout, car, curve, across);
 
     const sprites: Sprite[] = [];
     this.collectScenery(ctx, frame, layout, curve, across, sprites);
     this.collectHazards(ctx, frame, layout, curve, across, sprites);
     this.collectLaneEnds(ctx, frame, layout, curve, across, sprites);
     for (const car of frame.cars) {
+      const depth = layout.depthOf(car.ahead - CAR_LENGTH);
       sprites.push({
-        depth: layout.carDepth,
-        draw: () => this.drawCar(ctx, frame, layout, car, across(car.lateral * LANE_METRES)),
+        depth,
+        draw: () =>
+          this.drawCar(ctx, frame, layout, car, depth, curve, across(car.lateral * LANE_METRES)),
       });
     }
     sprites.sort((a, b) => b.depth - a.depth);
@@ -236,7 +263,37 @@ export class ChaseView implements RoadView {
 
     this.drawNight(ctx, frame, viewport, layout, across);
     drawWeather(ctx, frame, viewport);
+    this.drawTags(ctx, frame, layout, across);
     for (const crash of frame.crashes) this.drawCrash(ctx, frame, crash, viewport, layout, across);
+  }
+
+  /** Rival Driver's labels, on each car's rear window, after the night and the weather so nothing hides them. */
+  private drawTags(
+    ctx: CanvasRenderingContext2D,
+    frame: Frame,
+    layout: ChaseLayout,
+    across: (metres: number) => number,
+  ) {
+    for (const car of frame.cars) {
+      if (car.tag === null || car.driver === null) continue;
+      const rear = layout.project(
+        layout.depthOf(car.ahead - CAR_LENGTH),
+        across(car.lateral * LANE_METRES),
+        0,
+        bendOf(frame.road, frame.nose, layout.sightAhead),
+      );
+      const { shape } = car.look;
+      const rearWindow = car.hop + car.bounce + 0.3 + shape.height + shape.cabinHeight / 2;
+      const height = Math.max(11, Math.min(18, rear.scale * 0.22));
+      drawDriverTag(
+        ctx,
+        car.tag,
+        DRIVER_COLOURS[car.driver],
+        rear.x,
+        rear.y - rearWindow * rear.scale,
+        height,
+      );
+    }
   }
 
   private drawBackdrop(
@@ -768,12 +825,13 @@ export class ChaseView implements RoadView {
     frame: Frame,
     layout: ChaseLayout,
     car: CarFrame,
+    rearDepth: number,
+    curve: number,
     metres: number,
   ) {
     // Reaching the top, the car races away over the crest.
-    const depth =
-      layout.carDepth + summitProgress(frame) * (layout.crestDepth - layout.carDepth + 6);
-    const rear = layout.project(depth, metres);
+    const depth = rearDepth + summitProgress(frame) * (layout.crestDepth - rearDepth + 6);
+    const rear = layout.project(depth, metres, 0, curve);
     ctx.save();
     ctx.globalAlpha = ghostAlpha(car, frame);
     if (car.driver !== null) {
@@ -796,7 +854,54 @@ export class ChaseView implements RoadView {
       daylight: frame.palette.daylight,
       stuck: car.stuck,
       time: frame.time,
+      braking: car.shifting < 0,
     });
+    ctx.restore();
+  }
+
+  /**
+   * Riding Ahead, a car sees less of the road: a bracket in its colour runs
+   * up both sides of its lane from its nose to the crest, where donkeys come
+   * over the top, so the shorter stretch is plain to see.
+   */
+  private drawSightMarks(
+    ctx: CanvasRenderingContext2D,
+    layout: ChaseLayout,
+    car: CarFrame,
+    curve: number,
+    across: (metres: number) => number,
+  ) {
+    if (car.driver === null || car.ahead <= 0) return;
+    const near = layout.depthOf(car.ahead);
+    const middle = car.lateral * LANE_METRES;
+    const half = LANE_METRES * 0.46;
+    const edge = (side: -1 | 1, inset = 0) =>
+      Array.from({ length: 13 }, (_, index) => {
+        const depth = near + ((layout.crestDepth - near) * index) / 12;
+        return layout.project(depth, across(middle + side * (half - inset)), 0, curve);
+      });
+    const [left, right] = [edge(-1), edge(1)];
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, car.ahead / AHEAD_DISTANCE);
+    ctx.fillStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.12);
+    ctx.beginPath();
+    [...left, ...right.reverse()].forEach((point, index) =>
+      index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
+    );
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(DRIVER_COLOURS[car.driver], 0.9);
+    ctx.lineJoin = 'round';
+    for (const side of [-1, 1] as const) {
+      const points = edge(side);
+      const tick = edge(side, LANE_METRES * 0.16).at(-1) as { x: number; y: number };
+      ctx.lineWidth = Math.max(2, (points[0]?.scale ?? 0) * 0.12);
+      ctx.beginPath();
+      points.forEach((point, index) =>
+        index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y),
+      );
+      ctx.lineTo(tick.x, tick.y);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -817,11 +922,11 @@ export class ChaseView implements RoadView {
     if (lights) {
       ctx.globalCompositeOperation = 'lighter';
       const curve = bendOf(frame.road, frame.nose, layout.sightAhead);
-      // The beams leave the road just over the car's roof, so they seem to come from it.
-      const roof = layout.carBox(0).y;
       for (const car of frame.cars) {
+        // The beams leave the road just over the car's roof, so they seem to come from it.
+        const roof = layout.carBox(0, car.ahead).y;
         const metres = across(car.lateral * LANE_METRES);
-        let near = layout.carDepth;
+        let near = layout.depthOf(car.ahead - CAR_LENGTH);
         let far = layout.crestDepth;
         for (let step = 0; step < 16; step++) {
           const middle = (near + far) / 2;
@@ -859,14 +964,14 @@ export class ChaseView implements RoadView {
     across: (metres: number) => number,
   ) {
     const carMetres = across(crash.carLateral * LANE_METRES);
-    const rear = layout.project(layout.carDepth, carMetres);
+    const rear = layout.project(layout.depthOf(crash.carAhead - CAR_LENGTH), carMetres);
     const carBox: Box = {
       x: rear.x - rear.scale * 1.05,
       y: rear.y - rear.scale * 1.7,
       width: rear.scale * 2.1,
       height: rear.scale * 1.7,
     };
-    const donkeyDepth = layout.noseDepth + 1.2;
+    const donkeyDepth = layout.depthOf(crash.carAhead) + 1.2;
     const foot = layout.project(donkeyDepth, across(crash.donkeyLateral * LANE_METRES));
     const donkeyBox: Box = {
       x: foot.x - foot.scale * DONKEY_LENGTH * 0.55,

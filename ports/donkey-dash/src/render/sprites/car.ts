@@ -15,6 +15,8 @@ export interface CarPose {
   /** Spinning its wheels in mud. */
   stuck: boolean;
   time: number;
+  /** Rival Driver: dropping back, brake lights blazing. */
+  braking?: boolean;
 }
 
 const TYRE = '#1d1a20';
@@ -130,7 +132,20 @@ export function drawCarTop(ctx: CanvasRenderingContext2D, pose: CarPose) {
     ctx.ellipse(x, -half + 0.12, 0.17, 0.09, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  // Last, so the bloom spills out over the bumper and the road behind.
+  if (pose.braking) {
+    for (const x of [-width / 2 + 0.31, width / 2 - 0.31]) brakeGlow(ctx, x, half - 0.25, 1);
+  }
   ctx.restore();
+}
+
+/** The red bloom around a brake light, centred on it. */
+export function brakeGlow(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+  const halo = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+  halo.addColorStop(0, 'rgba(255, 70, 60, 0.85)');
+  halo.addColorStop(1, 'rgba(255, 60, 60, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
 /** Seen from behind and a little above, for the Chase view. Origin on the ground, mid-bumper. */
@@ -197,8 +212,8 @@ export function drawCarRear(ctx: CanvasRenderingContext2D, pose: CarPose) {
   ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
   ctx.fillRect(-width / 2 + 0.15, bodyTop + 0.04, width - 0.3, 0.05);
 
-  // Tail lights glow a little brighter as the day goes.
-  const glow = 0.35 + (1 - daylight) * 0.65;
+  // Tail lights glow a little brighter as the day goes, and blaze under braking.
+  const glow = pose.braking ? 1.4 : 0.35 + (1 - daylight) * 0.65;
   ctx.fillStyle = TAIL_LIGHT;
   roundRect(ctx, -width / 2 + 0.1, bodyTop + 0.12, 0.36, 0.2, 0.05);
   ctx.fill();

@@ -127,7 +127,7 @@ ports/donkey-dash/
     │   ├── planner.ts          RoadPlanner: phrases on the beat, shifts, the reach check
     │   ├── run.ts              Road Trip, Endless, Daily: lives, score, stars
     │   ├── duel.ts             Classic Duel and Donkey vs Driver, with gentle shifts
-    │   ├── rival.ts            Rival Driver: two cars, blocking, ghosts, meters, rounds
+    │   ├── rival.ts            Rival Driver: two cars, blocking, comebacks, meters, rounds
     │   ├── rival-cpu.ts        the CPU rival and its four styles
     │   ├── modes.ts            difficulties, Endless and Daily configs, daily rules
     │   ├── routes.ts           five routes, fifteen legs
@@ -166,7 +166,7 @@ ports/donkey-dash/
         ├── dom.ts, icons.ts    tiny DOM helpers and inline SVG icons
         ├── keys.ts             key names for the Rival key rebinding
         ├── title-screen.ts     logo, the 1981 box, mode cards
-        ├── settings-screen.ts  every setting, the CPU and the two-button layout
+        ├── settings-screen.ts  every setting, the CPU and the four buttons per driver
         ├── trip-screen.ts      routes, legs and stars
         ├── daily-screen.ts     today's road, streak, calendar
         ├── garage-screen.ts    preview and parts
@@ -302,8 +302,8 @@ flowchart LR
 - `stepTarget`, the **two-button rule** (Rival Driver): one lane left or
   right if that lane is open, else nothing (a bump).
 - `mergeTarget`: where a car pushed out of a closing lane goes. A crashed
-  car in a run is set back there; a shielded car (grace after a crash) or a
-  Rival ghost reaching a barrier is waved across instead of crashing.
+  car in a run is set back there, and a shielded car (grace after a crash)
+  reaching a barrier is waved across instead of crashing.
 - `edgesAt`: the paved road's two edges, in lane widths from the middle of
   the band. A lane about to open widens in over `TAPER_LENGTH` (10 m) with
   a smoothstep, and a closed lane narrows away behind its barrier. Every
@@ -426,58 +426,120 @@ A barrier crash is a point to the Donkey.
 ### Rival Driver: two cars on one road
 
 `rival.ts` runs one `Drive` (the road, its speed and its hazards) for two
-`RivalCar`s that share the same nose position: the same speed, the same
-row. Each round gets a fresh road from `rivalPlan` (three lanes, 120 bpm,
+`RivalCar`s at the same speed. The drive's nose is the **Level** line; a
+car rides there or **Ahead** of it (`row`), `AHEAD_DISTANCE` (4.9 m, a car
+length and 0.4 m) further up the road, and `shiftedAt` marks a surge or
+drop back under way. `aheadOf(car, roadTime)` is how far in front of the
+Level line a car is (0, 4.9 m, or in between, linearly over
+`SHIFT_SECONDS`, 0.4 s) and `noseOf` its own nose: every check of a car
+against the road (a crash, a dodge, a lane change, the CPU's view) uses
+it. Each round gets a fresh road from `rivalPlan` (three lanes, 120 bpm,
 14 m/s rising towards 19 m/s, pairs from beat 6, shifts from beat 8, rows
-with one gap from beat 20, `steering: 'two-button'`), with the cars on
-the outer lanes and the middle free. `stepRival` does, in order:
+with one gap from beat 20, `steering: 'two-button'` for the lane moves,
+`ahead: AHEAD_DISTANCE`), with the cars Level on the outer lanes and the
+middle free. `stepRival` does, in order:
 
-1. `moveCars`: both drivers' presses, resolved together (below).
-2. The road advances and hazards move, as in a run.
-3. `meetHazards` for each car: a crash, or a dodge when a donkey row goes
-   by (a row counts once per car), or an escape from a trap.
-4. `keepOnRoad` moves a ghost out of a lane that has ended; `comeBack`
-   brings crashed cars back as ghosts, and ghosts back to solid.
-5. `settleRound`: a full meter takes the round; two full meters on the
+1. `settleShift`: a surge or drop back that has taken its 0.4 s is over.
+2. `moveCars`: both drivers' presses, resolved together (below).
+3. The road advances and hazards move, as in a run.
+4. `meetHazards` for each car, at its own nose: a crash, or a dodge when a
+   donkey row goes by its tail (a row counts once per car; passed Ahead,
+   not half way through a surge, it adds `AHEAD_DODGE`, 1.25, to the
+   meter instead of 1), or an escape from a trap. A hazard counts as gone
+   for good once it is behind the Level car's tail, which is behind both.
+5. `comeBack` puts a crashed car back on the road once its time off is
+   up and `reentryLane` finds it a fair lane (below).
+6. `settleRound`: a full meter takes the round; two full meters on the
    same row make a dead heat.
 
-**Blocking and the same tick** ([ADR 0020](../../../docs/adr/0020-donkey-dash-two-car-blocking.md)).
-Each driver's input is turned into a target with `stepTarget`, from the
-lanes as they were at the start of the step. Then, for each car:
+**Cells, blocking and the same tick** ([ADR 0020](../../../docs/adr/0020-donkey-dash-two-car-blocking.md)).
+The road is a grid of **cells**, a lane and a row (`lane:level`,
+`lane:ahead`). A settled car fills one cell; a car surging or dropping
+back fills both cells of its lane (`cellsOf`); a car off the road fills
+none. Each driver's buttons become one **claim** (`claimOf`): a lane
+change if left or right was pressed, otherwise a surge or a drop back.
+Both claims are judged against the cells the cars held at the start of
+the step, so the order of the drivers never matters. For each car:
 
 ```mermaid
 flowchart TB
-  input["left or right this step"] --> target{"stepTarget gives an open lane?"}
+  input["this step's buttons"] --> kind{"left or right?"}
+  kind -- yes --> busy{"surging or dropping back?"}
+  busy -- yes --> bumpBusy["bump: busy"]
+  busy -- no --> target{"stepTarget, or a lane half widened in, at the car's own nose?"}
   target -- no --> edge["bump: edge"]
-  target -- yes --> solid{"both cars solid?"}
-  solid -- "no: a ghost or a crashed car" --> move["move"]
-  solid -- yes --> taken{"the other car's lane?"}
-  taken -- yes --> car["bump: car, honk, remember the block"]
-  taken -- no --> tie{"the other car's target too?"}
+  target -- yes --> laneCell["claim: the new lane, in the car's row"]
+  kind -- no --> shift{"surge or drop back, to a row it is not in and not on the way to?"}
+  shift -- no --> nothing["nothing to do"]
+  shift -- yes --> rowCell["claim: the other row of its lane"]
+  laneCell --> taken{"a cell the other car held at the start of the step?"}
+  rowCell --> taken
+  taken -- yes --> car["bump: car, honk, remember the block and the move"]
+  taken -- no --> tie{"a cell the other car claims too?"}
   tie -- yes --> neither["bump: tie, neither moves"]
-  tie -- no --> move
+  tie -- no --> move["move, or start the 0.4 s shift: holding both cells"]
 ```
 
-Both cars' targets are worked out before either moves, so the order of
-the drivers never matters and two racing cars can never swap or share a
-lane. A refused move is remembered with whatever was coming in that car's
-lane; if the car crashes within `TRAP_MEMORY_SECONDS` (1.6 s), or every
-safe lane at the row was on the far side of the other car, the crash is a
-**trap sprung** by the other car.
+So a car Ahead can change lanes across the bonnet of a car that is Level
+(the event says `cut: true` when it moves into that car's lane), but not
+into a lane where the other car is Ahead too or on its way; a drop back is
+refused when the other car holds the Level cell of its lane (the owner's
+"door shut"), and a car that is shifting can neither change lane nor be
+passed through in that lane. Lane presses win over surge and drop back
+pressed in the same step.
 
-**Crash, ghost, meter.** A crash empties the car's meter and its clean
-streak, takes it off the road for `CRASH_OUT_SECONDS` (1.3 s), and brings
-it back as a ghost for `GHOST_SECONDS` (1.2 s) in the open lane away from
-the other car with the most clear road ahead (`reentryLane`). A ghost
-cannot crash and does not block; it turns solid only on an open lane of
-its own. `METER_TARGET` is 8 clean donkey rows; rounds are first to
+A lane that is widening in beside the road can be taken once it is half
+there at the nose (`halfOpenLane`, within `TAPER_LENGTH / 2` of where it
+opens): the player can see it, and no donkey stands in a lane before it
+opens. The planner's proof does not count on this and only uses the lane
+from where it opens. Every press is carried out or refused in the step it
+is made, never later: an earlier version kept a press towards a lane that
+was not there yet and made the move when it opened, by which time the road
+had moved on and the car could land in front of a donkey.
+
+Both cars' claims are worked out before either moves, and a car may not
+follow the other into a cell it is leaving, so the order of the drivers
+never matters and two cars can never swap or share a cell. A refused move
+(a lane change, a cut, a surge or a drop back) is remembered with the
+move and whatever was coming in that car's lane; if the car crashes
+within `TRAP_MEMORY_SECONDS` (1.6 s), or, riding in the same row as the
+other car, every safe lane at the row was on its far side, the crash is a
+**trap sprung** by the other car (`doorShut` when the refused move was a
+drop back).
+
+**Crash, comeback, meter.** A crash, in either row or half way between,
+empties the car's meter and its clean streak and takes it off the road
+(`state: 'crashed'`) for at least `CRASH_OUT_SECONDS` (2.5 s); the event
+says how far Ahead it was, for the wreck. Off the road it takes up no
+cell. Then, each step, `reentryLane` looks for a lane to put it back in,
+Level and solid at once:
+
+- open, and not the lane the other car is in, in either row;
+- with no row of donkeys or barrier beside the cars at that moment;
+- safe past every row in view, so it can stay put until a new row turns up
+  (which then comes with the full reaction window);
+- leaving the other car a safe lane at each of those rows that it can reach
+  without going through it (`leavesWayPast`), so coming back never springs
+  a trap.
+
+Of those, the lane with the most clear road ahead wins; with none, the car
+waits a step and looks again. `METER_TARGET` is 8 clean donkey rows; rounds are first to
 `roundsToWin` (1 to 9, default 3). A dead heat switches the planner to
 `suddenDeath()`: from then on only rows with one gap.
 
 **The planner's promise** for Rival Driver: with `two-button` steering,
 the starting standing is every open lane, so each row is proved drivable
-from any lane a car might be in. A donkey row never blocks every open
-lane. The other car is the only thing that can take a way out away.
+from any lane a car might be in, **twice**: once for a car Level and once
+for a car `ahead` metres in front. A car Ahead meets each row and each
+lane end sooner, `ahead` metres earlier on the planner's clock, yet sees
+it come into view no earlier, so the planner keeps a second `Standing`
+for it (`aheadStanding`) and checks every row against both
+(`rowFits`, with `course(drive, lead)` and `met(row, lead)`). That is what
+sets `AHEAD_DISTANCE`: at the top speed of 19 m/s, 16 m of sight less
+4.9 m leaves 0.584 s, room for a reaction and two lane changes
+(0.3 + 2 × 0.14 s), so a row whose only gap is two lanes away is still
+fair from an outer lane. A donkey row never blocks every open lane. The
+other car is the only thing that can take a way out away.
 
 ### The CPU rival
 
@@ -491,20 +553,40 @@ lane. The other car is the only thing that can take a way out away.
 - It presses at most once every `pressGap`; it sometimes hesitates
   (`hesitation`, a 0.05–0.2 s pause) and sometimes misjudges a whole row
   (`blunder`).
+- It sees the road from its own nose (`viewFrom`): riding Ahead, a donkey
+  comes into view no earlier but is nearer, exactly as for a person. It
+  does nothing while its own surge or drop back is under way.
 - Each step it looks at the nearest row: first for a **trap**
   (`trapLane`: a lane safe for itself, within reach of `trapping`, that
   leaves the rival no way past while the rival still has one now, rolled
   once per row against `trapChance`), then for an **escape** (`route()`
-  with the rival's car as a wall, or without it if boxed in). With nothing
-  in view it leaves a lane that is ending, and a `wary` driver moves to the
-  middle lane.
+  with the rival's car as a wall when they share a row, or without it if
+  boxed in), and, settled and safe Level while the rival rides Ahead, to
+  **follow** it there. With nothing in view it leaves a lane that is
+  ending; Ahead it carries on **cutting across** to the lane it surged
+  for, then drops **back to Level**; Level it tries, in turn, to **shut
+  the door** (into the lane behind a rival riding Ahead), to follow the
+  rival Ahead, to **unpin** itself (beside the rival against the edge of
+  the road: surge, cut across, drop back on the far side), and a `wary`
+  driver moves to the middle lane.
+- `surging` says which of those it may do: `never` (Easy), `escape`
+  (Normal: unpin only), or `tactical` (Hard, Brutal: all of them), each
+  chance rolled once against `surgeChance`. Hard and Brutal stay Ahead
+  alongside a rival who rides Ahead, where they can still box it in.
+- `reactionSpread` (0 for the CPUs) and `ridesAhead` (0 for the CPUs) are
+  for the scripted humans of the playtests: people are not metronomes,
+  and some like the bonus.
 
-| Level | Name and car | Reaction | Press gap | Traps | Trap chance | Wary | Hesitation | Blunder |
-|---|---|---|---|---|---|---|---|---|
-| Easy | Dotty Dawdle, mint beetle | 0.50 s | 0.22 s | never | — | no | 30 % | 5 % |
-| Normal | Rusty Rowe, butter pickup | 0.42 s | 0.19 s | one lane over | 35 % | no | 22 % | 3 % |
-| Hard | Vera Vroom, cherry roadster | 0.36 s | 0.17 s | anywhere, lane ends too | 70 % | no | 18 % | 2.5 % |
-| Brutal | The Baron, midnight camper | 0.32 s | 0.16 s | anywhere, lane ends too | 90 % | yes | 14 % | 2 % |
+| Level | Name and car | Reaction | Press gap | Traps | Trap chance | Wary | Hesitation | Blunder | Surging | Surge chance |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Easy | Dotty Dawdle, mint beetle | 0.50 s | 0.22 s | never | — | no | 30 % | 5 % | never | — |
+| Normal | Rusty Rowe, butter pickup | 0.42 s | 0.19 s | one lane over | 35 % | no | 22 % | 3 % | to escape | 30 % |
+| Hard | Vera Vroom, cherry roadster | 0.36 s | 0.17 s | anywhere, lane ends too | 70 % | no | 18 % | 2.5 % | tactical | 60 % |
+| Brutal | The Baron, midnight camper | 0.32 s | 0.16 s | anywhere, lane ends too | 90 % | yes | 14 % | 2 % | tactical | 85 % |
+
+Against Easy over 32 seeded matches, Normal surges about 1.6 times a
+minute, Hard 3.2 and Brutal 4.1; Hard and Brutal pass about one row in
+seven Ahead (`rival.test.ts` keeps them between 5 % and 50 %).
 
 The names and cars live in `game/rivals.ts`; the friend's car is the
 player's own loadout in another paint.
@@ -539,8 +621,28 @@ works out the `Viewport` with room for the HUD bar (`hudInsets`), and hands
 the result to `shared/fx`.
 
 A `Frame` carries a list of cars (one in most modes, two in Rival Driver,
-each with its lane slide, look, ring colour and ghost flag), the road
-itself, every crash still playing, and which car the camera follows.
+each with its lane slide, look, driver colour, label and grace flag, and
+in Rival Driver how far `ahead` of the Level line it is and whether it is
+surging or dropping back), the road itself, every crash still playing
+(where the car was, Ahead or Level), and where the camera looks across
+the road (`focus`): the car in the one-car modes, the middle of the road
+in Rival Driver.
+
+**A car Ahead is drawn exactly where the engine counts it.** `Visuals`
+takes `aheadOf` at the moment between the last two steps that the frame
+stands for, the same moment as the interpolated nose, and adds nothing of
+its own: no easing past the engine, no nudge along the road for a refused
+surge or drop back (that is a jolt upwards instead, which moves nothing a
+donkey could be beside). Each view places the car, its ring, its label,
+its headlights and its wreck that far up the road. While a car is Ahead
+(or on its way) the view draws its **sight bracket**: two lines in its
+colour up the sides of its lane from its nose to the sight line, ending in
+ticks, over a faint wash, fading in with the surge. The headlights at
+night reach the sight line and no further, so a car Ahead lights less
+road. A surge kicks dust back from the rear wheels (`Effects.kick`); a
+drop back lights the brake lights (`CarPose.braking`).
+
+![Isometric, riding Ahead: the car a length in front of the CPU, its sight bracket running up the lane](../media/surge-iso.jpg)
 
 **The road's shape.** `lanes.ts` turns the engine's lane changes into what
 every view draws: `sliceAt` (the edges and lane dividers at a road
@@ -550,8 +652,9 @@ and the "lane ends" sign beside the road where it starts to close. Scenery
 (fences, verges, poles) is placed from the same edges, so it follows the
 road as it moves.
 
-- **Chase**: the camera follows the car (or the middle of the two cars)
-  part of the way across, so the road sways, and the road bends
+- **Chase**: the camera follows the car part of the way across, so the
+  road sways (with two cars it follows the road instead, so neither car
+  seems to move when the other one does), and the road bends
   (`bendOf`): a third of the gentle wander, plus a curve towards where the
   open lanes' middle will be at the crest (`SHIFT_BEND`), so the road
   swings over as soon as a new lane comes into view and straightens once
@@ -579,6 +682,22 @@ beyond it is drawn. The views meet that in their own way:
   the sight line, in any lane, just fits inside the top-right of the screen.
   Tall props stand only on the far side of the road.
 
+**Beside the car, a metre is a metre.** The views may stretch the road
+ahead, but never alongside or behind the car: there a donkey must pass the
+car at the scale the engine counts, or it would look past the car's tail
+while it can still be hit. Chase's `depthOf` and Isometric's `along` are
+stretched only for gaps ahead of the nose, and with two cars only beyond
+`AHEAD_DISTANCE`, so a car riding Ahead is true to scale too. Chase then
+moves the crest back if it must (`TWO_CAR_LEAST_STRETCH`), so the rest of
+the road is not squeezed so hard that donkeys seem to dawdle and then
+rush. The Isometric car is drawn at
+the 4.5 m the engine counts (`CAR_LENGTH`) whatever its body, and a
+donkey, which stands across the road and is thinner than the 1.2 m of road
+it blocks, is drawn in the middle of that stretch, as Chase and Classic
+place it. A donkey then looks clear of the car's tail within a frame of
+the engine letting a car move into its lane. `layout.test.ts` checks the
+true scale beside the car.
+
 A lane end is marked from where it starts to close, which comes into view
 a full sight before that, and its barrier is at least another sight
 further on: every view shows a closing lane at least one full reaction
@@ -600,21 +719,25 @@ There are no image files in the game; everything is drawn by code.
 | Sky, sun, crescent moon, mountains, snow caps, haze | `chase-view.ts` (`drawBackdrop`, `ridge`, `snowCaps`) |
 | Hedgerow and red-rock rim at the sight line | `classic-view.ts` (`drawHedgerow`) |
 | Headlights and the night overlay | `drawNight` in each view |
+| Rival Driver's sight bracket for a car Ahead | `drawSightMarks` in each view |
+| Brake lights while dropping back | `brakeGlow` in `sprites/car.ts`, used by `drawCarTop`, `drawCarRear` and `drawIsoCar` |
 | The crash, BOOM! and flash; the barrier's wobble and BONK! | `crash.ts` |
-| Particles, puffs from a bump, cones flying, garage trails | `effects.ts` |
-| Rival Driver's rings under the cars and HUD colours | `palette.ts` (`DRIVER_COLOURS`); ghosts fade with `ghostAlpha` in `view.ts` |
+| Particles, puffs from a bump, cones flying, garage trails, dust kicked up by a surge | `effects.ts` |
+| Rival Driver's rings under the cars and HUD colours | `palette.ts` (`DRIVER_COLOURS`) |
+| Rival Driver's YOU, CPU, P1 and P2 labels | `sprites/bits.ts` (`drawDriverTag`), placed by each view's `drawTags` after the night and the weather |
 | The CPU drivers' cars | `game/rivals.ts`, built from garage parts |
 | Weather | `weather.ts` |
 | Every colour: five looks × light and dark, coats, crops | `palette.ts` |
 | Bloom, grade, CRT, CGA | `stage.ts` settings for `shared/fx` |
 | Title logo, the 1981 box, mode card art (Rival Driver's two cars too), icons | `styles.css`, `ui/title-screen.ts`, `ui/icons.ts` |
-| Race meters, round pips, the key hints | `ui/hud.ts`, `styles.css` |
+| Race meters (quarters too), round pips, the ▲ AHEAD chip, the +¼ that floats off a plate, the touch pads | `ui/hud.ts`, `styles.css` |
 | The Hall's animated cover | `hall/covers/donkey-dash.ts` |
 
 **Audio** is synthesized with `shared/audio`. `audio/sounds.ts` holds the
 effect patches (lane whoosh, mud squelch, crash, carrot, beat tick, count-in
 and go, hop, commit, sign; for the shifting road and Rival Driver a clank of
-barrier and cones, the bump of a refused move and the respawn of a ghost),
+barrier and cones, the bump of a refused move, a car dropping back in, the
+rev of a surge and the tyre squeal of a drop back),
 the near-miss chimes that climb with the combo, the hee-haw (two brays,
 each a rising "hee" and a falling "haw" on a filtered sawtooth), the horns
 and the jingles. `audio/music.ts` builds each song from shared patches
@@ -666,25 +789,43 @@ How to run each suite, and what to try by hand, is in
     for inexact maths.
   - `duel.test.ts`: duels, the commit line, and gentle shifts that a quick
     driver always merges through.
-  - `rival.test.ts`: blocking, the same-tick rule, edges, crashes, ghosts,
-    traps, the meter, dead heats; for 30 seeds and both starting layouts,
-    no row fills every open lane and each car alone always has a way
-    through; each CPU level alone drives without a crash when it never
-    fumbles; and the **behaviour tests** over 16 seeded matches against
-    Easy: trap attempts per minute (none for Easy, more for Hard than
-    Normal), crash rates falling level by level but never zero, wins rising,
-    and the sight-line test.
+  - `rival.test.ts`: blocking in either driver order, the same-tick rule,
+    edges, lanes taken once half there; a car that only ever moves in a
+    step its driver steered (a random player over whole matches); crashes
+    beside a donkey but never into one that has gone by; traps, the meter,
+    dead heats; comebacks that never put
+    two cars in one lane (whole matches at every level), are always safe
+    past the rows in view and never spring a trap; for 30 seeds and both
+    starting layouts, no row fills every open lane and each car alone
+    always has a way through; each CPU level alone drives without a crash
+    when it never fumbles; the surge (0.4 s holding both cells, lane
+    presses bumped meanwhile, the owner's example, a refused drop back and
+    a refused surge, ties in either driver order, both cars Ahead, random
+    presses over whole matches that never put two cars in one cell or swap
+    them, the bonus, crashes while Ahead or surging and the comeback Level,
+    the fair sight Ahead, a door shut counted as a trap); the road proof
+    from every lane, Level and Ahead; and the **behaviour tests** over 32
+    seeded matches against Easy (and a rider who likes the bonus): trap
+    attempts per minute (none for Easy, more for Hard than Normal), crash
+    rates falling level by level but never zero, wins rising, surges per
+    minute (none for Easy, some for Normal, more for Hard and Brutal), the
+    share of rows Ahead, no bump for a lane change mid-surge or off the
+    road, doors shut on a rider more often by Hard and Brutal than by Easy
+    by chance, and the sight-line test.
   - `fingerprint.test.ts`, `run.test.ts`: the fingerprint, runs, stars and
     scoring.
 - **Views**: `render/layout.test.ts` checks fair sight in all three views,
-  over all four lane positions and with two cars.
+  over all four lane positions and with two cars; and, with a car riding
+  Ahead, that it is whole on screen, never covers a donkey on the sight
+  line, is drawn true to scale beside the road, and still has a reaction
+  and a press to spare at top speed.
 - **Game and UI logic**: settings (Rival keys and rounds), progress, daily
   share text and rules, the Pass reporter, music.
 - **Browser** (Playwright, `e2e/`):
   - `game.spec.ts` (`smoke` and `phone` projects): boot, one-button input,
     pause and camera switch, the daily flow, duels, two-player keys, Rival
-    Driver's two buttons and blocking, locked routes and garage items,
-    theme and reduced motion.
+    Driver's buttons and blocking, locked routes and garage items, theme
+    and reduced motion.
   - `engine.determinism.ts`: the same fingerprint, Rival matches included,
     in Chromium, Firefox and WebKit.
   - `drive.playtest.ts`: a phone-speed scripted player plays hundreds of
@@ -731,8 +872,19 @@ needs `DAILY_RULES` bumped.
 **Add a CPU level or tweak the AI.** Add a `CpuLevel`, its `DriverStyle`
 in `CPU_STYLES`, a name and car in `game/rivals.ts`, a label in the
 settings screen and its XP in `RIVAL_WIN_XP`. The behaviour tests in
-`rival.test.ts` expect the levels in order; the playtest's win rates show
-how it feels against people.
+`rival.test.ts` expect the levels in order, and the surges per minute to
+rise with them; the playtest's win rates show how it feels against
+people. A new surge tactic is one more function in `createRivalDriver`
+returning a `Plan`, tried in `decide` where it fits, rolled once per
+chance with `takes`.
+
+**Tune the surge.** `AHEAD_DISTANCE` is capped by the road proof: at the
+top speed, sight less the distance must leave a reaction and two presses
+(`rival.test.ts` and `layout.test.ts` say so if it does not).
+`SHIFT_SECONDS` sets how long a car is committed; `AHEAD_DODGE` how much
+a row Ahead is worth. Re-run the playtest's "riding Ahead pays against
+some levels" test and the numbers in `docs/games/donkey-dash.md` after
+any change.
 
 **Tweak the autopilot.** `createAutopilot` options: `reactionSeconds`,
 `pressGap`, `daring`, `greedy`. The demo uses a relaxed one; the tests use a
@@ -744,8 +896,8 @@ cosmetic to `pass.manifest.ts` with a level or badge unlock and the same id.
 
 ## Arcade Pass
 
-The manifest (`pass.manifest.ts`) declares 31 badges (five of them
-secret), 25 cosmetics and 11 stats. `main.ts` connects it with
+The manifest (`pass.manifest.ts`) declares 34 badges (five of them
+secret), 26 cosmetics and 12 stats. `main.ts` connects it with
 `connectPass` and mounts the shared unlock toasts.
 
 **Counting during play.** `PassReporter.observe` sees every run and duel
@@ -759,17 +911,22 @@ barrier at the end of a three-lane stretch without a crash) and the secret
 Worth It (crashing just after a carrot).
 
 `PassReporter.observeRace` does the same for Rival Driver, counting only
-what people do: the human drivers' dodges and merges, and traps sprung on
-the CPU (or, with two players on one browser, by either). Gotcha! unlocks
-on the first trap; Slippery when a human driver escapes a third trap in one
-match (the engine's `escape` event carries the count).
+what people do: the human drivers' dodges and merges, rows passed riding
+Ahead, and traps sprung on the CPU (or, with two players on one browser,
+by either). Gotcha! unlocks on the first trap, and Door Shut on the first
+whose crash came after a refused drop back (the crash event's
+`doorShut`); Slippery when a human driver escapes a third trap in one
+match (the engine's `escape` event carries the count); Slip Through on the
+first move across the bonnet of a Level car while Ahead (the move event's
+`cut`); Front Runner on the tenth row passed Ahead in one round (the
+count starts again at each `round` event).
 
 **Committing.** `commit()` sends the counts as progress on the counted
 badges (Hee-Haw Hundred, Carrot Cake, Whisker Master, On the Beat, Make Up
 Your Mind, Lane Changer, Merge Master) and as stats (dodged, near misses,
-carrots, best combo, merges, traps). It runs when a session ends, when the
-player leaves mid-run, and on `pagehide`, so the profile is written a
-handful of times per run.
+carrots, best combo, merges, traps, rows Ahead as `aheadRows`). It runs
+when a session ends, when the player leaves mid-run, and on `pagehide`,
+so the profile is written a handful of times per run.
 
 **XP and end-of-run badges.**
 
@@ -790,13 +947,14 @@ handful of times per run.
 | Any run | — | secret Photo Finish (finish on the last life); `runs` |
 
 Lane Changer (25 merges, bronze) and Merge Master (10 last-moment merges,
-silver) count in every one-button mode and in Rival Driver; Gotcha!
-(bronze), Slippery (silver), Rival Ready (gold) and Road Rage (secret)
-belong to Rival Driver.
+silver) count in every one-button mode and in Rival Driver; Gotcha! and
+Slip Through (bronze), Slippery, Door Shut and Front Runner (silver),
+Rival Ready (gold) and Road Rage (secret) belong to Rival Driver.
 
 **Cosmetics** unlock at Arcade levels 2 to 20 or with badges, and appear
 in the garage; a locked item shows how to earn it. Merge Master unlocks
-the Traffic cones trail, Rival Ready the Racing green paint.
+the Traffic cones trail, Rival Ready the Racing green paint, Front Runner
+the Turbo lime paint.
 
 **Toasts.** The toasts are held while a session is playing
 (`toasts.hold()` in `startSession`) and flushed when the results appear or

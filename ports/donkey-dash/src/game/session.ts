@@ -19,7 +19,9 @@ import { dailyRun, endlessRun } from '../engine/modes';
 import type { SignKind } from '../engine/road';
 import { legRun, legSeed, ROUTES, type RouteId } from '../engine/routes';
 import {
+  AHEAD_DODGE,
   createRival,
+  NO_INPUT,
   rivalMatch,
   stepRival,
   type RivalEvent,
@@ -53,10 +55,10 @@ import {
 } from '../render/palette';
 import type { Stage } from '../render/stage';
 import type { RoadView } from '../render/view';
-import type { Settings } from '../settings';
+import type { DriverKeys, Settings } from '../settings';
 import type { Hud, SteerLayout } from '../ui/hud';
 import { keyLabel } from '../ui/keys';
-import type { Controls } from './controls';
+import { RIVAL_MOVES, type Controls, type RivalMove } from './controls';
 import type { PassReporter } from './pass-report';
 import { soloCar, Visuals, type SceneCrash, type SceneState } from './visuals';
 
@@ -129,7 +131,9 @@ const SIGN_CAPTIONS: Record<SignKind, string> = {
   shift: 'The road shifts! When your lane ends, move over before the barrier.',
 };
 
-const NO_STEERING: RivalInput = { left: false, right: false };
+/** The labels on the two Rival cars, matching the plates' colours. */
+const CPU_TAGS = ['YOU', 'CPU'] as const;
+const FRIEND_TAGS = ['P1', 'P2'] as const;
 
 export class Session {
   paused = false;
@@ -141,9 +145,14 @@ export class Session {
   private lastPoint: 'donkey' | 'driver' | null = null;
   private lastCrash: Hazard | null = null;
   /** Rival Driver: each car's latest crash, while it plays out. */
-  private readonly rivalCrashes = new Map<RivalSide, { hazard: Hazard; at: number }>();
+  private readonly rivalCrashes = new Map<
+    RivalSide,
+    { hazard: Hazard; at: number; ahead: number }
+  >();
   private ended = false;
   private roundBanner = true;
+  /** Rival Driver: whether the caption on riding Ahead has been shown this match. */
+  private aheadExplained = false;
 
   constructor(private readonly options: SessionOptions) {
     const { request, settings, seed, hud, audio, controls } = options;
@@ -162,7 +171,7 @@ export class Session {
           : 'solo',
     );
     hud.layout(this.game.kind, request.kind === 'versus' || isFriendRival(request));
-    if (request.kind === 'rival') hud.steering(steerLayout(request, settings, options.names));
+    if (request.kind === 'rival') hud.steering(steerLayout(request, settings));
     hud.setMuted(audio.mix.muted);
     hud.show(true);
     this.syncHud();
@@ -230,6 +239,7 @@ export class Session {
       const { cars } = this.game.state;
       document.body.dataset.lanes = cars.map((car) => car.lane).join(',');
       document.body.dataset.meters = cars.map((car) => car.meter).join(',');
+      document.body.dataset.rows = cars.map((car) => car.row).join(',');
     }
     const scene = this.scene();
     document.body.dataset.moment =
@@ -276,7 +286,7 @@ export class Session {
         ? controls.steering(1)
         : driving
           ? game.cpu.decide(game.state)
-          : NO_STEERING;
+          : NO_INPUT;
       return { kind: 'rival', steering: [controls.steering(0), second] };
     }
     if (game.kind === 'duel' && game.state.config.versus) {
@@ -335,14 +345,14 @@ export class Session {
       );
     } else if (request.kind === 'rival') {
       hud.banner('Round 1', `${names[0]} against ${names[1]}`, 2);
-      const [first, second] = settings.rival.keys.map((pair) => pair.map(keyLabel).join(' '));
+      const [first, second] = settings.rival.keys.map((codes) => codes.map(keyLabel).join(' '));
       hud.showHint(
         touch
           ? request.opponent === 'cpu'
-            ? 'Tap the left or right of the screen to steer'
-            : 'Each player has a left and a right zone on their half'
+            ? 'Your pad: ◀ ▶ change lanes, ▲ surge Ahead, ▼ drop back'
+            : 'Each player has a pad in their corner: ◀ ▶ lanes, ▲ surge, ▼ drop back'
           : request.opponent === 'cpu'
-            ? `Steer with ${first} or ${second}`
+            ? `Lanes, surge and drop back: ${first} or ${second}`
             : `${names[0]}: ${first} · ${names[1]}: ${second}`,
       );
     } else {
@@ -362,7 +372,7 @@ export class Session {
     if (game.kind === 'rival') {
       events = stepRival(
         game.state,
-        inputs.kind === 'rival' ? inputs.steering : [NO_STEERING, NO_STEERING],
+        inputs.kind === 'rival' ? inputs.steering : [NO_INPUT, NO_INPUT],
       );
     } else if (game.kind === 'run') {
       events = stepRun(game.state, { driver: inputs.kind === 'buttons' && inputs.driver });
@@ -486,14 +496,28 @@ export class Session {
       case 'move':
         audio.play(SOUNDS.whoosh, { velocity: 0.7 });
         break;
+      case 'shift':
+        audio.play(event.to === 'ahead' ? SOUNDS.surge : SOUNDS.brake, { velocity: 0.8 });
+        if (event.to === 'ahead') this.explainAhead(event.car, game);
+        break;
+      case 'dodge':
+        if (event.ahead) hud.aheadBonus(event.car === 0 ? 'left' : 'right', AHEAD_DODGE - 1);
+        break;
       case 'bump':
         audio.play(SOUNDS.bump);
         if (event.reason !== 'edge') playHorn(audio, rivalLooks[event.car].horn);
         break;
       case 'crash':
-        this.rivalCrashes.set(event.car, { hazard: event.hazard, at: this.drive.roadTime });
+        this.rivalCrashes.set(event.car, {
+          hazard: event.hazard,
+          at: this.drive.roadTime,
+          ahead: event.ahead,
+        });
         this.crashSound(event.hazard);
-        if (event.trapped) hud.popup('Trapped!', 'crash', `by ${names[event.car === 0 ? 1 : 0]}`);
+        if (event.trapped) {
+          const by = `by ${names[event.car === 0 ? 1 : 0]}`;
+          hud.popup(event.doorShut ? 'Door shut!' : 'Trapped!', 'crash', by);
+        }
         break;
       case 'escape':
         hud.popup('Slipped out!', 'near', names[event.car]);
@@ -511,6 +535,16 @@ export class Session {
         );
         break;
     }
+  }
+
+  /** The first time a player surges, what riding Ahead gives and what it costs. */
+  private explainAhead(car: RivalSide, game: Extract<Game, { kind: 'rival' }>) {
+    if (this.aheadExplained || (game.cpu && car === 1)) return;
+    this.aheadExplained = true;
+    this.options.hud.caption(
+      'Riding Ahead: rows count a little more, but donkeys show up closer. ▼ drops back.',
+      4,
+    );
   }
 
   private crashSound(hazard: Hazard) {
@@ -589,6 +623,7 @@ export class Session {
           rounds: state.rounds[side],
           meter: car.meter,
           state: car.state,
+          ahead: car.state === 'racing' && car.row === 'ahead',
         };
       };
       hud.rival({
@@ -637,7 +672,13 @@ export class Session {
       for (const [side, crash] of this.rivalCrashes) {
         const age = drive.roadTime - crash.at;
         if (age < RIVAL_CRASH_SECONDS) {
-          crashes.push({ hazard: crash.hazard, age, car: side, look: rivalLooks[side] });
+          crashes.push({
+            hazard: crash.hazard,
+            age,
+            car: side,
+            look: rivalLooks[side],
+            ahead: crash.ahead,
+          });
         }
       }
       return {
@@ -649,10 +690,13 @@ export class Session {
                 {
                   id: side,
                   lane: car.lane,
-                  ghost: car.state === 'ghost',
+                  ghost: false,
                   stuck: false,
                   look: rivalLooks[side as RivalSide],
                   driver: side as RivalSide,
+                  tag: (game.cpu ? CPU_TAGS : FRIEND_TAGS)[side as RivalSide],
+                  row: car.row,
+                  shiftedAt: car.shiftedAt,
                 },
               ],
         ),
@@ -710,21 +754,29 @@ function isFriendRival(request: ModeRequest): boolean {
   return request.kind === 'rival' && request.opponent === 'friend';
 }
 
-/** Rival Driver's buttons for the HUD: each driver's own keys, or both pairs for one player. */
+/**
+ * Rival Driver's touch pads, with each driver's keys (both sets on the one
+ * pad against the CPU), labelled like the cars they steer.
+ */
 function steerLayout(
   request: Extract<ModeRequest, { kind: 'rival' }>,
   settings: Settings,
-  names: readonly [string, string],
 ): SteerLayout {
+  const keysOf = (...sets: DriverKeys[]) =>
+    Object.fromEntries(
+      RIVAL_MOVES.map((move, slot) => [
+        move,
+        sets.map((codes) => keyLabel(codes[slot] as string)).join(' '),
+      ]),
+    ) as Record<RivalMove, string>;
   const [first, second] = settings.rival.keys;
   if (request.opponent === 'cpu') {
-    const both = (side: 0 | 1) => `${keyLabel(first[side])} ${keyLabel(second[side])}`;
-    return { drivers: [{ name: names[0], keys: [both(0), both(1)] }] };
+    return { drivers: [{ name: CPU_TAGS[0], keys: keysOf(first, second) }] };
   }
   return {
-    drivers: [first, second].map((pair, index) => ({
-      name: names[index as 0 | 1],
-      keys: [keyLabel(pair[0]), keyLabel(pair[1])] as const,
+    drivers: [first, second].map((codes, index) => ({
+      name: FRIEND_TAGS[index as RivalSide],
+      keys: keysOf(codes),
     })),
   };
 }

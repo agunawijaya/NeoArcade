@@ -168,6 +168,12 @@ export const GARAGE: readonly GarageItem[] = [
     paint: { body: '#1f7a4d', shade: '#135033', trim: '#ffd23f' },
   },
   {
+    id: 'paint-lime',
+    slot: 'paint',
+    name: 'Turbo lime',
+    paint: { body: '#a6e22e', shade: '#73a516', trim: '#1d1a20' },
+  },
+  {
     id: 'paint-chrome',
     slot: 'paint',
     name: 'Chrome',

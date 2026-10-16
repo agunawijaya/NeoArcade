@@ -36,8 +36,18 @@ and with a scripted player. That leaves some gaps.
 - **Rival Driver with real people.** The CPU levels were tuned against two
   scripted players (`drive.playtest.ts`). Watch real players against
   Normal and Brutal, and two friends sharing one phone held sideways: is
-  the bump readable, do the touch zones feel right, and does the ghost read
-  as harmless? The styles are in `CPU_STYLES` (`engine/rival-cpu.ts`).
+  the bump readable, do the four-arrow pads fit two thumbs, and do the YOU
+  and CPU labels settle which car is whose? Does anyone find the surge
+  without being told, and is riding Ahead worth its shorter view for real
+  people (the scripted ones say: against Easy and Normal, yes; against Hard
+  and Brutal, no)? The styles are in `CPU_STYLES` (`engine/rival-cpu.ts`),
+  the surge's numbers in `engine/rival.ts`.
+- **Room for the thumbs in Chase.** On a phone held sideways, the Chase
+  view's two cars sit low, and a car in an outer lane can end up under its
+  driver's pad (the keys are see-through, but a thumb is not). Classic and
+  Isometric keep the cars clear. If real players mind, the two-car Chase
+  layout could keep the cars above the pads on touch screens, at the cost
+  of a smaller road.
 
 ## 2. Polish
 

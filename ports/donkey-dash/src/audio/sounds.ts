@@ -178,6 +178,37 @@ export const SOUNDS = {
     gain: 0.16,
     duration: 0.18,
   },
+  /** Rival Driver's surge Ahead: the engine revving up, and a gust of air. */
+  surge: [
+    {
+      wave: 'sawtooth',
+      frequency: 90,
+      glideTo: 2.4,
+      filter: { type: 'lowpass', frequency: 500, q: 4, sweepTo: 3 },
+      envelope: { attack: 0.02, decay: 0.25, sustain: 0.3, release: 0.12 },
+      gain: 0.22,
+      duration: 0.32,
+    },
+    {
+      wave: 'noise',
+      frequency: 400,
+      filter: { type: 'bandpass', frequency: 700, q: 1.2, sweepTo: 2.5 },
+      envelope: { attack: 0.03, decay: 0.2, sustain: 0.1, release: 0.1 },
+      gain: 0.12,
+      duration: 0.25,
+    },
+  ],
+  /** Dropping back: a short squeal of tyres. */
+  brake: [
+    {
+      wave: 'noise',
+      frequency: 1800,
+      filter: { type: 'bandpass', frequency: 2600, q: 9, sweepTo: 0.7 },
+      envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.1 },
+      gain: 0.2,
+      duration: 0.26,
+    },
+  ],
 } satisfies Record<string, Sound>;
 
 export type SoundName = keyof typeof SOUNDS;

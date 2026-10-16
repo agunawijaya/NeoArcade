@@ -243,6 +243,37 @@ export function drawBarrier(ctx: CanvasRenderingContext2D, time: number, wobble 
   }
 }
 
+/**
+ * A Rival driver's label, centred on (x, y) in screen pixels: a pill in the
+ * driver's colour, so each player can find their own car at a glance.
+ */
+export function drawDriverTag(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  colour: string,
+  x: number,
+  y: number,
+  height: number,
+) {
+  ctx.save();
+  ctx.font = `800 ${Math.round(height * 0.66)}px system-ui, "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const width = ctx.measureText(text).width + height * 0.9;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  ctx.shadowBlur = height * 0.3;
+  ctx.fillStyle = colour;
+  roundRect(ctx, x - width / 2, y - height / 2, width, height, height / 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(1, height * 0.1);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.stroke();
+  ctx.fillStyle = '#151024';
+  ctx.fillText(text, x, y + height * 0.04);
+  ctx.restore();
+}
+
 /** The "lane ends" warning: two lanes on a yellow diamond, one bending into the other. */
 export function drawLaneEndsSign(ctx: CanvasRenderingContext2D, merge: -1 | 1) {
   ctx.fillStyle = '#6b6b73';

@@ -154,7 +154,7 @@ export function buildSettingsScreen(
         ),
       ),
       group(
-        'Rival Driver · two buttons each',
+        'Rival Driver · four buttons each',
         keyLayout(settings.rival.keys, (keys) =>
           update({ ...settings, rival: { ...settings.rival, keys } }),
         ),
@@ -272,32 +272,42 @@ function stepper(
   );
 }
 
+/** The four moves in the order of a driver's keys, with their arrow and their name. */
+const MOVES = [
+  { arrow: '◀', name: 'lane left', slot: 'left' },
+  { arrow: '▶', name: 'lane right', slot: 'right' },
+  { arrow: '▲', name: 'surge Ahead', slot: 'surge' },
+  { arrow: '▼', name: 'drop back', slot: 'drop' },
+] as const;
+
 /**
- * Rival Driver's two buttons for each driver, drawn as key caps. Choosing a
- * cap waits for the next key and puts it there; a key another cap already
- * has swaps places with it, so the four always stay different.
+ * Rival Driver's four buttons for each driver, drawn as key caps in the
+ * shape of a cluster of arrow keys. Choosing a cap waits for the next key and
+ * puts it there; a key another cap already has swaps places with it, so the
+ * eight always stay different.
  */
 function keyLayout(keys: RivalKeys, change: (keys: RivalKeys) => void): HTMLElement {
-  const caps = keys.map((pair, driver) =>
+  const caps = keys.map((codes, driver) =>
     h(
       'div',
       { class: 'keys__driver', 'data-driver': String(driver) },
       h('span', { class: 'keys__name' }, `Driver ${driver + 1}`),
-      ...pair.map((code, side) =>
-        button(
-          h(
-            'span',
-            { class: 'keys__cap' },
-            h('b', {}, side === 0 ? '◀' : '▶'),
-            h('kbd', {}, keyLabel(code)),
-          ),
-          () => listen(driver, side),
-          'keys__button',
-          {
-            'aria-label': `Driver ${driver + 1}, steer ${side === 0 ? 'left' : 'right'}: ${keyLabel(code)}. Choose to change.`,
-            'data-focus-key': `key-${driver}-${side}`,
-          },
-        ),
+      h(
+        'div',
+        { class: 'keys__cluster' },
+        ...codes.map((code, index) => {
+          const move = MOVES[index] as (typeof MOVES)[number];
+          return button(
+            h('span', { class: 'keys__cap' }, h('b', {}, move.arrow), h('kbd', {}, keyLabel(code))),
+            () => listen(driver, index),
+            'keys__button',
+            {
+              'aria-label': `Driver ${driver + 1}, ${move.name}: ${keyLabel(code)}. Choose to change.`,
+              'data-focus-key': `key-${driver}-${index}`,
+              'data-slot': move.slot,
+            },
+          );
+        }),
       ),
     ),
   );
@@ -306,8 +316,8 @@ function keyLayout(keys: RivalKeys, change: (keys: RivalKeys) => void): HTMLElem
     'data-focus-key': 'keys-reset',
   });
 
-  const listen = (driver: number, side: number) => {
-    hint.textContent = `Press a key for Driver ${driver + 1}, ${side === 0 ? 'left' : 'right'}… (Esc to keep it)`;
+  const listen = (driver: number, slot: number) => {
+    hint.textContent = `Press a key for Driver ${driver + 1}, ${MOVES[slot]?.name}… (Esc to keep it)`;
     const onKey = (event: KeyboardEvent) => {
       // Ahead of the menus' own arrow keys: this key is meant for the slot.
       event.preventDefault();
@@ -317,14 +327,15 @@ function keyLayout(keys: RivalKeys, change: (keys: RivalKeys) => void): HTMLElem
         hint.textContent = 'Choose a key to change it.';
         return;
       }
-      const next: [[string, string], [string, string]] = [[...keys[0]], [...keys[1]]];
-      const current = next[driver]?.[side] as string;
-      for (const pair of next) {
-        for (let index = 0; index < 2; index++)
-          if (pair[index] === event.code) pair[index] = current;
+      const next = [[...keys[0]], [...keys[1]]];
+      const current = next[driver]?.[slot] as string;
+      for (const codes of next) {
+        for (let index = 0; index < codes.length; index++) {
+          if (codes[index] === event.code) codes[index] = current;
+        }
       }
-      (next[driver] as [string, string])[side] = event.code;
-      change(next);
+      (next[driver] as string[])[slot] = event.code;
+      change(next as unknown as RivalKeys);
     };
     window.addEventListener('keydown', onKey, true);
   };

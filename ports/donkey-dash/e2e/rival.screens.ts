@@ -5,16 +5,35 @@ import { createAutopilot } from '../src/engine/autopilot';
 import type { Drive } from '../src/engine/drive';
 import { endlessRun } from '../src/engine/modes';
 import { closingLaneAt } from '../src/engine/road';
-import { createRival, rivalMatch, stepRival, type RivalInput } from '../src/engine/rival';
-import { createRivalDriver, CPU_STYLES, type CpuLevel } from '../src/engine/rival-cpu';
+import {
+  AHEAD_DISTANCE,
+  createRival,
+  NO_INPUT,
+  rivalMatch,
+  stepRival,
+  type RivalEvent,
+} from '../src/engine/rival';
+import {
+  createRivalDriver,
+  CPU_STYLES,
+  type CpuLevel,
+  type DriverStyle,
+} from '../src/engine/rival-cpu';
 import { createRun, stepRun, type RunConfig } from '../src/engine/run';
-import { defaultSettings, type CameraView, type Settings } from '../src/settings';
+import { RIVAL_MOVES } from '../src/game/controls';
+import {
+  DEFAULT_RIVAL_KEYS,
+  defaultSettings,
+  type CameraView,
+  type Settings,
+} from '../src/settings';
 import { driveTo, openGame, run, runUntil, startMode, type OpenOptions } from './helpers';
 
 /**
  * Screenshots of the shifting road and Rival Driver, for art direction and
  * the docs: a lane closing ahead, a car that stayed in it too long, a trap
- * being sprung, the results, and the touch zones on a phone held sideways.
+ * being sprung, a surge Ahead from start to drop back, a door shut, the
+ * results, and the touch pads on a phone held sideways.
  * As in art.screens.ts, every moment is reached by playing: the presses are
  * worked out in Node and replayed into the page.
  *
@@ -160,44 +179,134 @@ test.describe('the shifting road', () => {
 
 interface RaceInput {
   step: number;
-  key: 'KeyA' | 'KeyD';
+  key: string;
+}
+
+/** The first round of a Rival match in Node, the player in the left car: their presses, and what happened when. */
+interface RaceLog {
+  inputs: RaceInput[];
+  events: { step: number; event: RivalEvent }[];
+}
+
+function playRace(seed: number, player: DriverStyle, cpu: CpuLevel): RaceLog {
+  const state = createRival(rivalMatch(seed, 3));
+  const me = createRivalDriver(player, 0, seed * 7);
+  const rival = createRivalDriver(CPU_STYLES[cpu], 1, seed + 1);
+  const log: RaceLog = { inputs: [], events: [] };
+  while (state.drive.steps < 60 * 90 && state.round === 1 && state.phase.kind === 'race') {
+    const mine = me.decide(state);
+    const move = RIVAL_MOVES.findIndex((candidate) => mine[candidate]);
+    if (move >= 0) {
+      log.inputs.push({ step: state.drive.steps, key: DEFAULT_RIVAL_KEYS[0][move] as string });
+    }
+    for (const event of stepRival(state, [mine, rival.decide(state)])) {
+      log.events.push({ step: state.drive.steps, event });
+    }
+  }
+  return log;
+}
+
+/** The step of the first event of the player's car that `matches`, from step `after` on. */
+function mine(log: RaceLog, after: number, matches: (event: RivalEvent) => boolean) {
+  return log.events.find(
+    ({ step, event }) => step >= after && 'car' in event && event.car === 0 && matches(event),
+  )?.step;
+}
+
+/** Just after the CPU refused one of a hesitant player's moves, and the player then crashed. */
+function trapIn(log: RaceLog) {
+  const crash = mine(log, 0, (event) => event.type === 'crash' && event.trapped);
+  if (crash === undefined) return null;
+  const bump = log.events.findLast(
+    ({ step, event }) =>
+      step < crash && event.type === 'bump' && event.car === 0 && event.reason === 'car',
+  );
+  return bump ? [bump.step + 4] : null;
 }
 
 /**
- * A Rival match against the CPU in Node, with a hesitant player in the other
- * car, up to the moment the CPU boxes that player in: the player's presses,
- * and the step just after the move that was refused.
+ * The owner's example: boxed in, the player surges Ahead, cuts across in
+ * front of the CPU and drops back on the other side. A frame from each.
  */
-function planTrap(seed: number, cpu: CpuLevel) {
-  const state = createRival(rivalMatch(seed, 3));
-  const player = createRivalDriver({ ...CPU_STYLES.easy, blunder: 0 }, 0, seed * 7);
-  const rival = createRivalDriver(CPU_STYLES[cpu], 1, seed + 1);
-  const inputs: RaceInput[] = [];
-  let bumpedAt = -1;
-  for (let step = 0; step < 60 * 90 && state.round === 1 && state.phase.kind === 'race'; step++) {
-    const mine: RivalInput = player.decide(state);
-    if (mine.left || mine.right) {
-      inputs.push({ step: state.drive.steps, key: mine.left ? 'KeyA' : 'KeyD' });
-    }
-    const events = stepRival(state, [mine, rival.decide(state)]);
-    for (const event of events) {
-      if (event.type === 'bump' && event.car === 0 && event.reason === 'car') {
-        bumpedAt = state.drive.steps;
-      }
-      if (event.type === 'crash' && event.car === 0 && event.trapped && bumpedAt > 0) {
-        return { inputs, step: bumpedAt + 4 };
-      }
-    }
+function slipThroughIn(log: RaceLog) {
+  for (const { step: blocked, event } of log.events) {
+    if (event.type !== 'bump' || event.car !== 0 || event.move !== 'lane') continue;
+    const surge = mine(log, blocked, (next) => next.type === 'shift' && next.to === 'ahead');
+    if (surge === undefined || surge - blocked > 90) continue;
+    const cut = mine(log, surge, (next) => next.type === 'move' && next.cut);
+    if (cut === undefined || cut - surge > 90) continue;
+    const drop = mine(log, cut, (next) => next.type === 'shift' && next.to === 'level');
+    const crash = mine(log, surge, (next) => next.type === 'crash');
+    if (drop === undefined || drop - cut > 120) continue;
+    if (crash !== undefined && crash < drop + 40) continue;
+    return [surge + 12, cut + 8, drop + 12];
   }
   return null;
 }
 
-/** A Rival match in Node up to the moment the player's car is back on the road as a ghost. */
+/** A drop back refused, the CPU sitting in the player's Level slot. */
+function doorShutIn(log: RaceLog) {
+  const step = mine(
+    log,
+    0,
+    (event) => event.type === 'bump' && event.move === 'drop' && event.reason === 'car',
+  );
+  return step === undefined ? null : [step + 3];
+}
+
+/** A crash while riding Ahead, playing out. */
+function crashAheadIn(log: RaceLog) {
+  const step = mine(
+    log,
+    0,
+    (event) => event.type === 'crash' && event.ahead >= AHEAD_DISTANCE - 0.01,
+  );
+  return step === undefined ? null : [step + 24];
+}
+
+/** The first seed whose match gives the moments `find` looks for, and the presses to get there. */
+function findRace(player: DriverStyle, cpu: CpuLevel, find: (log: RaceLog) => number[] | null) {
+  for (let seed = 1; seed < 400; seed++) {
+    const log = playRace(seed, player, cpu);
+    const steps = find(log);
+    if (steps) return { seed, inputs: log.inputs, steps };
+  }
+  throw new Error('No match gave that moment.');
+}
+
+/** Opens a match against the CPU on the race's seed and shoots each of its steps, replaying the player's presses. */
+async function shootRace(
+  page: Page,
+  race: ReturnType<typeof findRace>,
+  open: { size: SizeName; theme: 'light' | 'dark'; cpu: CpuLevel; camera: CameraView },
+  names: readonly string[],
+) {
+  await openAt(page, open.size, open.theme, {
+    seed: race.seed,
+    settings: rivalSettings(open.cpu, open.camera),
+  });
+  await page.locator('[data-rival="cpu"]').click({ force: true });
+  const keys = new Map(race.inputs.map((input) => [input.step, input.key]));
+  for (const [index, step] of race.steps.entries()) {
+    await driveTo(
+      page,
+      race.inputs.map((input) => input.step),
+      step,
+      (at) => page.keyboard.press(keys.get(at) ?? 'KeyD'),
+    );
+    await shoot(page, names[index] as string);
+  }
+}
+
+/** A player who surges like the Hard CPU, to show the surge off. */
+const SURGER: DriverStyle = { ...CPU_STYLES.hard, blunder: 0, hesitation: 0.1 };
+
+/** A Rival match in Node up to the moment the player's car drops back onto the road. */
 function planRespawn(seed: number) {
   const state = createRival(rivalMatch(seed, 3));
   const rival = createRivalDriver(CPU_STYLES.normal, 1, seed + 1);
   for (let step = 0; step < 60 * 90 && state.round === 1 && state.phase.kind === 'race'; step++) {
-    const events = stepRival(state, [{ left: false, right: false }, rival.decide(state)]);
+    const events = stepRival(state, [NO_INPUT, rival.decide(state)]);
     if (events.some((event) => event.type === 'respawn' && event.car === 0)) {
       return state.drive.steps + 12;
     }
@@ -216,29 +325,47 @@ test.describe('Rival Driver', () => {
       ['landscape', 'light'],
     ] as const) {
       test(`a trap sprung, ${camera}, ${size}, ${theme}`, async ({ page }) => {
-        let found: { seed: number; inputs: RaceInput[]; step: number } | null = null;
-        for (let seed = 1; seed < 300 && !found; seed++) {
-          const trap = planTrap(seed, 'hard');
-          if (trap) found = { seed, ...trap };
-        }
-        if (!found) throw new Error('The CPU never sprang a trap.');
-        const { seed, inputs, step } = found;
-        await openAt(page, size, theme, { seed, settings: rivalSettings('hard', camera) });
-        await page.locator('[data-rival="cpu"]').click({ force: true });
-        const keys = new Map(inputs.map((input) => [input.step, input.key]));
-        await driveTo(
-          page,
-          inputs.map((input) => input.step),
-          step,
-          (at) => page.keyboard.press(keys.get(at) ?? 'KeyD'),
-        );
-        await shoot(page, `rival-trap-${camera}-${size}-${theme}`);
+        const race = findRace({ ...CPU_STYLES.easy, blunder: 0 }, 'hard', trapIn);
+        await shootRace(page, race, { size, theme, cpu: 'hard', camera }, [
+          `rival-trap-${camera}-${size}-${theme}`,
+        ]);
       });
     }
   }
 
+  for (const camera of VIEWS) {
+    for (const [size, theme] of [
+      ['desktop', 'dark'],
+      ['laptop', 'light'],
+    ] as const) {
+      test(`the surge: boxed in, Ahead, across and back, ${camera}, ${size}, ${theme}`, async ({
+        page,
+      }) => {
+        const race = findRace(SURGER, 'hard', slipThroughIn);
+        const names = ['surge', 'cut', 'drop'].map(
+          (moment) => `surge-${moment}-${camera}-${size}-${theme}`,
+        );
+        await shootRace(page, race, { size, theme, cpu: 'hard', camera }, names);
+      });
+    }
+
+    test(`a drop back refused, the door shut, ${camera}`, async ({ page }) => {
+      const race = findRace(SURGER, 'brutal', doorShutIn);
+      await shootRace(page, race, { size: 'landscape', theme: 'dark', cpu: 'brutal', camera }, [
+        `surge-door-shut-${camera}`,
+      ]);
+    });
+
+    test(`a crash while riding Ahead, ${camera}`, async ({ page }) => {
+      const race = findRace({ ...SURGER, blunder: 0.05 }, 'hard', crashAheadIn);
+      await shootRace(page, race, { size: 'laptop', theme: 'light', cpu: 'hard', camera }, [
+        `surge-crash-${camera}`,
+      ]);
+    });
+  }
+
   for (const camera of ['classic', 'chase'] as const) {
-    test(`a crashed car back as a ghost, ${camera}`, async ({ page }) => {
+    test(`a crashed car dropping back onto the road, ${camera}`, async ({ page }) => {
       let seed = 1;
       let step = planRespawn(seed);
       while (step === null && seed < 100) step = planRespawn(++seed);
@@ -246,7 +373,7 @@ test.describe('Rival Driver', () => {
       await openAt(page, 'desktop', 'light', { seed, settings: rivalSettings('normal', camera) });
       await page.locator('[data-rival="cpu"]').click({ force: true });
       await driveTo(page, [], step, async () => undefined);
-      await shoot(page, `rival-ghost-${camera}`);
+      await shoot(page, `rival-comeback-${camera}`);
     });
   }
 
@@ -280,7 +407,7 @@ test.describe('Rival Driver', () => {
     test.use({ hasTouch: true, isMobile: true });
 
     for (const theme of ['dark', 'light'] as const) {
-      test(`the touch zones, ${theme}`, async ({ page }) => {
+      test(`the touch pads, two players, ${theme}`, async ({ page }) => {
         await openAt(page, 'landscape', theme, { settings: { camera: 'chase' } });
         await page.locator('[data-rival="friend"]').click({ force: true });
         await runUntil(page, () => document.body.dataset.phase === 'play', 20_000, 16);
@@ -288,6 +415,14 @@ test.describe('Rival Driver', () => {
         await shoot(page, `rival-touch-landscape-${theme}`);
       });
     }
+
+    test('the touch pad against the CPU, riding Ahead', async ({ page }) => {
+      const race = findRace(SURGER, 'hard', slipThroughIn);
+      const open = { size: 'landscape', theme: 'light', cpu: 'hard', camera: 'iso' } as const;
+      await shootRace(page, { ...race, steps: race.steps.slice(1, 2) }, open, [
+        'surge-touch-landscape-light',
+      ]);
+    });
   });
 
   test('the title, with Rival Driver among the modes', async ({ page }) => {
@@ -296,7 +431,7 @@ test.describe('Rival Driver', () => {
     await shoot(page, 'rival-title-desktop-dark');
   });
 
-  test('the settings: CPU, rounds and the two-button layout', async ({ page }) => {
+  test('the settings: CPU, rounds and the four buttons each', async ({ page }) => {
     await openAt(page, 'desktop', 'dark');
     await page.getByRole('button', { name: 'Settings' }).click({ force: true });
     await page.locator('[data-focus-key="key-0-0"]').scrollIntoViewIfNeeded();

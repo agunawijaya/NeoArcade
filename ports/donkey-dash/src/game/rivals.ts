@@ -38,8 +38,11 @@ export const CPU_RIVALS: Record<CpuLevel, CpuRival> = {
   },
 };
 
-/** The friend's car in Rival Driver: yours, in a paint that tells the two apart. */
+/**
+ * The friend's car in Rival Driver: yours, in a red that goes with Player 2's
+ * pink, and never in Player 1's paint.
+ */
 export function friendLook(loadout: Loadout): Look {
-  const paint = loadout.paint === 'paint-sky' ? 'paint-sunset' : 'paint-sky';
+  const paint = loadout.paint === 'paint-cherry' ? 'paint-lilac' : 'paint-cherry';
   return lookOf({ ...loadout, paint });
 }

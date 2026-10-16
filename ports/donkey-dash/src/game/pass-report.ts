@@ -74,6 +74,9 @@ export class PassReporter {
   private merges = 0;
   private lateMerges = 0;
   private traps = 0;
+  private aheadRows = 0;
+  /** Rival Driver: rows passed riding Ahead this round, by each car. */
+  private aheadThisRound: [number, number] = [0, 0];
   private lastCarrotAt = -Infinity;
   private heldDodgeAt = -Infinity;
   private threeLaneClean = false;
@@ -138,17 +141,29 @@ export class PassReporter {
    */
   observeRace(event: RivalEvent, cpu: RivalSide | null) {
     switch (event.type) {
+      case 'round':
+        this.aheadThisRound = [0, 0];
+        break;
       case 'dodge':
-        if (event.car !== cpu) this.dodged += 1;
+        if (event.car === cpu) break;
+        this.dodged += 1;
+        if (event.ahead) {
+          this.aheadRows += 1;
+          this.aheadThisRound[event.car] += 1;
+          if (this.aheadThisRound[event.car] >= 10) this.pass.unlock('front-runner');
+        }
         break;
       case 'move':
-        if (event.car !== cpu && event.merging) this.merges += 1;
+        if (event.car === cpu) break;
+        if (event.merging) this.merges += 1;
+        if (event.cut) this.pass.unlock('slip-through');
         break;
       case 'crash':
         // The CPU caught out, or, with two players on one browser, either of them.
         if (event.trapped && (cpu === null || event.car === cpu)) {
           this.traps += 1;
           this.pass.unlock('gotcha');
+          if (event.doorShut) this.pass.unlock('door-shut');
         }
         break;
       case 'escape':
@@ -168,6 +183,7 @@ export class PassReporter {
     if (this.lateMerges > 0) this.pass.progress('merge-master', { add: this.lateMerges });
     if (this.merges > 0) this.pass.stat('merges', { add: this.merges });
     if (this.traps > 0) this.pass.stat('traps', { add: this.traps });
+    if (this.aheadRows > 0) this.pass.stat('aheadRows', { add: this.aheadRows });
     if (this.dodged > 0) this.pass.stat('dodged', { add: this.dodged });
     if (this.nearMisses > 0) this.pass.stat('nearMisses', { add: this.nearMisses });
     if (this.carrots > 0) this.pass.stat('carrots', { add: this.carrots });
@@ -182,6 +198,7 @@ export class PassReporter {
     this.merges = 0;
     this.lateMerges = 0;
     this.traps = 0;
+    this.aheadRows = 0;
   }
 
   finishRun(summary: RunSummary) {

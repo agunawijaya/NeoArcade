@@ -17,12 +17,13 @@ export const MODE_IDS: readonly ModeId[] = [
 export const CAMERA_VIEWS: readonly CameraView[] = ['chase', 'classic', 'iso'];
 export const SCREEN_FILTERS: readonly ScreenFilter[] = ['none', 'crt', 'cga'];
 
-/** Rival Driver's keys, by KeyboardEvent.code: each driver's left and right. */
-export type RivalKeys = readonly [readonly [string, string], readonly [string, string]];
+/** One Rival driver's keys, by KeyboardEvent.code: a lane left, a lane right, surge, drop back. */
+export type DriverKeys = readonly [string, string, string, string];
+export type RivalKeys = readonly [DriverKeys, DriverKeys];
 
 export const DEFAULT_RIVAL_KEYS: RivalKeys = [
-  ['KeyA', 'KeyD'],
-  ['ArrowLeft', 'ArrowRight'],
+  ['KeyA', 'KeyD', 'KeyW', 'KeyS'],
+  ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'],
 ];
 
 export type RivalOpponent = 'cpu' | 'friend';
@@ -112,17 +113,26 @@ export function sanitiseSettings(raw: unknown): Settings {
   };
 }
 
-/** Four different key codes, two per driver, or nothing. */
+/**
+ * Eight different key codes, four per driver, or nothing. Keys kept from
+ * before the surge, a left and a right each, get the default surge and drop
+ * back keys added, as long as all eight stay different.
+ */
 function rivalKeys(value: unknown): RivalKeys | null {
   if (!Array.isArray(value) || value.length !== 2) return null;
-  const pairs = value.filter(
-    (pair): pair is [string, string] =>
-      Array.isArray(pair) &&
-      pair.length === 2 &&
-      pair.every((code) => typeof code === 'string' && /^[A-Za-z0-9]{1,24}$/.test(code)),
-  );
-  if (pairs.length !== 2 || new Set(pairs.flat()).size !== 4) return null;
-  return [pairs[0], pairs[1]] as RivalKeys;
+  const drivers = value.map((keys: unknown, driver) => {
+    if (!Array.isArray(keys) || !keys.every(isKeyCode)) return null;
+    if (keys.length === 4) return keys as string[];
+    if (keys.length === 2) return [...keys, ...(DEFAULT_RIVAL_KEYS[driver] as DriverKeys).slice(2)];
+    return null;
+  });
+  const [first, second] = drivers;
+  if (!first || !second || new Set([...first, ...second]).size !== 8) return null;
+  return [first, second] as unknown as RivalKeys;
+}
+
+function isKeyCode(code: unknown): code is string {
+  return typeof code === 'string' && /^[A-Za-z0-9]{1,24}$/.test(code);
 }
 
 function oneOf<T extends string>(value: unknown, options: readonly T[], otherwise: T): T {

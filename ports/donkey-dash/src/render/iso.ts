@@ -1,5 +1,6 @@
 import type { BodyShape, HatStyle, Paint } from '../garage';
 import { mix, type Coat } from './palette';
+import { brakeGlow } from './sprites/car';
 
 /**
  * True 2:1 isometric drawing. The road runs along `u` (up and to the right
@@ -253,6 +254,8 @@ export interface IsoCarPose {
   paint: Paint;
   daylight: number;
   lean: number;
+  /** Rival Driver: dropping back, brake lights blazing. */
+  braking?: boolean;
 }
 
 /** The car as blocks: chassis, cabin, wheels, lights. Its nose is at `u`, centred on `v`. */
@@ -348,6 +351,9 @@ export function drawIsoCar(
   for (const offset of [0.18, width - 0.46]) {
     const light = iso(projection, back, left + offset, z + shape.height * 0.62);
     const next = iso(projection, back, left + offset + 0.28, z + shape.height * 0.62);
+    if (pose.braking) {
+      brakeGlow(ctx, (light.x + next.x) / 2, (light.y + next.y) / 2, projection.unit * 0.8);
+    }
     ctx.strokeStyle = '#ff4d4d';
     ctx.lineWidth = Math.max(1.5, projection.unit * 0.14);
     ctx.beginPath();

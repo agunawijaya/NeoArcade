@@ -234,6 +234,7 @@ function rivalResults(
       rows: [
         row('Rounds', (side) => state.rounds[side]),
         row('Dodges', (side) => stats(side).dodges),
+        row('… of them Ahead', (side) => stats(side).aheadDodges),
         row('Crashes', (side) => stats(side).crashes),
         row('Traps sprung', (side) => stats(side).trapsSprung),
         row('Longest clean streak', (side) => stats(side).bestStreak),

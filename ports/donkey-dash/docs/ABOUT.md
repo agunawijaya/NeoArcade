@@ -88,8 +88,10 @@ Donkey Dash keeps all of that and builds a road trip around it.
   rival needs just as a donkey turns up in theirs. Race a friend on one
   keyboard, one screen or two gamepads, or take on four CPU drivers, from
   Dotty Dawdle, who waves at every donkey, to The Baron, who sets traps,
-  slips yours, and only now and then sneezes. Two buttons each, for once:
-  left and right.
+  slips yours, and only now and then sneezes. Boxed in? Surge a car length
+  ahead, cut across your rival's bonnet and drop back on the far side,
+  unless they have slid into the gap behind you and shut the door. Four
+  buttons each, for once: left, right, surge and drop back.
 
 ![Rival Driver: an orange car and Vera Vroom's red roadster side by side, a donkey ahead](../media/rival.jpg "Rival Driver: who moves over first?")
 

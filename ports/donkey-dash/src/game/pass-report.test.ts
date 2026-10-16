@@ -138,4 +138,33 @@ describe('PassReporter', () => {
     expect(pass.hasBadge('donkey-supreme')).toBe(true);
     expect(pass.statOf('runs')).toBe(2);
   });
+
+  it('rewards the surge in Rival Driver: Slip Through, Door Shut, Front Runner', () => {
+    const { pass, report } = reporter();
+    const dodge = (car: 0 | 1, ahead: boolean) =>
+      report.observeRace({ type: 'dodge', car, hazard: donkey(), meter: 1, ahead }, 1);
+    const cut = { type: 'move', from: 0, to: 1, merging: false, cut: true } as const;
+    // What the CPU does counts for nothing.
+    report.observeRace({ ...cut, car: 1 }, 1);
+    for (let row = 0; row < 12; row++) dodge(1, true);
+    expect(pass.hasBadge('slip-through')).toBe(false);
+    expect(pass.hasBadge('front-runner')).toBe(false);
+    report.observeRace({ ...cut, car: 0 }, 1);
+    expect(pass.hasBadge('slip-through')).toBe(true);
+    // Ten rows Ahead, but not in one round.
+    for (let row = 0; row < 6; row++) dodge(0, true);
+    report.observeRace({ type: 'round', round: 2 }, 1);
+    for (let row = 0; row < 9; row++) dodge(0, row !== 4);
+    expect(pass.hasBadge('front-runner')).toBe(false);
+    dodge(0, true);
+    dodge(0, true);
+    expect(pass.hasBadge('front-runner')).toBe(true);
+    report.observeRace(
+      { type: 'crash', car: 1, hazard: donkey(), trapped: true, doorShut: true, ahead: 0 },
+      1,
+    );
+    expect(pass.hasBadge('door-shut')).toBe(true);
+    report.commit();
+    expect(pass.statOf('aheadRows')).toBe(16);
+  });
 });

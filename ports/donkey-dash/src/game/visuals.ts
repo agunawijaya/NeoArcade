@@ -1,8 +1,8 @@
-import { CAR_LENGTH } from '../engine/constants';
+import { CAR_LENGTH, STEP_SECONDS } from '../engine/constants';
 import type { Drive, DriveEvent } from '../engine/drive';
 import type { Hazard } from '../engine/hazards';
 import { laneLateral, roadCentreAt } from '../engine/road';
-import type { RivalEvent } from '../engine/rival';
+import { aheadOf, type RivalEvent, type Row } from '../engine/rival';
 import type { HatStyle, Look } from '../garage';
 import { Effects } from '../render/effects';
 import type { Palette } from '../render/palette';
@@ -23,6 +23,10 @@ export interface SceneCar {
   stuck: boolean;
   look: Look;
   driver: 0 | 1 | null;
+  tag: string | null;
+  /** Rival Driver: the row it rides in, and when its surge or drop back began, if it is under way. */
+  row: Row;
+  shiftedAt: number | null;
 }
 
 export interface SceneCrash {
@@ -31,6 +35,8 @@ export interface SceneCrash {
   /** The id of the car that crashed. */
   car: number;
   look: Look;
+  /** Rival Driver: how far in front of the Level line it was when it hit. */
+  ahead?: number;
 }
 
 export interface SceneState {
@@ -60,14 +66,21 @@ export function soloCar(drive: Drive, look: Look): SceneCar {
     stuck: car.heldPresses.length > 0,
     look,
     driver: null,
+    tag: null,
+    row: 'level',
+    shiftedAt: null,
   };
 }
 
 interface CarMotion {
   lateral: number | null;
+  /** Metres in front of the Level line, as last drawn. */
+  ahead: number;
   hopStart: number;
   bumpStart: number;
+  /** Which way a refused lane change went; a refused surge or drop back (`bumpAlong`) has none. */
   bumpDirection: number;
+  bumpAlong: boolean;
 }
 
 interface HazardMotion {
@@ -124,19 +137,38 @@ export class Visuals {
         const motion = this.carMotion(bump.car);
         const lateral = motion.lateral ?? laneLateral(bump.lane);
         motion.bumpStart = this.time;
-        motion.bumpDirection = Math.sign(laneLateral(bump.lane) - lateral) || 1;
+        // A refused lane change shudders towards the lane; a refused surge or drop back jolts in place.
+        motion.bumpAlong = bump.move !== 'lane';
+        motion.bumpDirection = motion.bumpAlong
+          ? 1
+          : Math.sign(laneLateral(bump.lane) - lateral) || 1;
         if (bump.reason !== 'edge') {
+          const end = bump.move === 'drop' ? -CAR_LENGTH : bump.move === 'surge' ? 0.2 : -0.4;
           this.effects.puff(
-            drive.car.nose - 0.4,
-            (lateral + motion.bumpDirection * 0.35) * LANE_METRES,
+            drive.car.nose + motion.ahead + end,
+            (lateral + (motion.bumpAlong ? 0 : motion.bumpDirection * 0.35)) * LANE_METRES,
+          );
+        }
+        break;
+      }
+      case 'shift': {
+        const { car, to } = event as Extract<RivalEvent, { type: 'shift' }>;
+        const motion = this.carMotion(car);
+        if (to === 'ahead' && !this.reducedMotion()) {
+          this.effects.kick(
+            drive.car.nose + motion.ahead - CAR_LENGTH,
+            (motion.lateral ?? 0) * LANE_METRES,
           );
         }
         break;
       }
       case 'respawn': {
-        // Back on the road somewhere else: it appears there rather than sliding across.
-        const { car } = event as Extract<RivalEvent, { type: 'respawn' }>;
-        this.carMotion(car).lateral = null;
+        // Back on the road somewhere else: it drops in there rather than sliding across.
+        const { car, lane } = event as Extract<RivalEvent, { type: 'respawn' }>;
+        const motion = this.carMotion(car);
+        motion.lateral = null;
+        motion.hopStart = this.time;
+        this.effects.puff(drive.car.nose - CAR_LENGTH / 2, laneLateral(lane) * LANE_METRES);
         break;
       }
       case 'hop': {
@@ -198,7 +230,11 @@ export class Visuals {
     const { drive } = scene;
     const nose = this.previousNose + (this.currentNose - this.previousNose) * alpha;
 
-    const cars = scene.cars.map((car) => this.carFrame(car, scene, frameSeconds, frozen, reduced));
+    // The moment between the last two steps that `nose` stands for, so a surge lines up with it.
+    const roadTime = drive.roadTime - (1 - alpha) * STEP_SECONDS;
+    const cars = scene.cars.map((car) =>
+      this.carFrame(car, scene, roadTime, frameSeconds, frozen, reduced),
+    );
     const climbRate = drive.climb < this.climb ? 40 : 9;
     this.climb += (drive.climb - this.climb) * (1 - Math.exp(-frameSeconds * climbRate));
     if (reduced) this.climb = drive.climb;
@@ -222,9 +258,10 @@ export class Visuals {
       road: drive.road,
       cars,
       twoCars: scene.twoCars,
+      // With two cars the camera keeps to the road, so one car's move never seems to shift the other.
       focus:
-        cars.length > 0
-          ? cars.reduce((sum, car) => sum + car.lateral, 0) / cars.length
+        cars.length === 1 && !scene.twoCars
+          ? (cars[0] as CarFrame).lateral
           : roadCentreAt(drive.road, drive.car.nose),
       hazards,
       commitGap: scene.commitGap,
@@ -241,6 +278,7 @@ export class Visuals {
   private carFrame(
     car: SceneCar,
     scene: SceneState,
+    roadTime: number,
     frameSeconds: number,
     frozen: boolean,
     reduced: boolean,
@@ -261,22 +299,31 @@ export class Visuals {
         ? motion.bumpDirection * Math.sin(bumpAge * Math.PI) * (1 - bumpAge)
         : 0;
     const bounce = reduced || frozen ? 0 : Math.abs(Math.sin(this.time * 11 + car.id * 1.7)) * 0.03;
+    // Never eased beyond what the engine says: a donkey has passed the car exactly when it looks it.
+    motion.ahead = Math.max(0, aheadOf(car, roadTime));
+    const nose = drive.car.nose + motion.ahead;
 
     if (!frozen && !reduced && drive.speed > 0) {
       const across = motion.lateral * LANE_METRES;
-      this.effects.wheels(drive.car.nose, across, CAR_LENGTH, drive.speed, frameSeconds, car.stuck);
-      this.effects.trail(car.look.trail, drive.car.nose, across, CAR_LENGTH);
+      this.effects.wheels(nose, across, CAR_LENGTH, drive.speed, frameSeconds, car.stuck);
+      this.effects.trail(car.look.trail, nose, across, CAR_LENGTH);
     }
+    const sideways = motion.bumpAlong ? 0 : bump;
     return {
-      lateral: motion.lateral + bump * 0.12,
-      lean: Math.max(-1, Math.min(1, lean + bump * 0.6)),
+      lateral: motion.lateral + sideways * 0.12,
+      lean: Math.max(-1, Math.min(1, lean + sideways * 0.6)),
       hop,
-      bounce,
+      // A refused surge or drop back jolts the car where it is: nudging it along
+      // the road would show it somewhere the engine does not count it.
+      bounce: bounce + (motion.bumpAlong ? Math.abs(bump) * 0.2 : 0),
       ghost: car.ghost,
       stuck: car.stuck,
       look: car.look,
       driver: car.driver,
+      tag: car.tag,
       bump,
+      ahead: motion.ahead,
+      shifting: car.shiftedAt === null ? 0 : car.row === 'ahead' ? 1 : -1,
     };
   }
 
@@ -315,6 +362,7 @@ export class Visuals {
     return {
       age: crash.age,
       carLateral: this.carMotion(crash.car).lateral ?? laneLateral(hazard.lane),
+      carAhead: crash.ahead ?? 0,
       look: crash.look,
       obstacle: hazard.kind === 'barrier' ? 'barrier' : 'donkey',
       donkeyLateral: this.motions.get(hazard.id)?.lateral ?? laneLateral(hazard.lane),
@@ -327,7 +375,14 @@ export class Visuals {
   private carMotion(id: number): CarMotion {
     let motion = this.cars.get(id);
     if (!motion) {
-      motion = { lateral: null, hopStart: -Infinity, bumpStart: -Infinity, bumpDirection: 0 };
+      motion = {
+        lateral: null,
+        ahead: 0,
+        hopStart: -Infinity,
+        bumpStart: -Infinity,
+        bumpDirection: 0,
+        bumpAlong: false,
+      };
       this.cars.set(id, motion);
     }
     return motion;

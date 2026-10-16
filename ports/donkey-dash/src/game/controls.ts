@@ -1,6 +1,6 @@
 import { createInput, type Input } from '@shared/input';
 import type { RivalInput } from '../engine/rival';
-import { DEFAULT_RIVAL_KEYS, type RivalKeys } from '../settings';
+import { DEFAULT_RIVAL_KEYS, type DriverKeys, type RivalKeys } from '../settings';
 
 /**
  * One button drives the car. Alone, it is every key worth pressing, a tap
@@ -8,10 +8,10 @@ import { DEFAULT_RIVAL_KEYS, type RivalKeys } from '../settings';
  * owns half: the left or right half of the keyboard, the left or right half
  * of the screen, and their own gamepad.
  *
- * Rival Driver is the one mode with two buttons: left and right. Each driver
- * has a key for each (A and D, and the arrow keys, unless rebound), a pair of
- * touch zones on their own half of the screen and their own gamepad. Against
- * the CPU the one player gets both key pairs and the whole screen.
+ * Rival Driver is the one mode with more: four buttons, a lane left or right,
+ * surge Ahead and drop back. Each driver has a key for each (W A S D, and the
+ * arrow keys, unless rebound), a touch pad in their corner of the screen and
+ * their own gamepad. Against the CPU the one player gets both sets of keys.
  */
 export type Action = 'press' | 'pause' | 'mute' | 'horn';
 export type PlayMode = 'solo' | 'versus' | 'rival' | 'rival-cpu';
@@ -71,19 +71,28 @@ const MENU_ONLY: Record<Action, readonly string[]> = {
   horn: [],
 };
 
-const PAD_LEFT = ['pad:left', 'pad:leftX-', 'pad:lb', 'pad:lt'];
-const PAD_RIGHT = ['pad:right', 'pad:leftX+', 'pad:rb', 'pad:rt'];
+/** A Rival driver's four buttons, in the order of their keys. */
+export const RIVAL_MOVES = ['left', 'right', 'surge', 'drop'] as const;
+export type RivalMove = (typeof RIVAL_MOVES)[number];
 
-type Steer = 'left' | 'right';
+const PAD_MOVES: Record<RivalMove, readonly string[]> = {
+  left: ['pad:left', 'pad:leftX-', 'pad:lb', 'pad:lt'],
+  right: ['pad:right', 'pad:leftX+', 'pad:rb', 'pad:rt'],
+  surge: ['pad:up', 'pad:leftY-'],
+  drop: ['pad:down', 'pad:leftY+'],
+};
+
+const NO_TAPS = (): Record<RivalMove, number> => ({ left: 0, right: 0, surge: 0, drop: 0 });
 
 export class Controls {
   readonly input: Input<Action>;
   private readonly players: [Input<'press'>, Input<'press'>];
-  private readonly drivers: [Input<Steer>, Input<Steer>];
+  private readonly drivers: [Input<RivalMove>, Input<RivalMove>];
   private readonly taps: [number, number] = [0, 0];
-  private readonly steerTaps: [Record<Steer, number>, Record<Steer, number>] = [
-    { left: 0, right: 0 },
-    { left: 0, right: 0 },
+  /** Taps on each Rival driver's touch pad since the last step. */
+  private readonly padTaps: [Record<RivalMove, number>, Record<RivalMove, number>] = [
+    NO_TAPS(),
+    NO_TAPS(),
   ];
   private mode: PlayMode = 'solo';
   private rivalKeys: RivalKeys = DEFAULT_RIVAL_KEYS;
@@ -98,12 +107,12 @@ export class Controls {
       }),
     ) as [Input<'press'>, Input<'press'>];
     this.drivers = [0, 1].map((pad) =>
-      createInput<Steer>({
-        bindings: { left: [], right: [] },
+      createInput<RivalMove>({
+        bindings: NO_BINDINGS,
         getGamepads: () => [readPad(pad)],
         deadzone: 0.5,
       }),
-    ) as [Input<Steer>, Input<Steer>];
+    ) as [Input<RivalMove>, Input<RivalMove>];
     surface.addEventListener('pointerdown', this.onPointerDown);
     this.bind();
   }
@@ -129,10 +138,13 @@ export class Controls {
     this.enabled = false;
     this.bind();
     this.taps.fill(0);
-    for (const taps of this.steerTaps) {
-      taps.left = 0;
-      taps.right = 0;
-    }
+    this.padTaps[0] = NO_TAPS();
+    this.padTaps[1] = NO_TAPS();
+  }
+
+  /** A tap on a Rival driver's touch pad. */
+  tap(driver: 0 | 1, move: RivalMove) {
+    if (this.enabled) this.padTaps[driver][move] += 1;
   }
 
   private bind() {
@@ -144,17 +156,18 @@ export class Controls {
     });
     const rival = playing && (this.mode === 'rival' || this.mode === 'rival-cpu');
     this.drivers.forEach((driver, index) => {
-      // Against the CPU, the one player may use either pair of keys.
-      const pairs = !rival
+      // Against the CPU, the one player may use either set of keys.
+      const sets = !rival
         ? []
         : this.mode === 'rival-cpu'
           ? index === 0
             ? [...this.rivalKeys]
             : []
-          : [this.rivalKeys[index] as readonly [string, string]];
-      const keysFor = (side: 0 | 1) => pairs.map((pair) => `key:${pair[side]}`);
-      driver.rebind('left', pairs.length > 0 ? [...keysFor(0), ...PAD_LEFT] : []);
-      driver.rebind('right', pairs.length > 0 ? [...keysFor(1), ...PAD_RIGHT] : []);
+          : [this.rivalKeys[index] as DriverKeys];
+      RIVAL_MOVES.forEach((move, slot) => {
+        const keys = sets.map((codes) => `key:${codes[slot]}`);
+        driver.rebind(move, sets.length > 0 ? [...keys, ...PAD_MOVES[move]] : []);
+      });
     });
   }
 
@@ -189,53 +202,38 @@ export class Controls {
     return this.players[player].wasPressed('press') || tapped;
   }
 
-  /** A Rival driver's left and right this step: their keys, their touch zones, their pad. */
+  /** A Rival driver's buttons this step: their keys, their touch pad, their gamepad. */
   steering(driver: 0 | 1): RivalInput {
-    const taps = this.steerTaps[driver];
+    const taps = this.padTaps[driver];
     const input = this.drivers[driver];
-    const steer = {
+    this.padTaps[driver] = NO_TAPS();
+    return {
       left: input.wasPressed('left') || taps.left > 0,
       right: input.wasPressed('right') || taps.right > 0,
+      surge: input.wasPressed('surge') || taps.surge > 0,
+      drop: input.wasPressed('drop') || taps.drop > 0,
     };
-    taps.left = 0;
-    taps.right = 0;
-    return steer;
   }
 
+  /** Donkey vs Driver splits the screen in two; Rival Driver has its touch pads instead. */
   private readonly onPointerDown = (event: PointerEvent) => {
-    if (!this.enabled || this.mode === 'solo') return;
+    if (!this.enabled || this.mode !== 'versus') return;
     const bounds = this.surface.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / bounds.width;
     const y = (event.clientY - bounds.top) / bounds.height;
     const portrait = bounds.height > bounds.width;
-    if (this.mode === 'versus') {
-      // Upright, the phone lies between the players: the far end belongs to player 2.
-      const second = portrait ? y < 0.5 : x > 0.5;
-      this.taps[second ? 1 : 0] += 1;
-      return;
-    }
-    const zone = rivalZone(this.mode, portrait, x, y);
-    this.steerTaps[zone.driver][zone.steer] += 1;
+    // Upright, the phone lies between the players: the far end belongs to player 2.
+    const second = portrait ? y < 0.5 : x > 0.5;
+    this.taps[second ? 1 : 0] += 1;
   };
 }
 
-/**
- * Which driver a touch belongs to and which way it steers. Against the CPU the
- * whole screen is one player's: left half, right half. Two players share it
- * like Donkey vs Driver, and each half is split again into left and right.
- */
-export function rivalZone(
-  mode: 'rival' | 'rival-cpu',
-  portrait: boolean,
-  x: number,
-  y: number,
-): { driver: 0 | 1; steer: Steer } {
-  if (mode === 'rival-cpu') return { driver: 0, steer: x < 0.5 ? 'left' : 'right' };
-  if (portrait) return { driver: y < 0.5 ? 1 : 0, steer: x < 0.5 ? 'left' : 'right' };
-  const driver = x < 0.5 ? 0 : 1;
-  const within = driver === 0 ? x * 2 : (x - 0.5) * 2;
-  return { driver, steer: within < 0.5 ? 'left' : 'right' };
-}
+const NO_BINDINGS: Record<RivalMove, readonly string[]> = {
+  left: [],
+  right: [],
+  surge: [],
+  drop: [],
+};
 
 function pressBindings(player: number): string[] {
   const keys = player === 0 ? LEFT_KEYS : RIGHT_KEYS;

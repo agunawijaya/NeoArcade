@@ -88,3 +88,37 @@ one fairness number. What changed around it:
 - Rival Driver's Chase view uses a two-car layout that pulls the camera
   back so both cars fit (ADR 0020); it is one more case in the layout
   tests.
+- **Views may stretch distance ahead, never beside the car.** Isometric
+  used to stretch the whole road, behind the nose too, while drawing the
+  car at true length, so a donkey looked past the car's tail about 3 m
+  (0.15 to 0.2 s) before it was: a car moved into its lane "after it had
+  gone" and crashed. Now, as in Chase, the stretch applies only ahead of
+  the nose; the Isometric car is drawn at the engine's 4.5 m and the donkey
+  in the middle of the road it blocks. The layout tests check true scale
+  beside the car in both views.
+
+## Update, 2026-10-16 (prompt 015): a car riding Ahead
+
+In Rival Driver a car may ride Ahead, `AHEAD_DISTANCE` (4.9 m) in front of
+the Level line (ADR 0020). The sight line does not move: donkeys come into
+view `SIGHT_DISTANCE` ahead of the Level line for both cars, so a car Ahead
+has 11.1 m of road to react in, 0.584 s at the top speed of 19 m/s. That is
+still a reaction and two lane changes (0.58 s), above the promise of a
+reaction and a press plus a margin; the engine and planner tests prove it
+row by row, and `layout.test.ts` again per view.
+
+- **True scale reaches the car Ahead.** With two cars, Chase's `depthOf`
+  and Isometric's `along` stretch the road only beyond `AHEAD_DISTANCE`,
+  so a donkey passes a car Ahead at the scale the engine counts. Chase
+  moves its crest back if it must, so the rest of the road is squeezed no
+  more than `TWO_CAR_LEAST_STRETCH` (0.45) and donkeys do not seem to
+  dawdle on the crest and then rush. Classic is true scale everywhere.
+- **The shorter sight is drawn.** While a car is Ahead, each view draws a
+  bracket in its colour up both sides of its lane from its nose to the
+  sight line, and its headlights at night end at the sight line; the HUD
+  shows ▲ AHEAD on its plate.
+- **Tested per view.** At 1440×900, 1024×768, 844×390 and 390×844, a car
+  Ahead is whole on screen, never covers a donkey on the sight line in
+  any lane, and is drawn true to scale beside the road; and the road
+  between its nose and the sight line still holds a reaction and a press
+  with time to spare at top speed.

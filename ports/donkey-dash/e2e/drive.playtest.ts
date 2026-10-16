@@ -20,6 +20,8 @@ import {
   stepRun,
   type RunConfig,
 } from '../src/engine/run';
+import { RIVAL_MOVES } from '../src/game/controls';
+import { DEFAULT_RIVAL_KEYS } from '../src/settings';
 import { driveTo, FRAME_MS, openGame, runUntil, startMode } from './helpers';
 
 /**
@@ -186,27 +188,52 @@ test('a keyboard player drives an Endless run, and the page agrees with Node', a
   expect(metres).toBe(`${metresDriven(plan.run).toLocaleString('en')} m`);
 });
 
-/** A phone player in Rival Driver: a little slow, now and then hesitant, and up for a block when one is right there. */
+/**
+ * A phone player in Rival Driver: a little slow, now and then hesitant, and
+ * up for a block when one is right there. They never surge, as nobody could
+ * before the surge, so their numbers compare with the ones from back then.
+ */
 const PHONE_RIVAL: DriverStyle = {
   reactionSeconds: PHONE_REACTION,
+  reactionSpread: 0,
   pressGap: 0.2,
   trapping: 'near',
   trapChance: 0.3,
   wary: false,
   hesitation: 0.25,
   blunder: 0.02,
+  surging: 'never',
+  surgeChance: 0,
+  ridesAhead: 0,
 };
 
 /** A quick player on keys who has worked out that the middle lane is the place to be. */
 const SAVVY_RIVAL: DriverStyle = {
   reactionSeconds: 0.34,
+  reactionSpread: 0,
   pressGap: 0.15,
   trapping: 'anywhere',
   trapChance: 0.5,
   wary: true,
   hesitation: 0.15,
   blunder: 0.015,
+  surging: 'never',
+  surgeChance: 0,
+  ridesAhead: 0,
 };
+
+/**
+ * The phone player once they have found the surge: no metronome, they slip
+ * out of boxes Ahead and ride there for the bonus some of the time, or all
+ * of it.
+ */
+const surgingPhone = (ridesAhead: number): DriverStyle => ({
+  ...PHONE_RIVAL,
+  reactionSpread: 0.25,
+  surging: 'escape',
+  surgeChance: 0.3,
+  ridesAhead,
+});
 
 /** One Rival match in Node; side 0 is `left`. Returns the winner and how long it took. */
 function race(left: DriverStyle, right: DriverStyle, seed: number) {
@@ -277,6 +304,30 @@ test('Rival Driver: Normal is a fair fight, and Brutal is sharp but beatable', (
   expect(savvy.rate).toBeGreaterThan(0.2);
 });
 
+test('Rival Driver: riding Ahead pays against some levels, not against all of them', () => {
+  const ways = { level: surgingPhone(0), sometimes: surgingPhone(0.3), always: surgingPhone(1) };
+  const rates = Object.fromEntries(
+    Object.entries(ways).map(([way, style]) => [
+      way,
+      Object.fromEntries(
+        CPU_LEVELS.map((level) => [level, winRate(style, CPU_STYLES[level], 40).rate]),
+      ),
+    ]),
+  ) as Record<keyof typeof ways, Record<CpuLevel, number>>;
+  test.info().annotations.push({
+    type: 'rival, phone player who surges, wins by how much they ride Ahead',
+    description: Object.entries(rates)
+      .map(
+        ([way, byLevel]) =>
+          `${way}: ${CPU_LEVELS.map((level) => `${level} ${Math.round(byLevel[level] * 100)}%`).join(', ')}`,
+      )
+      .join('; '),
+  });
+  // Tempting, not dominant: never riding Ahead must still win somewhere.
+  expect(CPU_LEVELS.some((level) => rates.level[level] >= rates.always[level])).toBe(true);
+  expect(rates.always.easy).toBeGreaterThan(0.3);
+});
+
 test('a scripted player races the CPU in the page, and the page agrees with Node', async ({
   page,
 }) => {
@@ -286,10 +337,11 @@ test('a scripted player races the CPU in the page, and the page agrees with Node
   const state = createRival(rivalMatch(seed, 3));
   const player = createRivalDriver(PHONE_RIVAL, 0, 5);
   const cpu = createRivalDriver(CPU_STYLES.normal, 1, seed + 1);
-  const presses = new Map<number, 'KeyA' | 'KeyD'>();
+  const presses = new Map<number, string>();
   while (state.round === 1 && state.phase.kind === 'race' && state.drive.steps < 60 * 50) {
     const mine: RivalInput = player.decide(state);
-    if (mine.left || mine.right) presses.set(state.drive.steps, mine.left ? 'KeyA' : 'KeyD');
+    const key = RIVAL_MOVES.findIndex((move) => mine[move]);
+    if (key >= 0) presses.set(state.drive.steps, DEFAULT_RIVAL_KEYS[0][key] as string);
     stepRival(state, [mine, cpu.decide(state)]);
   }
   const stopAt = state.drive.steps;
@@ -302,10 +354,7 @@ test('a scripted player races the CPU in the page, and the page agrees with Node
         opponent: 'cpu',
         cpu: 'normal',
         rounds: 3,
-        keys: [
-          ['KeyA', 'KeyD'],
-          ['ArrowLeft', 'ArrowRight'],
-        ],
+        keys: DEFAULT_RIVAL_KEYS,
       },
     },
   });

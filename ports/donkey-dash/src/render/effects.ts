@@ -149,6 +149,28 @@ export class Effects {
     this.burst(along, across, 'dust', 9, ['#ffffff', '#f1ece4', '#dcd6cc'], 1.6);
   }
 
+  /** Dust kicked back from both rear wheels as a car surges Ahead. */
+  kick(along: number, across: number) {
+    for (const side of [-0.7, 0.7]) {
+      for (let index = 0; index < 6; index++) {
+        this.add({
+          kind: 'dust',
+          along: along + this.rng.float(-0.2, 0.3),
+          across: across + side + this.rng.float(-0.15, 0.15),
+          up: 0.15,
+          velocity: {
+            along: -this.rng.float(3, 7),
+            across: side * this.rng.float(0.5, 1.6),
+            up: this.rng.float(0.4, 1.4),
+          },
+          life: this.rng.float(0.35, 0.7),
+          size: this.rng.float(0.16, 0.3),
+          colour: '#f6ead2',
+        });
+      }
+    }
+  }
+
   /** Traffic cones bowled over by a car that met a barrier, with a shower of sparks. */
   cones(along: number, across: number) {
     this.burst(along, across, 'cone', 9, ['#ff7a1f', '#ff8f3a'], 7);

@@ -81,6 +81,12 @@ export interface PlanConfig {
   steering?: Steering;
   /** The open lanes at the start; two in the middle unless said otherwise. */
   start?: Layout;
+  /**
+   * Rival Driver: a car may also ride this many metres ahead of the row the
+   * road is laid for, meeting everything sooner with the same view. Every
+   * obstacle must suit a car there too.
+   */
+  ahead?: number;
 }
 
 /** Rows sit on this grid of beats: on the beat, or halfway between two. */
@@ -111,6 +117,8 @@ export class RoadPlanner {
   private readonly beatStarts: number[] = [0];
   /** Where the player may be after the last obstacle, and from when. */
   private standing: Standing;
+  /** The same for a car riding `config.ahead` in front. */
+  private aheadStanding: Standing;
   private lastObstacle: PlacedRow | null = null;
   /** The next phrase starts no earlier than this beat. */
   private cursor: number;
@@ -131,6 +139,7 @@ export class RoadPlanner {
     // One car starts on the left; with two, any lane may be taken.
     const starts = config.steering === 'two-button' ? lanesOf(this.layout) : [this.layout.first];
     this.standing = { lanes: starts, clearedAt: 0 };
+    this.aheadStanding = this.standing;
   }
 
   speedAtBeat(beat: number): number {
@@ -283,18 +292,27 @@ export class RoadPlanner {
     const { slack } = this.config;
     // A hesitant donkey only decides once the one before it is gone.
     if (spec.wobble && row.known < this.standing.clearedAt + slack) return false;
-    return canGetPast(this.course(drive), this.standing, row);
+    if (!canGetPast(this.course(drive), this.standing, row)) return false;
+    const { ahead } = this.config;
+    return (
+      !ahead || canGetPast(this.course(drive, ahead), this.aheadStanding, this.met(row, ahead))
+    );
   }
 
-  /** The road as reach.ts sees it, for checking a pattern. */
-  private course(drive: Drive): Course {
+  /** The road as reach.ts sees it, for checking a pattern, for a car `lead` metres ahead of the row. */
+  private course(drive: Drive, lead = 0): Course {
     return {
       road: drive.road,
       steering: this.config.steering ?? 'one-button',
       slack: this.config.slack,
-      timeAtPosition: (position) => this.timeAtPosition(position),
-      positionAtTime: (time) => this.positionAtTime(time),
+      timeAtPosition: (position) => this.timeAtPosition(position - lead),
+      positionAtTime: (time) => this.positionAtTime(time) + lead,
     };
+  }
+
+  /** An obstacle as a car `lead` metres ahead meets it: sooner, though it comes into view no earlier. */
+  private met(row: PlacedRow, lead: number): PlacedRow {
+    return { ...row, arrival: this.timeAtPosition(row.position - lead) };
   }
 
   private commit(drive: Drive, row: PlacedRow, spec: RowSpec) {
@@ -326,6 +344,8 @@ export class RoadPlanner {
     }
     if (spec.blocked.length > 0) {
       this.standing = standingAfter(drive.road, row);
+      const { ahead } = this.config;
+      if (ahead) this.aheadStanding = standingAfter(drive.road, this.met(row, ahead));
       this.lastObstacle = row;
     }
     this.cursor = row.beat + GRID;

@@ -91,7 +91,11 @@ let cgaThroughout = false;
 const hallHref = hallUrl();
 const howToPlayHref = `${hallHref}#/games/donkey-dash/how-to-play`;
 
-const hud = new Hud({ pause: () => openPause(), mute: () => session?.toggleMute() });
+const hud = new Hud({
+  pause: () => openPause(),
+  mute: () => session?.toggleMute(),
+  steer: (driver, move) => controls.tap(driver, move),
+});
 const title = buildTitleScreen(
   {
     play: (mode) => chooseMode(mode),
@@ -321,6 +325,7 @@ function endSession() {
   delete document.body.dataset.lane;
   delete document.body.dataset.lanes;
   delete document.body.dataset.meters;
+  delete document.body.dataset.rows;
   delete document.body.dataset.moment;
 }
 
